@@ -21,8 +21,9 @@
 ```
 kennel/
 ├── apps/
-│   ├── web/          # React + TypeScript frontend
-│   └── api/          # Bun + Elysia backend
+│   ├── web/          # Marketing/home page — React + TypeScript (Vite)
+│   ├── shomer-app/   # Main veterinary web app — React + TypeScript (Vite)
+│   └── backend/      # Bun + Elysia API server
 ├── packages/
 │   └── shared/       # Shared TypeScript types, constants, utils
 ├── docs/
@@ -42,12 +43,17 @@ kennel/
 ### Root (monorepo)
 - `bun install` — install all workspace dependencies
 
-### Frontend (`apps/web`)
+### Home page (`apps/web`)
 - `bun run dev` — start Vite dev server
 - `bun run build` — production build
-- `bun test` — run frontend tests
+- `bun test` — run tests
 
-### Backend (`apps/api`)
+### Main app (`apps/shomer-app`)
+- `bun run dev` — start Vite dev server
+- `bun run build` — production build
+- `bun test` — run tests
+
+### Backend (`apps/backend`)
 - `bun run dev` — start Elysia dev server with `--watch`
 - `bun run build` — compile for production
 - `bun test` — run backend tests
