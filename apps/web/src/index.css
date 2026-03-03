@@ -1,0 +1,129 @@
+@import "tailwindcss";
+
+/* ── Fonts ──────────────────────────────────────────────────────────────── */
+@font-face {
+  font-family: "BC Alphapipe";
+  src: url("/fonts/BCAlphapipe-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Quicksand";
+  src: url("/fonts/Quicksand.ttf") format("truetype");
+  font-weight: 400 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Quicksand";
+  src: url("/fonts/Quicksand-Bold.ttf") format("truetype");
+  font-weight: 600 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ── Design tokens ──────────────────────────────────────────────────────── */
+:root {
+  --ds-bg: #FEFAFF;
+  --ds-surface: #F4F0FA;
+  --ds-surface-2: #EDE8F5;
+  --ds-text: #1A1825;
+  --ds-text-muted: #6B6478;
+  --ds-border: #EDE8F5;
+}
+
+.dark {
+  --ds-bg: #0F0E13;
+  --ds-surface: #1A1825;
+  --ds-surface-2: #221F30;
+  --ds-text: #F0ECF8;
+  --ds-text-muted: #8B8699;
+  --ds-border: #2A2735;
+}
+
+/* ── Tailwind v4 theme ──────────────────────────────────────────────────── */
+@theme {
+  --color-primary: #9979FF;
+  --color-accent: #FAE8C7;
+  --color-ink: #3B1F8C;
+  --color-danger: #E05555;
+
+  --color-background: var(--ds-bg);
+  --color-surface: var(--ds-surface);
+  --color-surface-2: var(--ds-surface-2);
+  --color-foreground: var(--ds-text);
+  --color-muted: var(--ds-text-muted);
+  --color-border-base: var(--ds-border);
+
+  --font-display: "BC Alphapipe", Georgia, serif;
+  --font-sans: "Quicksand", system-ui, sans-serif;
+}
+
+/* ── Base ───────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background-color: #FEFAFF;
+  color: #3B1F8C;
+  font-family: "Quicksand", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.6;
+}
+
+/* ── Neo-Brutalist utilities ────────────────────────────────────────────── */
+.shadow-neo    { box-shadow: 4px 4px 0px 0px #3B1F8C; }
+.shadow-neo-lg { box-shadow: 8px 8px 0px 0px #3B1F8C; }
+.shadow-neo-xl { box-shadow: 12px 12px 0px 0px #3B1F8C; }
+
+/* Button press: translate into shadow space */
+.btn-neo {
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+.btn-neo:hover, .btn-neo:focus-visible {
+  transform: translate(4px, 4px);
+  box-shadow: none !important;
+}
+.btn-neo:active {
+  transform: translate(6px, 6px);
+  box-shadow: none !important;
+}
+
+/* Dot pattern overlay for sections */
+.bg-dot-pattern {
+  background-image: radial-gradient(circle, rgba(153, 121, 255, 0.09) 1.5px, transparent 1.5px);
+  background-size: 32px 32px;
+}
+
+/* ── Marquee animation ──────────────────────────────────────────────────── */
+@keyframes marquee-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee-scroll 35s linear infinite;
+}
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+/* ── Global focus-visible ───────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid #3B1F8C;
+  outline-offset: 3px;
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+  html { scroll-behavior: auto !important; }
+}

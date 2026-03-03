@@ -1,0 +1,11 @@
+{
+  "name": "kennel",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev:web": "bun run --cwd apps/web dev",
+    "dev:api": "bun run --cwd apps/api dev",
+    "build:web": "bun run --cwd apps/web build",
+    "build:api": "bun run --cwd apps/api build"
+  }
+}

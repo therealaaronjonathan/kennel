@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /Users/aj/Shomer/kennel -type f \\\\\\( -name \"*.tsx\" -o -name \"*.ts\" -o -name \"*.json\" \\\\\\) 2>/dev/null | grep -E \"\\(package\\\\.json|tsconfig|vite\\)\" | head -20)",
+      "Bash(bun create vite apps/web --template react-ts 2>&1)",
+      "Bash(bun install 2>&1)",
+      "Skill(shadcn-ui)",
+      "Bash(bun run dev 2>&1)",
+      "Bash(find /Users/aj/Shomer -name \"*.png\" -o -name \"*.pdf\" 2>/dev/null | head -30)",
+      "Bash(cd /Users/aj/Shomer/kennel/apps/web && bun run build 2>&1)",
+      "Bash(bun run build 2>&1)",
+      "Bash(cd /Users/aj/Shomer/kennel/apps/web && bun add firebase)",
+      "Bash(bunx tsc --noEmit 2>&1)",
+      "Bash(bun run dev)",
+      "Bash(cd /Users/aj/Shomer/kennel && bun pm untrusted 2>&1)",
+      "Bash(./node_modules/.bin/esbuild --version 2>&1)",
+      "Bash(bun --version && node --version 2>&1)",
+      "Bash(xattr /Users/aj/Shomer/kennel/node_modules/@esbuild/darwin-arm64/bin/esbuild 2>&1)",
+      "Bash(rm -rf node_modules && bun install 2>&1)",
+      "Bash(pkill -f \"node.*vite\" 2>/dev/null; sleep 1; echo \"cleared\")",
+      "Bash(cd /Users/aj/Shomer/kennel/apps/web && bun remove firebase 2>&1)",
+      "Bash(cd /Users/aj/Shomer/kennel && rm -rf node_modules && bun install 2>&1)"
+    ]
+  }
+}

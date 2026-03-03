@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "skills": {
+    "firebase-auth-basics": {
+      "source": "firebase/skills",
+      "sourceType": "github",
+      "computedHash": "6e5d03858be7f2a55ceef29d2b74100db1813393c262562960e39f1f7fae5f3b"
+    },
+    "firebase-basics": {
+      "source": "firebase/skills",
+      "sourceType": "github",
+      "computedHash": "75d1c711575183510c31047ffc2608f8c3cb31ce4af63bcbf32e44b998eb62b3"
+    },
+    "firebase-firestore-basics": {
+      "source": "firebase/skills",
+      "sourceType": "github",
+      "computedHash": "e7e21f72b693e8eba6797e0799e1f9d96ec9f73669cb741a7ca2e541fa460b55"
+    },
+    "firebase-hosting-basics": {
+      "source": "firebase/skills",
+      "sourceType": "github",
+      "computedHash": "f495d67cd8c131deeadaf8c03623537b2ac4e0e73bba3163678eaa0b46d87bd5"
+    },
+    "shadcn-ui": {
+      "source": "giuseppe-trisciuoglio/developer-kit",
+      "sourceType": "github",
+      "computedHash": "6ac4f3b3f702e7d81edf883bea1f330bfd6b1b721e876c81642a96edf4c54d75"
+    },
+    "vercel-react-best-practices": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "computedHash": "4365be772fd3b41994a72ad478472c6d680678e7f3859860ab010e9c46e48ee0"
+    }
+  }
+}
