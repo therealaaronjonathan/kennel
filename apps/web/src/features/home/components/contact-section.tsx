@@ -1,5 +1,8 @@
 import { useState } from 'react'
 
+// Paste your deployed Google Apps Script web app URL here after setup
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwQHCpNSoivuOTMU2cbeP6TOibOVEOJoAMvxtoytqVbskrNYC9wiW7N0WoWeVBg7Iwu/exec'
+
 interface FormState {
   name: string
   email: string
@@ -19,14 +22,23 @@ export function ContactSection() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    // TODO: wire up to POST /api/contact or email service
+
+    // Fire and forget — no-cors means we can't read the response anyway,
+    // so show success immediately and let the request run in the background
+    fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    }).catch(() => { })
+
     setSubmitted(true)
   }
 
   return (
     <section
       id="request-access"
-      className="bg-dot-pattern bg-[#FEFAFF] border-b-2 border-ink px-6 py-20"
+      className="bg-dot-pattern bg-[#FEFAFF] border-b-4 border-ink px-6 py-24"
       aria-labelledby="contact-heading"
     >
       <div className="mx-auto max-w-xl">
@@ -41,13 +53,13 @@ export function ContactSection() {
           >
             Get Early Access
           </h2>
-          <p className="mt-4 font-sans text-sm font-medium leading-relaxed text-ink/60">
+          <p className="mt-4 font-sans text-base font-semibold leading-relaxed text-ink/60">
             Shomer is currently invite-only. Tell us about your clinic and we'll be in touch.
           </p>
         </div>
 
         {/* Form card */}
-        <div className="border-2 border-ink bg-[#FEFAFF] shadow-neo-xl p-8">
+        <div className="border-4 border-ink bg-[#FEFAFF] shadow-neo-xl p-8">
           {submitted ? (
             <div
               role="status"
@@ -55,7 +67,7 @@ export function ContactSection() {
               className="py-10 text-center"
             >
               {/* Success icon */}
-              <div className="mb-5 inline-flex h-16 w-16 items-center justify-center border-2 border-ink bg-accent shadow-neo">
+              <div className="mb-5 inline-flex h-16 w-16 items-center justify-center border-4 border-ink bg-accent shadow-neo">
                 <svg
                   className="h-7 w-7 text-ink"
                   fill="none"
@@ -70,7 +82,7 @@ export function ContactSection() {
               <p className="font-display text-2xl font-bold tracking-tight text-ink">
                 You're on the list!
               </p>
-              <p className="mt-2 font-sans text-sm font-medium text-ink/60">
+              <p className="mt-2 font-sans text-base font-semibold text-ink/60">
                 We'll reach out to the email you provided shortly.
               </p>
             </div>
@@ -151,7 +163,7 @@ export function ContactSection() {
                   name="phone"
                   type="tel"
                   autoComplete="tel"
-                  placeholder="+1 (555) 000-0000"
+                  placeholder="+91 xxxxx xxxxx"
                   value={form.phone}
                   onChange={handleChange}
                   className="h-11 w-full border-2 border-ink bg-[#FEFAFF] px-3 font-sans text-sm font-medium text-ink placeholder:text-ink/30 focus-visible:outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 transition-colors duration-100"
@@ -160,7 +172,7 @@ export function ContactSection() {
 
               <button
                 type="submit"
-                className="btn-neo shadow-neo-lg mt-2 inline-flex h-12 w-full items-center justify-center border-2 border-ink bg-ink font-sans text-sm font-bold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
+                className="btn-neo shadow-neo mt-2 inline-flex h-14 w-full items-center justify-center border-4 border-ink bg-ink font-sans text-base font-bold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
               >
                 Request Early Access
               </button>

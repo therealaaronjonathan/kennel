@@ -11,7 +11,7 @@ export function AppNavbar() {
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
-    <header className="relative sticky top-0 z-50 h-20 w-full border-b-2 border-ink bg-[#FEFAFF]">
+    <header className="relative sticky top-0 z-50 h-20 w-full border-b-4 border-ink bg-[#FEFAFF]">
       <nav
         className="mx-auto flex h-full max-w-7xl items-center justify-between px-6"
         aria-label="Main navigation"
@@ -19,18 +19,18 @@ export function AppNavbar() {
         {/* Logo */}
         <Link
           to="/"
-          className="flex items-center gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 rounded-[2px]"
+          className="flex items-end gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 rounded-[2px]"
           aria-label="Shomer — home"
         >
           <img
-            src="/logos/shomer-icon-purple.png"
+            src="/logos/shomer-icon-beige.png"
             alt=""
             aria-hidden="true"
-            width="32"
-            height="32"
-            className="h-8 w-8 object-contain"
+            width="64"
+            height="64"
+            className="h-16 w-16 flex-shrink-0 object-contain"
           />
-          <span className="font-display text-xl font-bold text-ink">shomer</span>
+          <span className="font-display text-5xl font-bold leading-none text-ink translate-y-0.5">shomer</span>
         </Link>
 
         {/* Center links — desktop only */}
@@ -50,7 +50,7 @@ export function AppNavbar() {
         <div className="flex items-center gap-3">
           <a
             href="#request-access"
-            className="btn-neo shadow-neo hidden md:inline-flex items-center rounded-[4px] border-2 border-ink bg-ink px-5 py-2.5 font-sans text-sm font-semibold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
+            className="btn-neo shadow-neo hidden md:inline-flex items-center border-4 border-ink bg-ink px-5 py-2.5 font-sans text-sm font-bold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
           >
             Get Early Access
           </a>
@@ -62,7 +62,7 @@ export function AppNavbar() {
             aria-expanded={menuOpen}
             aria-controls="mobile-nav"
             onClick={() => setMenuOpen((o) => !o)}
-            className="md:hidden inline-flex h-11 w-11 items-center justify-center border-2 border-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
+            className="md:hidden inline-flex h-11 w-11 items-center justify-center border-4 border-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
           >
             {menuOpen ? (
               /* X icon */
@@ -82,7 +82,7 @@ export function AppNavbar() {
       {/* Mobile menu dropdown */}
       <div
         id="mobile-nav"
-        className={`absolute left-0 right-0 top-full border-b-2 border-ink bg-[#FEFAFF] md:hidden transition-opacity duration-150 ${
+        className={`absolute left-0 right-0 top-full border-b-4 border-ink bg-[#FEFAFF] md:hidden transition-opacity duration-150 ${
           menuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
         aria-hidden={!menuOpen}
@@ -101,7 +101,7 @@ export function AppNavbar() {
           <a
             href="#request-access"
             onClick={() => setMenuOpen(false)}
-            className="mt-3 inline-flex h-11 w-full items-center justify-center border-2 border-ink bg-ink font-sans text-sm font-semibold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink"
+            className="mt-3 inline-flex h-11 w-full items-center justify-center border-4 border-ink bg-ink font-sans text-sm font-bold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink"
           >
             Get Early Access
           </a>

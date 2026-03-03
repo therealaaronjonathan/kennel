@@ -19,7 +19,10 @@
       "Bash(rm -rf node_modules && bun install 2>&1)",
       "Bash(pkill -f \"node.*vite\" 2>/dev/null; sleep 1; echo \"cleared\")",
       "Bash(cd /Users/aj/Shomer/kennel/apps/web && bun remove firebase 2>&1)",
-      "Bash(cd /Users/aj/Shomer/kennel && rm -rf node_modules && bun install 2>&1)"
+      "Bash(cd /Users/aj/Shomer/kennel && rm -rf node_modules && bun install 2>&1)",
+      "Bash(cd /Users/aj/Shomer/kennel/apps/web && ./node_modules/.bin/tsc --noEmit 2>&1 || node_modules/.bin/tsc -p apps/web/tsconfig.app.json --noEmit 2>&1)",
+      "Bash(ls /Users/aj/Shomer/kennel/node_modules/.bin/tsc 2>&1 && /Users/aj/Shomer/kennel/node_modules/.bin/tsc -p /Users/aj/Shomer/kennel/apps/web/tsconfig.app.json --noEmit 2>&1)",
+      "Bash(cd /Users/aj/Shomer/kennel && firebase deploy --only hosting 2>&1)"
     ]
   }
 }

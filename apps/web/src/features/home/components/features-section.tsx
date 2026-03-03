@@ -15,13 +15,13 @@ const features: Feature[] = [
   },
   {
     icon: Calendar,
-    title: 'Appointment Scheduling',
-    description: 'Book and manage appointments with a clear calendar built for high-volume clinic workflows.',
+    title: 'Queue Management',
+    description: 'Manage walk-ins and clinic crowds in real time — see who\'s next, track wait times, and keep your front desk in control.',
   },
   {
     icon: ClipboardList,
-    title: 'Care History',
-    description: 'A structured timeline of every visit, procedure, and prescription your whole team can access instantly.',
+    title: 'Track Pet History',
+    description: 'A complete timeline of every visit, diagnosis, and treatment — so any team member can pick up right where the last vet left off.',
   },
   {
     icon: Users,
@@ -31,7 +31,7 @@ const features: Feature[] = [
   {
     icon: Bell,
     title: 'Smart Reminders',
-    description: 'Automated follow-up reminders for vaccinations, medications, and next visits keep care on track.',
+    description: 'Automated follow-up reminders for vaccinations, medications, and next visits keep pet-care on track.',
   },
   {
     icon: Lock,
@@ -44,55 +44,53 @@ export function FeaturesSection() {
   return (
     <section
       id="features"
-      className="border-b-2 border-ink bg-[#FEFAFF] px-6 py-20"
+      className="border-b-4 border-ink bg-[#FEFAFF] px-6 py-24"
       aria-labelledby="features-heading"
     >
       <div className="mx-auto max-w-7xl">
         {/* Header */}
-        <div className="mb-12 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div className="mb-14 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <h2
             id="features-heading"
-            className="font-display text-4xl font-bold tracking-tight text-ink md:text-5xl"
+            className="font-display font-bold tracking-tight text-ink"
+            style={{ fontSize: 'clamp(2.5rem, 5vw, 4rem)' }}
           >
             Everything your<br />clinic needs
           </h2>
-          <p className="max-w-xs font-sans text-sm font-medium text-ink/60 md:text-right">
-            One platform, every workflow. No spreadsheets, no paper charts.
+          <p className="max-w-xs font-sans text-base font-semibold text-ink/60 md:text-right">
+            One platform, every workflow.<br />No spreadsheets, no paper charts.
           </p>
         </div>
 
-        {/* 3-column grid — outer border on container, inner dividers per cell */}
-        {/* Right border: lg col 1+2 (not col 3); sm col 1 (not col 2); none on mobile        */}
-        {/* Bottom border: mobile all-but-last; sm all-but-last-2; lg first row only (0-2)    */}
-        <div className="grid gap-0 border-2 border-ink sm:grid-cols-2 lg:grid-cols-3">
+        {/* Grid — border-4 frame, thick inner dividers */}
+        <div className="grid gap-0 border-4 border-ink shadow-neo-xl sm:grid-cols-2 lg:grid-cols-3">
           {features.map((feature, i) => {
             const Icon = feature.icon
-            // Per-cell border classes derived for a 6-item, 2-row grid
             const cellBorders = [
-              /* 0 lg-col1 sm-col1 row1 */ 'sm:border-r-2 sm:border-ink border-b-2 border-ink',
-              /* 1 lg-col2 sm-col2 row1 */ 'lg:border-r-2 lg:border-ink border-b-2 border-ink',
-              /* 2 lg-col3 sm-col1 row1 */ 'sm:border-r-2 sm:border-ink lg:border-r-0 border-b-2 border-ink',
-              /* 3 lg-col1 sm-col2 row2 */ 'lg:border-r-2 lg:border-ink border-b-2 border-ink lg:border-b-0',
-              /* 4 lg-col2 sm-col1 row2 */ 'sm:border-r-2 sm:border-ink border-b-2 border-ink sm:border-b-0',
-              /* 5 lg-col3 sm-col2 row2 */ '',
+              'sm:border-r-4 sm:border-ink border-b-4 border-ink',
+              'lg:border-r-4 lg:border-ink border-b-4 border-ink',
+              'sm:border-r-4 sm:border-ink lg:border-r-0 border-b-4 border-ink',
+              'lg:border-r-4 lg:border-ink border-b-4 border-ink lg:border-b-0',
+              'sm:border-r-4 sm:border-ink border-b-4 border-ink sm:border-b-0',
+              '',
             ]
             return (
               <div
                 key={feature.title}
-                className={`group relative p-8 transition-colors duration-150 hover:bg-accent/20 ${cellBorders[i]}`}
+                className={`group relative p-8 transition-colors duration-150 hover:bg-ink hover:text-accent ${cellBorders[i]}`}
               >
                 {/* Icon box */}
-                <div className="mb-5 inline-flex h-12 w-12 items-center justify-center border-2 border-ink bg-accent transition-colors duration-150 group-hover:bg-primary">
+                <div className="mb-6 inline-flex h-14 w-14 items-center justify-center border-4 border-ink bg-accent transition-colors duration-150 group-hover:bg-primary group-hover:border-accent">
                   <Icon
-                    className="h-5 w-5 text-ink transition-colors duration-150 group-hover:text-[#FEFAFF]"
-                    strokeWidth={2}
+                    className="h-6 w-6 text-ink transition-colors duration-150 group-hover:text-accent"
+                    strokeWidth={2.5}
                     aria-hidden="true"
                   />
                 </div>
-                <h3 className="mb-2 font-display text-xl font-bold tracking-tight text-ink">
+                <h3 className="mb-3 font-display text-xl font-bold tracking-tight text-ink transition-colors duration-150 group-hover:text-accent">
                   {feature.title}
                 </h3>
-                <p className="font-sans text-sm font-medium leading-relaxed text-ink/60">
+                <p className="font-sans text-base font-semibold leading-relaxed text-ink/60 transition-colors duration-150 group-hover:text-accent/80">
                   {feature.description}
                 </p>
               </div>

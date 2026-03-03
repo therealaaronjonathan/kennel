@@ -78,28 +78,41 @@ body {
 }
 
 /* ── Neo-Brutalist utilities ────────────────────────────────────────────── */
-.shadow-neo    { box-shadow: 4px 4px 0px 0px #3B1F8C; }
-.shadow-neo-lg { box-shadow: 8px 8px 0px 0px #3B1F8C; }
-.shadow-neo-xl { box-shadow: 12px 12px 0px 0px #3B1F8C; }
+.shadow-neo    { box-shadow:  6px  6px 0px 0px #3B1F8C; }
+.shadow-neo-lg { box-shadow: 10px 10px 0px 0px #3B1F8C; }
+.shadow-neo-xl { box-shadow: 16px 16px 0px 0px #3B1F8C; }
 
 /* Button press: translate into shadow space */
 .btn-neo {
-  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
 }
 .btn-neo:hover, .btn-neo:focus-visible {
-  transform: translate(4px, 4px);
+  transform: translate(6px, 6px);
   box-shadow: none !important;
 }
 .btn-neo:active {
-  transform: translate(6px, 6px);
+  transform: translate(10px, 10px);
   box-shadow: none !important;
 }
 
 /* Dot pattern overlay for sections */
 .bg-dot-pattern {
-  background-image: radial-gradient(circle, rgba(153, 121, 255, 0.09) 1.5px, transparent 1.5px);
-  background-size: 32px 32px;
+  background-image: radial-gradient(circle, rgba(59, 31, 140, 0.18) 1.5px, transparent 1.5px);
+  background-size: 28px 28px;
 }
+
+/* ── Hero stagger entrance ───────────────────────────────────────────────── */
+@keyframes hero-in {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.hero-stagger > * {
+  animation: hero-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.hero-stagger > *:nth-child(1) { animation-delay: 0.05s; }
+.hero-stagger > *:nth-child(2) { animation-delay: 0.15s; }
+.hero-stagger > *:nth-child(3) { animation-delay: 0.25s; }
+.hero-stagger > *:nth-child(4) { animation-delay: 0.35s; }
 
 /* ── Marquee animation ──────────────────────────────────────────────────── */
 @keyframes marquee-scroll {
