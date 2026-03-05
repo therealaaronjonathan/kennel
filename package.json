@@ -4,8 +4,10 @@
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "dev:web": "bun run --cwd apps/web dev",
+    "dev:app": "bun run --cwd apps/shomer-app dev",
     "dev:api": "bun run --cwd apps/api dev",
     "build:web": "bun run --cwd apps/web build",
+    "build:app": "bun run --cwd apps/shomer-app build",
     "build:api": "bun run --cwd apps/api build"
   }
 }

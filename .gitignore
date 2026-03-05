@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+.output/
+
+# Environment files — never commit these
+.env
+.env.local
+.env.*.local
+
+# Vite / TypeScript cache
+*.tsbuildinfo
+.vite/
+
+# macOS
+.DS_Store
+

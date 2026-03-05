@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+/* ── Fonts ──────────────────────────────────────────────────────────────── */
+@font-face {
+  font-family: "BC Alphapipe";
+  src: url("/fonts/BCAlphapipe-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Quicksand";
+  src: url("/fonts/Quicksand.ttf") format("truetype");
+  font-weight: 400 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Quicksand";
+  src: url("/fonts/Quicksand-Bold.ttf") format("truetype");
+  font-weight: 600 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ── Design tokens ──────────────────────────────────────────────────────── */
+:root {
+  --ds-bg: #FEFAFF;
+  --ds-surface: #F4F0FA;
+  --ds-surface-2: #EDE8F5;
+  --ds-text: #1A1825;
+  --ds-text-muted: #6B6478;
+  --ds-border: rgba(26, 24, 37, 0.08);
+  --ds-border-active: rgba(153, 121, 255, 0.4);
+  --ds-white: #ffffff;
+}
+
+/* ── Tailwind v4 theme ──────────────────────────────────────────────────── */
+@theme {
+  --color-primary: #9979FF;
+  --color-accent: #FAE8C7;
+  --color-danger: #E05555;
+  --color-success: #16A34A;
+  --color-warning: #D97706;
+  --color-white: #ffffff;
+
+  --color-background: var(--ds-bg);
+  --color-surface: var(--ds-surface);
+  --color-surface-2: var(--ds-surface-2);
+  --color-foreground: var(--ds-text);
+  --color-muted: var(--ds-text-muted);
+  --color-border-base: var(--ds-border);
+  --color-border-active: var(--ds-border-active);
+
+  --font-display: "BC Alphapipe", Georgia, serif;
+  --font-sans: "Quicksand", system-ui, sans-serif;
+}
+
+/* ── Base ───────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background-color: var(--ds-bg);
+  color: var(--ds-text);
+  font-family: "Quicksand", system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Focus visible ──────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--ds-border-active);
+  outline-offset: 2px;
+}
+
+/* ── Entrance animation ─────────────────────────────────────────────────── */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes loading-bar {
+  0%   { transform: translateX(-100%); }
+  50%  { transform: translateX(100%); }
+  100% { transform: translateX(300%); }
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

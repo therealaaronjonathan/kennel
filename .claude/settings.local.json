@@ -22,7 +22,21 @@
       "Bash(cd /Users/aj/Shomer/kennel && rm -rf node_modules && bun install 2>&1)",
       "Bash(cd /Users/aj/Shomer/kennel/apps/web && ./node_modules/.bin/tsc --noEmit 2>&1 || node_modules/.bin/tsc -p apps/web/tsconfig.app.json --noEmit 2>&1)",
       "Bash(ls /Users/aj/Shomer/kennel/node_modules/.bin/tsc 2>&1 && /Users/aj/Shomer/kennel/node_modules/.bin/tsc -p /Users/aj/Shomer/kennel/apps/web/tsconfig.app.json --noEmit 2>&1)",
-      "Bash(cd /Users/aj/Shomer/kennel && firebase deploy --only hosting 2>&1)"
+      "Bash(cd /Users/aj/Shomer/kennel && firebase deploy --only hosting 2>&1)",
+      "Bash(cp -r /Users/aj/Shomer/kennel/apps/web/public/fonts /Users/aj/Shomer/kennel/apps/shomer-app/public/fonts && cp -r /Users/aj/Shomer/kennel/apps/web/public/logos /Users/aj/Shomer/kennel/apps/shomer-app/public/logos && echo \"Assets copied\")",
+      "Bash(mkdir -p /Users/aj/Shomer/kennel/apps/shomer-app/public && cp -r /Users/aj/Shomer/kennel/apps/web/public/fonts /Users/aj/Shomer/kennel/apps/shomer-app/public/ && cp -r /Users/aj/Shomer/kennel/apps/web/public/logos /Users/aj/Shomer/kennel/apps/shomer-app/public/ && echo \"Assets copied\")",
+      "Bash(cd /Users/aj/Shomer/kennel/apps/shomer-app && bun run build 2>&1 | head -80)",
+      "Bash(ls /Users/aj/Shomer/kennel/bun.lock* 2>/dev/null)",
+      "Bash(bun install)",
+      "Bash(bun run *)",
+      "Bash(bun add *)",
+      "Bash(bun remove *)",
+      "Bash(bunx *)",
+      "Bash(git status)",
+      "Bash(git add *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(cd /Users/aj/Shomer/kennel/apps/shomer-app/public/logos && python3 - <<'EOF'\nimport struct, zlib\n\ndef read_png_dimensions\\(path\\):\n    with open\\(path, 'rb'\\) as f:\n        sig = f.read\\(8\\)\n        # Read IHDR chunk\n        length = struct.unpack\\('>I', f.read\\(4\\)\\)[0]\n        chunk_type = f.read\\(4\\)\n        data = f.read\\(length\\)\n        w = struct.unpack\\('>I', data[0:4]\\)[0]\n        h = struct.unpack\\('>I', data[4:8]\\)[0]\n        bit_depth = data[8]\n        color_type = data[9]\n        return w, h, bit_depth, color_type\n\nfor name in [\"shomer-icon-beige.png\", \"shomer-beige-on-purple.png\"]:\n    w, h, bd, ct = read_png_dimensions\\(name\\)\n    print\\(f\"{name}: {w}x{h}, bit_depth={bd}, color_type={ct}\"\\)\nEOF)"
     ]
   }
 }
