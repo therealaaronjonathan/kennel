@@ -36,16 +36,20 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
 
     const fetchStaff = async () => {
       try {
+        console.log('[clinic] looking up staff uid:', user.uid)
         const staffSnap = await getDoc(doc(db, 'staff', user.uid))
+        console.log('[clinic] doc exists:', staffSnap.exists())
         if (staffSnap.exists()) {
           const data = staffSnap.data()
+          console.log('[clinic] data:', data)
           setClinicId(data.clinicId ?? null)
           setBranchId(data.branchId ?? null)
           setError(null)
         } else {
           setError('Staff profile not found. Contact your administrator.')
         }
-      } catch {
+      } catch (err) {
+        console.error('[clinic] error:', err)
         setError('Failed to load clinic info. Check your connection.')
       } finally {
         setLoading(false)

@@ -15,11 +15,11 @@ export interface Pet {
   id: string
   ownerId: string
   clinicId: string
-  branchId: string
   name: string
   species: 'dog' | 'cat' | 'bird' | 'rabbit' | 'other'
   breed?: string
   age?: number
+  microchipNumber?: string
   createdAt: Timestamp
   updatedAt: Timestamp
 }
@@ -47,6 +47,7 @@ export interface NewOwnerFormData {
   species: 'dog' | 'cat' | 'bird' | 'rabbit' | 'other'
   breed: string
   age: string
+  microchipNumber: string
 }
 
 export interface CheckinResult {

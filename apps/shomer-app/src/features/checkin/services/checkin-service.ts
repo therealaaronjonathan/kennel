@@ -142,12 +142,7 @@ export async function registerAndCheckin(
   const ownerRef = doc(
     collection(db, `clinics/${clinicId}/branches/${branchId}/petOwners`),
   )
-  const petRef = doc(
-    collection(
-      db,
-      `clinics/${clinicId}/branches/${branchId}/petOwners/${ownerRef.id}/pets`,
-    ),
-  )
+  const petRef = doc(collection(db, `clinics/${clinicId}/pets`))
   const visitRef = doc(
     collection(db, `clinics/${clinicId}/branches/${branchId}/visits`),
   )
@@ -176,12 +171,12 @@ export async function registerAndCheckin(
     // Create pet
     transaction.set(petRef, {
       clinicId,
-      branchId,
       ownerId: ownerRef.id,
       name: newOwner.petName,
       species: newOwner.species,
       breed: newOwner.breed || null,
       age: newOwner.age ? parseInt(newOwner.age) : null,
+      microchipNumber: newOwner.microchipNumber || null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     })

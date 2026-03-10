@@ -31,6 +31,7 @@ export function RegisterOwnerStep({
     species: 'dog',
     breed: '',
     age: '',
+    microchipNumber: '',
   })
   const [errors, setErrors] = useState<Partial<Record<keyof NewOwnerFormData, string>>>({})
 
@@ -185,6 +186,19 @@ export function RegisterOwnerStep({
               className={inputClass('age')}
             />
           </div>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
+            Microchip No.
+          </label>
+          <input
+            type="text"
+            placeholder="15-digit chip number (if available)"
+            value={form.microchipNumber}
+            onChange={(e) => set('microchipNumber', e.target.value)}
+            className={inputClass('microchipNumber')}
+          />
         </div>
       </div>
 

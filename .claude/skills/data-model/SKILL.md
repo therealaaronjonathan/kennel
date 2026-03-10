@@ -8,10 +8,10 @@ description: Firestore data model — entities, relationships, subcollection hie
 
 ```
 clinics/{clinicId}
+├── pets/{petId}                      # clinic-level — not branch-specific
 ├── branches/{branchId}
 │   ├── doctors/{doctorId}
 │   ├── petOwners/{ownerId}
-│   │   └── pets/{petId}
 │   ├── queues/{queueId}              # one per doctor per day
 │   └── visits/{visitId}              # flat under branch for cross-cutting queries
 │       ├── diagnoses/{diagnosisId}
@@ -95,14 +95,13 @@ interface PetOwner {
 ```
 
 ### Pet
-Subcollection of Pet Owner.
+Direct subcollection of Clinic — not branch-specific. A pet belongs to the clinic as a whole so its history is unified regardless of which branch it visits.
 
 ```ts
 interface Pet {
-  id: string
-  ownerId: string
-  branchId: string
+  id: string             // Firestore auto-ID — internal use only
   clinicId: string
+  ownerId: string        // primary owner (the person who registered the pet)
   name: string
   species: 'dog' | 'cat' | 'bird' | 'rabbit' | 'other'
   breed?: string
@@ -110,10 +109,13 @@ interface Pet {
   weight?: number        // kg
   sex?: 'male' | 'female'
   notes?: string
+  microchipNumber?: string  // optional — indexed for lookup; front office instructed to enter for dogs
   createdAt: Timestamp
   updatedAt: Timestamp
 }
 ```
+
+**Known limitation**: different people bringing the same pet under different phone numbers will create duplicate pet records. This is an accepted V1 trade-off — to be resolved with a pet merge feature in a future increment.
 
 ### Queue
 One per doctor per day. Tracks the ordered list of visits for real-time queue display.
@@ -237,7 +239,8 @@ interface BillItem {
 ### Denormalization
 Firestore is not relational — denormalize where it avoids extra reads:
 - Visit carries `ownerId`, `petId`, `doctorId` as fields (not just path-based)
-- Pet and Doctor carry `branchId` and `clinicId` for security rules
+- Pet carries `clinicId` for security rules (no `branchId` — pet is clinic-level)
+- Doctor carries `branchId` and `clinicId` for security rules
 - Do NOT denormalize names or labels — fetch those via separate reads when displaying
 
 ### Indexing
@@ -245,9 +248,11 @@ Composite indexes needed for V1:
 - `visits`: (`branchId`, `date`, `status`) — receptionist dashboard
 - `visits`: (`doctorId`, `date`, `status`) — vet queue view
 - `visits`: (`petId`, `date`) — pet history
+- `pets`: `microchipNumber` — single field index for chip-based lookup
 
 ### Security Rules Pattern
-Every document's `clinicId` and `branchId` fields are the foundation for security rules. A user can only read/write documents where their assigned `clinicId` and `branchId` match.
+- Branch-level documents (`visits`, `petOwners`, `doctors`, `queues`): user's `clinicId` and `branchId` must match the document's fields
+- Clinic-level documents (`pets`): user's `clinicId` must match — any staff member across any branch of the clinic can access all pets
 
 ## Visit Type Flows
 

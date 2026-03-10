@@ -108,137 +108,192 @@ export function LoginPage() {
   return (
     <div className="flex min-h-screen">
 
-      {/* ── Left panel — brand, desktop only, fully decorative ────────────── */}
+      {/* ── Left panel — editorial brand statement ────────────────────────── */}
       <div
         aria-hidden="true"
-        className="hidden lg:flex lg:w-[420px] xl:w-[460px] flex-shrink-0 flex-col items-center justify-center gap-10 px-8"
-        style={{ backgroundColor: '#9979FF' }}
+        className="hidden lg:flex lg:w-[420px] xl:w-[480px] flex-shrink-0 flex-col justify-between px-12 py-14 relative overflow-hidden"
+        style={{
+          backgroundColor: '#9979FF',
+          backgroundImage: 'repeating-linear-gradient(-45deg, rgba(250,232,199,0.05) 0px, rgba(250,232,199,0.05) 1px, transparent 1px, transparent 32px)',
+        }}
       >
+        {/* Top: staff + textmark logo */}
         <img
           src="/logos/shomer-full-icon.png"
           alt=""
-          className="w-full h-auto object-contain select-none"
+          className="h-20 w-auto object-contain object-left select-none -ml-3"
         />
 
-        {/* Tagline — sentence case, no period, AA-compliant cream */}
+        {/* Middle: bold statement */}
+        <div>
+          <div
+            className="mb-7 h-px w-12"
+            style={{ backgroundColor: 'rgba(250, 232, 199, 0.4)' }}
+          />
+          <p
+            className="text-[46px] xl:text-[54px] font-bold leading-[1.05] mb-5"
+            style={{ fontFamily: '"BC Alphapipe", Georgia, serif', color: '#FAE8C7' }}
+          >
+            Your clinic,<br />simplified.
+          </p>
+          <p
+            className="text-[14px] font-semibold"
+            style={{ color: 'rgba(250, 232, 199, 0.55)' }}
+          >
+            The operating system for modern pet-clinics.
+          </p>
+        </div>
+
+        {/* Bottom: byline */}
         <p
-          className="text-[11px] font-semibold uppercase tracking-[0.14em] text-center"
-          style={{ color: 'rgba(250, 232, 199, 0.82)' }}
+          className="text-[11px] font-semibold uppercase tracking-[0.12em]"
+          style={{ color: 'rgba(250, 232, 199, 0.35)' }}
         >
-          Veterinary care, simplified
+          Shomer © 2026
         </p>
       </div>
 
-      {/* ── Right panel — form ────────────────────────────────────────────── */}
-      <div className="flex flex-1 items-center justify-center bg-surface px-6 py-12">
+      {/* ── Right panel — light theme form ───────────────────────────────── */}
+      <div
+        className="flex flex-1 items-center justify-center px-8 py-12"
+        style={{ backgroundColor: '#FEFAFF' }}
+      >
         <div className="w-full max-w-[380px]">
 
-          {/* Brand header */}
+          {/* Mobile logo — hidden on desktop */}
+          <div className="lg:hidden mb-10 animate-fade-up">
+            <img
+              src="/logos/shomer-full-icon.png"
+              alt="Shomer"
+              className="h-10 w-auto object-contain object-left select-none -ml-1"
+            />
+          </div>
+
+          {/* Heading */}
           <div
-            className="mb-8 flex items-center gap-3 animate-fade-up"
+            className="mb-10 animate-fade-up"
             style={{ animationDelay: '0ms' }}
           >
-            <img
-              src="/logos/shomer-icon-beige.png"
-              alt="Shomer"
-              className="h-14 w-14 flex-shrink-0 rounded-[6px] object-contain select-none"
-            />
-
-            <div>
-              <h1
-                className="text-[22px] font-bold leading-none text-foreground"
-                style={{ fontFamily: '"BC Alphapipe", Georgia, serif' }}
-              >
-                Shomer
-              </h1>
-              <p className="mt-1 text-[13px] font-semibold text-muted">
-                Sign in to your clinic
-              </p>
-            </div>
+            <h1
+              className="text-[58px] xl:text-[66px] font-bold leading-none mb-3"
+              style={{ fontFamily: '"BC Alphapipe", Georgia, serif', color: '#1A1825' }}
+            >
+              Sign in.
+            </h1>
+            <p
+              className="text-[14px] font-semibold"
+              style={{ color: '#6B6478' }}
+            >
+              Access your clinic's workspace
+            </p>
           </div>
 
-          {/* Card */}
-          <div
-            className="rounded-[4px] border bg-white px-7 py-6 animate-fade-up"
-            style={{
-              borderColor: 'rgba(26, 24, 37, 0.08)',
-              animationDelay: '60ms',
-            }}
+          {/* Form */}
+          <form
+            onSubmit={handleEmailSignIn}
+            noValidate
+            className="space-y-6 animate-fade-up"
+            style={{ animationDelay: '80ms' }}
           >
-            {/* Email/password form */}
-            <form onSubmit={handleEmailSignIn} noValidate className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  placeholder="you@clinic.com"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  required
-                  // eslint-disable-next-line jsx-a11y/no-autofocus
-                  autoFocus
-                  className="text-[14px] h-10"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required
-                  className="text-[14px] h-10"
-                />
-              </div>
-
-              {/* Error — fades in when it appears */}
-              {error && (
-                <p role="alert" className="animate-fade-up text-[13px] font-semibold text-danger">
-                  {error}
-                </p>
-              )}
-
-              {/* 44px touch target */}
-              <Button
-                type="submit"
-                variant="primary"
-                className="w-full h-11 text-[14px] font-semibold mt-1"
-                disabled={submitting || googleLoading}
+            <div className="space-y-2">
+              <Label
+                htmlFor="email"
+                className="text-[11px] font-semibold uppercase tracking-[0.1em]"
+                style={{ color: '#6B6478' }}
               >
-                {submitting ? 'Signing in…' : 'Sign in'}
-              </Button>
-            </form>
-
-            {/* Divider */}
-            <div className="relative my-5">
-              <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                <div className="w-full border-t" style={{ borderColor: 'rgba(26, 24, 37, 0.08)' }} />
-              </div>
-              <div className="relative flex justify-center">
-                <span className="bg-white px-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
-                  or
-                </span>
-              </div>
+                Email
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                placeholder="you@clinic.com"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                required
+                // eslint-disable-next-line jsx-a11y/no-autofocus
+                autoFocus
+                className="text-[14px] h-12"
+                style={{
+                  backgroundColor: '#ffffff',
+                  borderColor: 'rgba(26, 24, 37, 0.14)',
+                  color: '#1A1825',
+                }}
+              />
             </div>
 
-            {/* Google sign-in — 44px touch target */}
+            <div className="space-y-2">
+              <Label
+                htmlFor="password"
+                className="text-[11px] font-semibold uppercase tracking-[0.1em]"
+                style={{ color: '#6B6478' }}
+              >
+                Password
+              </Label>
+              <Input
+                id="password"
+                type="password"
+                autoComplete="current-password"
+                placeholder="••••••••"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                required
+                className="text-[14px] h-12"
+                style={{
+                  backgroundColor: '#ffffff',
+                  borderColor: 'rgba(26, 24, 37, 0.14)',
+                  color: '#1A1825',
+                }}
+              />
+            </div>
+
+            {/* Error */}
+            {error && (
+              <p role="alert" className="animate-fade-up text-[13px] font-semibold text-danger">
+                {error}
+              </p>
+            )}
+
             <Button
-              type="button"
-              variant="ghost"
-              className="w-full h-11 text-[14px] font-semibold"
-              onClick={handleGoogleSignIn}
+              type="submit"
+              variant="primary"
+              className="w-full h-12 text-[14px] font-bold mt-1"
               disabled={submitting || googleLoading}
             >
-              <GoogleIcon />
-              {googleLoading ? 'Redirecting…' : 'Continue with Google'}
+              {submitting ? 'Signing in…' : 'Sign in'}
             </Button>
+          </form>
+
+          {/* Divider */}
+          <div
+            className="relative my-6 animate-fade-up"
+            style={{ animationDelay: '140ms' }}
+          >
+            <div className="absolute inset-0 flex items-center" aria-hidden="true">
+              <div className="w-full border-t" style={{ borderColor: 'rgba(26, 24, 37, 0.08)' }} />
+            </div>
+            <div className="relative flex justify-center">
+              <span
+                className="px-3 text-[11px] font-semibold uppercase tracking-[0.06em]"
+                style={{ backgroundColor: '#FEFAFF', color: '#6B6478' }}
+              >
+                or
+              </span>
+            </div>
           </div>
+
+          {/* Google sign-in */}
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full h-12 text-[14px] font-semibold animate-fade-up"
+            style={{ animationDelay: '160ms' }}
+            onClick={handleGoogleSignIn}
+            disabled={submitting || googleLoading}
+          >
+            <GoogleIcon />
+            {googleLoading ? 'Redirecting…' : 'Continue with Google'}
+          </Button>
         </div>
       </div>
     </div>
