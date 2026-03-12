@@ -8,7 +8,7 @@ interface ConfirmationStepProps {
 }
 
 export function ConfirmationStep({ result, onNewCheckin }: ConfirmationStepProps) {
-  const queueLink = `${window.location.origin}/queue/${result.doctorId}?token=${result.tokenDisplay}`
+  const queueLink = `${window.location.origin}/queue/${result.doctorId}?token=${result.tokenDisplay}&clinicId=${result.clinicId}&branchId=${result.branchId}`
 
   function copyLink() {
     navigator.clipboard.writeText(queueLink)

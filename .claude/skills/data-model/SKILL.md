@@ -7,11 +7,14 @@ description: Firestore data model — entities, relationships, subcollection hie
 ## Firestore Collection Hierarchy
 
 ```
+staff/{staffId}                       # ROOT level — auth bootstrap only (see note below)
+
 clinics/{clinicId}
+├── staff/{staffId}                   # clinic-level — full staff profile
+├── doctors/{doctorId}                # clinic-level — branchIds for assignment
+├── petOwners/{ownerId}               # clinic-level — branchIds for branches visited
 ├── pets/{petId}                      # clinic-level — not branch-specific
 ├── branches/{branchId}
-│   ├── doctors/{doctorId}
-│   ├── petOwners/{ownerId}
 │   ├── queues/{queueId}              # one per doctor per day
 │   └── visits/{visitId}              # flat under branch for cross-cutting queries
 │       ├── diagnoses/{diagnosisId}
@@ -19,9 +22,15 @@ clinics/{clinicId}
 │       └── bills/{billId}
 ```
 
+**Root-level `staff/{uid}` — auth bootstrap**: A minimal lookup document exists at the root (outside any clinic) for every staff member. It contains only `{ clinicId, branchIds }`. This solves the chicken-and-egg problem — the app needs `clinicId` to read anything under `clinics/{clinicId}`, but can't know `clinicId` before authenticating. On login, the app reads `staff/{uid}` directly by path (no query needed), gets `clinicId` and `branchIds`, then uses those for all subsequent reads. The full staff profile lives at `clinics/{clinicId}/staff/{uid}`.
+
 ## Why This Shape
 
-Firestore rewards nesting for ownership/security but punishes it for cross-cutting queries. Visits sit under Branch (not under Pet) because three different roles query them:
+Firestore rewards nesting for ownership/security but punishes it for cross-cutting queries.
+
+**Doctors, Pet Owners, and Staff at clinic level**: these entities can operate across multiple branches. A single source of truth at clinic level with a `branchIds` array avoids duplication and data drift. Branch-specific context (like which doctor is available where) is derived from `branchIds` — no separate assignment subcollection needed for V1.
+
+**Visits under Branch**: three different roles query them:
 
 - **Receptionist**: "all visits today at this branch" → query `visits` where `date == today`
 - **Vet**: "my visits today" → query `visits` where `doctorId == me && date == today`
@@ -29,7 +38,7 @@ Firestore rewards nesting for ownership/security but punishes it for cross-cutti
 
 All three work with Visit at the branch level using indexed fields. If Visit were nested under `petOwners/{id}/pets/{id}/visits`, only the pet owner query would be simple.
 
-Diagnosis, Prescription, and Bill are subcollections of Visit because they are always accessed in the context of a specific visit — never queried across all visits in V1.
+**Diagnosis, Prescription, and Bill** are subcollections of Visit because they are always accessed in the context of a specific visit — never queried across all visits in V1. Cross-branch pet history (all diagnoses/prescriptions for a pet) is available via collection group queries on `petId`.
 
 ## Entity Definitions
 
@@ -62,14 +71,32 @@ interface Branch {
 }
 ```
 
+### Staff
+Clinic-level. Receptionists, admins, and other non-vet staff. `branchIds` determines which branches they can access.
+
+```ts
+interface Staff {
+  id: string            // matches Firebase Auth UID
+  clinicId: string
+  branchIds: string[]   // branches this staff member works at
+  name: string
+  phone: string
+  email?: string
+  role: 'receptionist' | 'admin' | 'owner'
+  isActive: boolean
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+```
+
 ### Doctor
-A vet assigned to a branch.
+Clinic-level. `branchIds` determines which branches the doctor is assigned to — used to populate the doctor dropdown at check-in.
 
 ```ts
 interface Doctor {
   id: string            // matches Firebase Auth UID
-  branchId: string
   clinicId: string
+  branchIds: string[]   // branches this doctor works at
   name: string
   phone: string
   specialization?: string
@@ -80,12 +107,13 @@ interface Doctor {
 ```
 
 ### Pet Owner
+Clinic-level. `branchIds` tracks which branches the owner has visited.
 
 ```ts
 interface PetOwner {
   id: string
-  branchId: string
   clinicId: string
+  branchIds: string[]   // branches where this owner has checked in
   name: string
   phone: string         // primary lookup field at check-in
   email?: string
@@ -169,6 +197,7 @@ Subcollection of Visit. Skipped for vaccination-type visits.
 interface Diagnosis {
   id: string
   visitId: string
+  petId: string          // denormalized for collection group queries
   condition: string
   severity?: 'mild' | 'moderate' | 'severe'
   notes?: string
@@ -183,6 +212,7 @@ Subcollection of Visit. Present for all visit types (vaccinations include vaccin
 interface Prescription {
   id: string
   visitId: string
+  petId: string          // denormalized for collection group queries
   items: PrescriptionItem[]
   notes?: string
   sentToOwner: boolean
@@ -223,12 +253,21 @@ interface BillItem {
 }
 ```
 
+## Auth & Branch Selection Flow
+
+1. User lands on login page and selects a branch from a dropdown
+2. User authenticates via Firebase Auth
+3. App validates the user's `branchIds` includes the selected branch
+4. Selected branch is stored in app state for the session
+
+Users with a single branch skip the branch selector. Clinic owners with access to all branches see the full list.
+
 ## Firestore Conventions
 
 ### Document IDs
 - Use Firestore auto-generated IDs for most documents
 - Queue IDs use composite format: `{doctorId}_{YYYY-MM-DD}` for easy lookup
-- Doctor IDs match Firebase Auth UIDs
+- Doctor and Staff IDs match Firebase Auth UIDs
 
 ### Field Conventions
 - All documents include `createdAt` and `updatedAt` Timestamps
@@ -240,7 +279,8 @@ interface BillItem {
 Firestore is not relational — denormalize where it avoids extra reads:
 - Visit carries `ownerId`, `petId`, `doctorId` as fields (not just path-based)
 - Pet carries `clinicId` for security rules (no `branchId` — pet is clinic-level)
-- Doctor carries `branchId` and `clinicId` for security rules
+- Doctor and Staff carry `clinicId` and `branchIds` for security rules and branch filtering
+- Diagnosis and Prescription carry `petId` for collection group queries across branches
 - Do NOT denormalize names or labels — fetch those via separate reads when displaying
 
 ### Indexing
@@ -250,9 +290,13 @@ Composite indexes needed for V1:
 - `visits`: (`petId`, `date`) — pet history
 - `pets`: `microchipNumber` — single field index for chip-based lookup
 
+Collection group indexes needed for cross-branch pet history:
+- `diagnoses`: `petId` (collection group scope)
+- `prescriptions`: `petId` (collection group scope)
+
 ### Security Rules Pattern
-- Branch-level documents (`visits`, `petOwners`, `doctors`, `queues`): user's `clinicId` and `branchId` must match the document's fields
-- Clinic-level documents (`pets`): user's `clinicId` must match — any staff member across any branch of the clinic can access all pets
+- Branch-level documents (`visits`, `queues`): user's `clinicId` and selected `branchId` must match the document's fields
+- Clinic-level documents (`pets`, `petOwners`, `doctors`, `staff`): user's `clinicId` must match — any staff member across any branch of the clinic can access these
 
 ## Visit Type Flows
 

@@ -15,6 +15,9 @@ const CheckinPage = lazy(() =>
 const QueuePage = lazy(() =>
   import('@/features/queue/components/queue-page').then(m => ({ default: m.QueuePage }))
 )
+const VetPage = lazy(() =>
+  import('@/features/vet/components/vet-page').then(m => ({ default: m.VetPage }))
+)
 
 const router = createBrowserRouter([
   {
@@ -49,6 +52,16 @@ const router = createBrowserRouter([
           <AuthGuard>
             <Suspense fallback={<div className="min-h-screen bg-background" />}>
               <CheckinPage />
+            </Suspense>
+          </AuthGuard>
+        ),
+      },
+      {
+        path: 'vet',
+        element: (
+          <AuthGuard>
+            <Suspense fallback={<div className="h-screen bg-background" />}>
+              <VetPage />
             </Suspense>
           </AuthGuard>
         ),

@@ -27,6 +27,8 @@ async function performCheckin(
   ownerId: string,
   petId: string,
   ownerEmail: string | undefined,
+  ownerName: string,
+  petName: string,
   formData: CheckinFormData,
   doctorName: string,
 ): Promise<CheckinResult> {
@@ -69,7 +71,9 @@ async function performCheckin(
       doctorId: formData.doctorId,
       doctorName,
       ownerId,
+      ownerName,
       petId,
+      petName,
       tokenNumber: nextToken,
       tokenDisplay,
       complaints: formData.complaints,
@@ -89,13 +93,15 @@ async function performCheckin(
     tokenDisplay,
     doctorName,
     doctorId: formData.doctorId,
+    clinicId,
+    branchId,
     complaints: formData.complaints,
     isEmergency: formData.isEmergency,
     ownerEmail,
   }
 
   if (ownerEmail) {
-    const queueLink = `${window.location.origin}/queue/${formData.doctorId}?token=${tokenDisplay}`
+    const queueLink = `${window.location.origin}/queue/${formData.doctorId}?token=${tokenDisplay}&clinicId=${clinicId}&branchId=${branchId}`
     await sendCheckInConfirmation({
       to: ownerEmail,
       doctorName,
@@ -112,6 +118,7 @@ export async function checkinExistingOwner(
   clinicId: string,
   branchId: string,
   owner: PetOwner,
+  petName: string,
   formData: CheckinFormData,
   doctorName: string,
 ): Promise<CheckinResult> {
@@ -121,6 +128,8 @@ export async function checkinExistingOwner(
     owner.id,
     formData.petId,
     owner.email,
+    owner.name,
+    petName,
     formData,
     doctorName,
   )
@@ -139,9 +148,7 @@ export async function registerAndCheckin(
     db,
     `clinics/${clinicId}/branches/${branchId}/queues/${queueDocId}`,
   )
-  const ownerRef = doc(
-    collection(db, `clinics/${clinicId}/branches/${branchId}/petOwners`),
-  )
+  const ownerRef = doc(collection(db, `clinics/${clinicId}/petOwners`))
   const petRef = doc(collection(db, `clinics/${clinicId}/pets`))
   const visitRef = doc(
     collection(db, `clinics/${clinicId}/branches/${branchId}/visits`),
@@ -160,7 +167,7 @@ export async function registerAndCheckin(
     // Create owner
     transaction.set(ownerRef, {
       clinicId,
-      branchId,
+      branchIds: [branchId],
       name: newOwner.ownerName,
       phone: newOwner.phone,
       email: newOwner.email || null,
@@ -202,7 +209,9 @@ export async function registerAndCheckin(
       doctorId: formData.doctorId,
       doctorName,
       ownerId: ownerRef.id,
+      ownerName: newOwner.ownerName,
       petId: petRef.id,
+      petName: newOwner.petName,
       tokenNumber: nextToken,
       tokenDisplay,
       complaints: formData.complaints,
@@ -222,13 +231,15 @@ export async function registerAndCheckin(
     tokenDisplay,
     doctorName,
     doctorId: formData.doctorId,
+    clinicId,
+    branchId,
     complaints: formData.complaints,
     isEmergency: formData.isEmergency,
     ownerEmail: newOwner.email || undefined,
   }
 
   if (newOwner.email) {
-    const queueLink = `${window.location.origin}/queue/${formData.doctorId}?token=${tokenDisplay}`
+    const queueLink = `${window.location.origin}/queue/${formData.doctorId}?token=${tokenDisplay}&clinicId=${clinicId}&branchId=${branchId}`
     await sendCheckInConfirmation({
       to: newOwner.email,
       doctorName,

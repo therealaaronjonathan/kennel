@@ -3,7 +3,7 @@ import type { Timestamp } from 'firebase/firestore'
 export interface PetOwner {
   id: string
   clinicId: string
-  branchId: string
+  branchIds: string[]
   name: string
   phone: string
   email?: string
@@ -27,7 +27,7 @@ export interface Pet {
 export interface Doctor {
   id: string
   clinicId: string
-  branchId: string
+  branchIds: string[]
   name: string
   isActive: boolean
 }
@@ -56,6 +56,8 @@ export interface CheckinResult {
   tokenDisplay: string
   doctorName: string
   doctorId: string
+  clinicId: string
+  branchId: string
   complaints: string[]
   isEmergency: boolean
   ownerEmail?: string

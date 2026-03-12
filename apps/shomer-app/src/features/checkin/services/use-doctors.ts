@@ -8,11 +8,9 @@ export function useDoctors(clinicId: string, branchId: string) {
     queryKey: ['doctors', clinicId, branchId],
     queryFn: async (): Promise<Doctor[]> => {
       const q = query(
-        collection(
-          db,
-          `clinics/${clinicId}/branches/${branchId}/doctors`,
-        ),
+        collection(db, `clinics/${clinicId}/doctors`),
         where('isActive', '==', true),
+        where('branchIds', 'array-contains', branchId),
       )
       const snap = await getDocs(q)
       return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Doctor)

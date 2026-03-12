@@ -4,9 +4,12 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
+  type UserCredential,
 } from 'firebase/auth'
-import { auth } from '@/lib/firebase'
+import { doc, getDoc } from 'firebase/firestore'
+import { auth, db } from '@/lib/firebase'
 import { useAuth } from '../hooks/use-auth'
+import { useClinic } from '@/features/clinic'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -60,9 +63,20 @@ function GoogleIcon() {
   )
 }
 
+async function getDestination(uid: string): Promise<string> {
+  try {
+    const snap = await getDoc(doc(db, 'staff', uid))
+    if (snap.exists() && snap.data().doctorId) return '/vet'
+  } catch {
+    // fall through to default
+  }
+  return '/dashboard'
+}
+
 export function LoginPage() {
   const navigate = useNavigate()
   const { user, loading } = useAuth()
+  const { doctorId, loading: clinicLoading } = useClinic()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -70,20 +84,25 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
 
-  // Already authenticated — go straight to dashboard
+  // Already authenticated — redirect based on role once clinic data is ready
   useEffect(() => {
-    if (!loading && user) {
-      navigate('/dashboard', { replace: true })
+    if (!loading && !clinicLoading && user) {
+      navigate(doctorId ? '/vet' : '/dashboard', { replace: true })
     }
-  }, [user, loading, navigate])
+  }, [user, loading, clinicLoading, doctorId, navigate])
+
+  async function redirectAfterSignIn(cred: UserCredential) {
+    const dest = await getDestination(cred.user.uid)
+    navigate(dest, { replace: true })
+  }
 
   async function handleEmailSignIn(e: FormEvent) {
     e.preventDefault()
     setError(null)
     setSubmitting(true)
     try {
-      await signInWithEmailAndPassword(auth, email, password)
-      navigate('/dashboard', { replace: true })
+      const cred = await signInWithEmailAndPassword(auth, email, password)
+      await redirectAfterSignIn(cred)
     } catch (err) {
       setError(getFriendlyError(err) ?? 'Something went wrong. Please try again.')
     } finally {
@@ -95,8 +114,8 @@ export function LoginPage() {
     setError(null)
     setGoogleLoading(true)
     try {
-      await signInWithPopup(auth, googleProvider)
-      navigate('/dashboard', { replace: true })
+      const cred = await signInWithPopup(auth, googleProvider)
+      await redirectAfterSignIn(cred)
     } catch (err) {
       const msg = getFriendlyError(err)
       if (msg) setError(msg) // silently ignore popup-closed-by-user

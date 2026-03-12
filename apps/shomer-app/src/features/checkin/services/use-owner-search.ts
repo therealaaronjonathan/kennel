@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore'
+import { collection, getDocs, query, where } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import type { PetOwner, Pet } from '../types'
 
@@ -17,10 +17,7 @@ export function useOwnerSearch(
   return useQuery({
     queryKey: ['petOwners', clinicId, branchId, searchTerm],
     queryFn: async (): Promise<OwnerSearchResult | null> => {
-      const col = collection(
-        db,
-        `clinics/${clinicId}/branches/${branchId}/petOwners`,
-      )
+      const col = collection(db, `clinics/${clinicId}/petOwners`)
 
       const field = searchTerm.includes('@') ? 'email' : 'phone'
       const q = query(col, where(field, '==', searchTerm.trim()))
@@ -34,12 +31,9 @@ export function useOwnerSearch(
         query(
           collection(db, `clinics/${clinicId}/pets`),
           where('ownerId', '==', owner.id),
-          orderBy('createdAt'),
         ),
       )
-      const pets = petsSnap.docs.map(
-        (d) => ({ id: d.id, ...d.data() }) as Pet,
-      )
+      const pets = petsSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Pet)
 
       return { owner, pets }
     },

@@ -45,13 +45,15 @@ export function CheckinPage() {
   const existingCheckin = useMutation({
     mutationFn: ({
       owner,
+      petName,
       formData,
       doctorName,
     }: {
       owner: PetOwner
+      petName: string
       formData: CheckinFormData
       doctorName: string
-    }) => checkinExistingOwner(clinicId!, branchId!, owner, formData, doctorName),
+    }) => checkinExistingOwner(clinicId!, branchId!, owner, petName, formData, doctorName),
     onSuccess: (result) => setStep({ type: 'confirmation', result }),
   })
 
@@ -74,7 +76,9 @@ export function CheckinPage() {
   function handleCheckinFormSubmit(formData: CheckinFormData, doctorName: string) {
     if (step.type !== 'checkin-form') return
     if (step.owner) {
-      existingCheckin.mutate({ owner: step.owner, formData, doctorName })
+      const pet = step.pets.find((p) => p.id === formData.petId) ?? step.pets[0]
+      const petName = pet?.name ?? ''
+      existingCheckin.mutate({ owner: step.owner, petName, formData, doctorName })
     } else if (step.newOwnerData) {
       newCheckin.mutate({ newOwner: step.newOwnerData, formData, doctorName })
     }

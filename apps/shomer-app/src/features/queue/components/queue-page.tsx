@@ -1,14 +1,11 @@
 import { useParams, useSearchParams } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { useQueue } from '../services/use-queue'
+import { useDoctor } from '../services/use-doctor'
 
 function StatusDot({ status, isEmergency }: { status: string; isEmergency: boolean }) {
-  if (isEmergency) {
-    return <span className="h-1.5 w-1.5 rounded-full bg-danger flex-shrink-0" />
-  }
-  if (status === 'in-progress') {
-    return <span className="h-1.5 w-1.5 rounded-full bg-warning flex-shrink-0" />
-  }
+  if (isEmergency) return <span className="h-1.5 w-1.5 rounded-full bg-danger flex-shrink-0" />
+  if (status === 'in-progress') return <span className="h-1.5 w-1.5 rounded-full bg-warning flex-shrink-0" />
   return <span className="h-1.5 w-1.5 rounded-full bg-muted flex-shrink-0" />
 }
 
@@ -22,10 +19,16 @@ export function QueuePage() {
   const { doctorId } = useParams<{ doctorId: string }>()
   const [searchParams] = useSearchParams()
   const highlightToken = searchParams.get('token')
+  const clinicId = searchParams.get('clinicId') ?? ''
+  const branchId = searchParams.get('branchId') ?? ''
 
-  const { entries, loading, error } = useQueue(doctorId ?? '')
+  const { entries, loading, error } = useQueue(doctorId ?? '', clinicId, branchId)
+  const doctor = useDoctor(clinicId, doctorId ?? '')
 
-  const doctorName = entries[0]?.doctorName ?? null
+  const myPosition = highlightToken
+    ? entries.findIndex((e) => e.tokenDisplay === highlightToken) + 1
+    : null
+  const aheadCount = myPosition !== null ? myPosition - 1 : null
 
   if (loading) {
     return (
@@ -42,6 +45,8 @@ export function QueuePage() {
       </div>
     )
   }
+
+  const doctorName = doctor?.name ?? entries[0]?.doctorName ?? null
 
   return (
     <div className="min-h-screen bg-background">
@@ -64,51 +69,104 @@ export function QueuePage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-lg px-6 py-6">
-        {entries.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-2">
-            <span className="text-3xl">🐾</span>
-            <p className="text-[13px] font-semibold text-muted">
-              No patients waiting right now
+      <main className="mx-auto max-w-lg px-6 py-6 space-y-6">
+
+        {/* Your token card */}
+        {highlightToken && myPosition !== null && (
+          <div className="rounded-[4px] border border-border-active bg-surface-2 px-5 py-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted mb-1">
+              Your token
             </p>
+            <p className="text-[28px] font-bold text-primary leading-none mb-3">
+              {highlightToken}
+            </p>
+            <div className="h-px bg-border-base mb-3" />
+            {aheadCount === 0 ? (
+              <p className="text-[13px] font-semibold text-foreground">
+                You're next — please be ready
+              </p>
+            ) : (
+              <p className="text-[13px] font-semibold text-foreground">
+                {aheadCount} {aheadCount === 1 ? 'patient' : 'patients'} ahead of you
+              </p>
+            )}
+            {doctorName && (
+              <p className="mt-1 text-[12px] text-muted">Consulting with {doctorName}</p>
+            )}
+          </div>
+        )}
+
+        {/* Doctor profile */}
+        {doctor && (
+          <div className="rounded-[4px] border border-border-base bg-surface px-5 py-4">
+            <div className="flex items-start gap-4">
+              {doctor.photoUrl ? (
+                <img
+                  src={doctor.photoUrl}
+                  alt={doctor.name}
+                  className="h-16 w-16 flex-shrink-0 rounded-[4px] object-cover object-top"
+                />
+              ) : (
+                <div className="h-16 w-16 flex-shrink-0 rounded-[4px] bg-surface-2 flex items-center justify-center">
+                  <span className="text-[22px] font-bold text-muted">
+                    {doctor.name.charAt(0)}
+                  </span>
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="text-[15px] font-bold text-foreground leading-tight">
+                  {doctor.name}
+                </p>
+                {doctor.specialization && (
+                  <p className="mt-0.5 text-[12px] font-semibold text-primary">
+                    {doctor.specialization}
+                  </p>
+                )}
+                {doctor.bio && (
+                  <p className="mt-2 text-[12px] text-muted leading-relaxed">
+                    {doctor.bio}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Queue list */}
+        {entries.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-2">
+            <p className="text-[13px] font-semibold text-muted">No patients waiting right now</p>
           </div>
         ) : (
           <div className="space-y-1">
             {/* Header row */}
-            <div className="grid grid-cols-[1fr_auto_auto] gap-4 px-3 pb-2">
+            <div className="grid grid-cols-[1fr_auto] gap-4 px-3 pb-2">
               <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
                 Token
-              </span>
-              <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
-                Complaints
               </span>
               <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
                 Status
               </span>
             </div>
 
-            {entries.map((entry, i) => {
+            {entries.map((entry) => {
               const isHighlighted = highlightToken && entry.tokenDisplay === highlightToken
               return (
                 <div
                   key={entry.id}
                   className={cn(
-                    'grid grid-cols-[1fr_auto_auto] gap-4 items-center rounded-[4px] px-3 py-2.5 transition-colors',
+                    'grid grid-cols-[1fr_auto] gap-4 items-center rounded-[4px] px-3 py-2.5 transition-colors',
                     isHighlighted
                       ? 'bg-surface-2 border border-border-active'
-                      : i % 2 === 0
-                      ? 'hover:bg-surface'
                       : 'hover:bg-surface',
                   )}
                 >
-                  {/* Token + position */}
+                  {/* Token */}
                   <div className="flex items-center gap-2.5">
                     <span
                       className={cn(
                         'text-[13px] font-bold',
-                        isHighlighted
-                          ? 'text-primary'
-                          : entry.status === 'in-progress'
+                        isHighlighted || entry.status === 'in-progress'
                           ? 'text-primary'
                           : 'text-muted',
                       )}
@@ -127,23 +185,6 @@ export function QueuePage() {
                     )}
                   </div>
 
-                  {/* Complaints */}
-                  <div className="flex flex-wrap gap-1 justify-end max-w-[180px]">
-                    {entry.complaints.slice(0, 2).map((c) => (
-                      <span
-                        key={c}
-                        className="rounded-[3px] bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold text-muted"
-                      >
-                        {c}
-                      </span>
-                    ))}
-                    {entry.complaints.length > 2 && (
-                      <span className="text-[10px] text-muted font-medium">
-                        +{entry.complaints.length - 2}
-                      </span>
-                    )}
-                  </div>
-
                   {/* Status */}
                   <div className="flex items-center gap-1.5">
                     <StatusDot status={entry.status} isEmergency={entry.isEmergency} />
@@ -157,7 +198,7 @@ export function QueuePage() {
           </div>
         )}
 
-        <p className="mt-6 text-center text-[11px] text-muted">
+        <p className="text-center text-[11px] text-muted">
           Updates in real time · Please arrive 10 minutes before your turn
         </p>
       </main>

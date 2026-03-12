@@ -2,17 +2,19 @@ import { useEffect, useState } from 'react'
 import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 
-export interface QueueEntry {
+export interface VetQueueEntry {
   id: string
   tokenNumber: number
   tokenDisplay: string
+  petId: string
+  petName: string
+  ownerId: string
+  ownerName: string
   doctorId: string
-  doctorName: string
   status: string
   isEmergency: boolean
   complaints: string[]
   date: string
-  queuePosition: number
 }
 
 function getTodayString(): string {
@@ -20,14 +22,17 @@ function getTodayString(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-export function useQueue(doctorId: string, clinicId: string, branchId: string) {
-  const [entries, setEntries] = useState<QueueEntry[]>([])
+export function useVetQueue(
+  clinicId: string | null,
+  branchId: string | null,
+  doctorId: string | null,
+) {
+  const [entries, setEntries] = useState<VetQueueEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!doctorId || !clinicId || !branchId) {
-      setError('Invalid queue link. Please use the link from your check-in confirmation.')
+    if (!clinicId || !branchId || !doctorId) {
       setLoading(false)
       return
     }
@@ -44,7 +49,7 @@ export function useQueue(doctorId: string, clinicId: string, branchId: string) {
       q,
       (snap) => {
         const all = snap.docs
-          .map((d) => ({ id: d.id, ...d.data() }) as QueueEntry)
+          .map((d) => ({ id: d.id, ...d.data() }) as VetQueueEntry)
           .filter((v) => v.status !== 'completed' && v.status !== 'cancelled')
 
         all.sort((a, b) => {
@@ -57,14 +62,14 @@ export function useQueue(doctorId: string, clinicId: string, branchId: string) {
         setLoading(false)
       },
       (err) => {
-        console.error('Queue snapshot error:', err)
-        setError('Failed to load queue. Check your connection.')
+        console.error('Vet queue snapshot error:', err)
+        setError('Failed to load queue.')
         setLoading(false)
       },
     )
 
     return unsub
-  }, [doctorId, clinicId, branchId])
+  }, [clinicId, branchId, doctorId])
 
   return { entries, loading, error }
 }

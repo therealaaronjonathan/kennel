@@ -6,6 +6,7 @@ import { useAuth } from '@/features/auth'
 interface ClinicContextValue {
   clinicId: string | null
   branchId: string | null
+  doctorId: string | null
   loading: boolean
   error: string | null
 }
@@ -13,6 +14,7 @@ interface ClinicContextValue {
 const ClinicContext = createContext<ClinicContextValue>({
   clinicId: null,
   branchId: null,
+  doctorId: null,
   loading: true,
   error: null,
 })
@@ -21,6 +23,7 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
   const { user, loading: authLoading } = useAuth()
   const [clinicId, setClinicId] = useState<string | null>(null)
   const [branchId, setBranchId] = useState<string | null>(null)
+  const [doctorId, setDoctorId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -30,6 +33,7 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
     if (!user) {
       setClinicId(null)
       setBranchId(null)
+      setDoctorId(null)
       setLoading(false)
       return
     }
@@ -43,7 +47,10 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
           const data = staffSnap.data()
           console.log('[clinic] data:', data)
           setClinicId(data.clinicId ?? null)
-          setBranchId(data.branchId ?? null)
+          // branchIds is an array — for V1 single-branch clinics take the first entry
+          const branchIds: string[] = data.branchIds ?? []
+          setBranchId(branchIds[0] ?? null)
+          setDoctorId(data.doctorId ?? null)
           setError(null)
         } else {
           setError('Staff profile not found. Contact your administrator.')
@@ -60,7 +67,7 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
   }, [user, authLoading])
 
   return (
-    <ClinicContext.Provider value={{ clinicId, branchId, loading, error }}>
+    <ClinicContext.Provider value={{ clinicId, branchId, doctorId, loading, error }}>
       {children}
     </ClinicContext.Provider>
   )
