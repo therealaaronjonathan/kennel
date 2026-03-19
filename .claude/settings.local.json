@@ -36,7 +36,10 @@
       "Bash(git add *)",
       "Bash(git diff *)",
       "Bash(git log *)",
-      "Bash(cd /Users/aj/Shomer/kennel/apps/shomer-app/public/logos && python3 - <<'EOF'\nimport struct, zlib\n\ndef read_png_dimensions\\(path\\):\n    with open\\(path, 'rb'\\) as f:\n        sig = f.read\\(8\\)\n        # Read IHDR chunk\n        length = struct.unpack\\('>I', f.read\\(4\\)\\)[0]\n        chunk_type = f.read\\(4\\)\n        data = f.read\\(length\\)\n        w = struct.unpack\\('>I', data[0:4]\\)[0]\n        h = struct.unpack\\('>I', data[4:8]\\)[0]\n        bit_depth = data[8]\n        color_type = data[9]\n        return w, h, bit_depth, color_type\n\nfor name in [\"shomer-icon-beige.png\", \"shomer-beige-on-purple.png\"]:\n    w, h, bd, ct = read_png_dimensions\\(name\\)\n    print\\(f\"{name}: {w}x{h}, bit_depth={bd}, color_type={ct}\"\\)\nEOF)"
+      "Bash(cd /Users/aj/Shomer/kennel/apps/shomer-app/public/logos && python3 - <<'EOF'\nimport struct, zlib\n\ndef read_png_dimensions\\(path\\):\n    with open\\(path, 'rb'\\) as f:\n        sig = f.read\\(8\\)\n        # Read IHDR chunk\n        length = struct.unpack\\('>I', f.read\\(4\\)\\)[0]\n        chunk_type = f.read\\(4\\)\n        data = f.read\\(length\\)\n        w = struct.unpack\\('>I', data[0:4]\\)[0]\n        h = struct.unpack\\('>I', data[4:8]\\)[0]\n        bit_depth = data[8]\n        color_type = data[9]\n        return w, h, bit_depth, color_type\n\nfor name in [\"shomer-icon-beige.png\", \"shomer-beige-on-purple.png\"]:\n    w, h, bd, ct = read_png_dimensions\\(name\\)\n    print\\(f\"{name}: {w}x{h}, bit_depth={bd}, color_type={ct}\"\\)\nEOF)",
+      "Bash(git ls-files:*)",
+      "Skill(browse)",
+      "Bash(ls:*)"
     ]
   }
 }

@@ -1,1 +1,1 @@
-export type { CheckinResult, PetOwner, Pet, Doctor } from './types'
+export type { CheckinResult, PetOwner, Pet, PetWithOwner, Doctor } from './types'

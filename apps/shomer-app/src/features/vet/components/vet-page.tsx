@@ -122,13 +122,22 @@ export function VetPage() {
             <span className="text-[13px] font-semibold text-foreground">Vet Console</span>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => signOut(auth).then(() => navigate('/login'))}
-          className="rounded-[4px] border border-border-base px-3 py-1.5 text-[12px] font-semibold text-muted hover:text-foreground hover:border-foreground/20 transition-colors"
-        >
-          Sign out
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => navigate('/settings')}
+            className="rounded-[4px] border border-border-base px-3 py-1.5 text-[12px] font-semibold text-muted hover:text-foreground hover:border-foreground/20 transition-colors"
+          >
+            Settings
+          </button>
+          <button
+            type="button"
+            onClick={() => signOut(auth).then(() => navigate('/login'))}
+            className="rounded-[4px] border border-border-base px-3 py-1.5 text-[12px] font-semibold text-muted hover:text-foreground hover:border-foreground/20 transition-colors"
+          >
+            Sign out
+          </button>
+        </div>
       </header>
 
       {/* Split layout */}
@@ -186,7 +195,7 @@ export function VetPage() {
             />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-8">
-              <div className="h-10 w-10 rounded-full bg-surface-2 flex items-center justify-center">
+              <div className="h-10 w-10 rounded-[4px] bg-surface-2 flex items-center justify-center">
                 <Stethoscope size={18} className="text-muted opacity-50" />
               </div>
               <div>

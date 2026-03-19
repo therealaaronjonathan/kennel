@@ -1,50 +1,95 @@
 import { useState } from 'react'
 import { ArrowLeft } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import type { NewOwnerFormData } from '../types'
+import { useBreeds } from '../services/use-breeds'
+import { BreedSelect } from './breed-select'
 
 const SPECIES_OPTIONS: { value: NewOwnerFormData['species']; label: string }[] = [
   { value: 'dog', label: 'Dog' },
   { value: 'cat', label: 'Cat' },
-  { value: 'bird', label: 'Bird' },
-  { value: 'rabbit', label: 'Rabbit' },
   { value: 'other', label: 'Other' },
 ]
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+// ── RegisterOwnerStep ─────────────────────────────────────────────────────────
+
 interface RegisterOwnerStepProps {
-  prefillPhone?: string
-  prefillEmail?: string
+  prefillPetName?: string
+  prefillBreed?: string
+  prefillSpecies?: NewOwnerFormData['species']
   onSubmit: (data: NewOwnerFormData) => void
   onBack: () => void
 }
 
+type FormErrors = Partial<Record<keyof NewOwnerFormData, string>>
+
 export function RegisterOwnerStep({
-  prefillPhone = '',
-  prefillEmail = '',
+  prefillPetName = '',
+  prefillBreed = '',
+  prefillSpecies = 'dog',
   onSubmit,
   onBack,
 }: RegisterOwnerStepProps) {
   const [form, setForm] = useState<NewOwnerFormData>({
     ownerName: '',
-    phone: prefillPhone,
-    email: prefillEmail,
-    petName: '',
-    species: 'dog',
-    breed: '',
+    phone: '+91',
+    email: '',
+    petName: prefillPetName,
+    species: prefillSpecies,
+    speciesName: '',
+    breed: prefillBreed,
     age: '',
     microchipNumber: '',
   })
-  const [errors, setErrors] = useState<Partial<Record<keyof NewOwnerFormData, string>>>({})
+  const [errors, setErrors] = useState<FormErrors>({})
+
+  const breeds = useBreeds(form.species)
 
   function set<K extends keyof NewOwnerFormData>(key: K, value: NewOwnerFormData[K]) {
     setForm((prev) => ({ ...prev, [key]: value }))
     setErrors((prev) => ({ ...prev, [key]: undefined }))
   }
 
+  // Phone — store as "+91{digits}", input shows only the 10-digit part
+  function handlePhoneChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 10)
+    setForm((prev) => ({ ...prev, phone: '+91' + digits }))
+    setErrors((prev) => ({ ...prev, phone: undefined }))
+  }
+
+  function handlePhoneBlur() {
+    const digits = form.phone.slice(3)
+    if (digits.length > 0 && digits.length !== 10) {
+      setErrors((prev) => ({ ...prev, phone: 'Phone number must be 10 digits' }))
+    }
+  }
+
+  function handleEmailBlur() {
+    if (form.email && !EMAIL_RE.test(form.email)) {
+      setErrors((prev) => ({ ...prev, email: 'Enter a valid email address' }))
+    }
+  }
+
+  function handleMicrochipBlur() {
+    if (form.microchipNumber.length > 15) {
+      setErrors((prev) => ({ ...prev, microchipNumber: 'Maximum 15 characters' }))
+    }
+  }
+
   function validate(): boolean {
-    const next: typeof errors = {}
+    const next: FormErrors = {}
     if (!form.ownerName.trim()) next.ownerName = 'Required'
-    if (!form.phone.trim()) next.phone = 'Required'
+    if (form.phone === '+91' || form.phone.length === 3) {
+      next.phone = 'Required'
+    } else if (form.phone.slice(3).length !== 10) {
+      next.phone = 'Phone number must be 10 digits'
+    }
+    if (form.email && !EMAIL_RE.test(form.email)) next.email = 'Enter a valid email address'
     if (!form.petName.trim()) next.petName = 'Required'
+    if (form.species === 'other' && !form.speciesName.trim()) next.speciesName = 'Required'
+    if (form.microchipNumber.length > 15) next.microchipNumber = 'Maximum 15 characters'
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -55,8 +100,14 @@ export function RegisterOwnerStep({
   }
 
   function inputClass(field: keyof NewOwnerFormData) {
-    return `w-full rounded-[4px] border ${errors[field] ? 'border-danger' : 'border-border-base'} bg-white px-3 py-[9px] text-[13px] font-medium text-foreground placeholder:text-muted focus:border-primary focus:outline-none transition-colors`
+    return cn(
+      'w-full rounded-[4px] border bg-white px-3 py-[9px] text-[13px] font-medium text-foreground placeholder:text-muted focus:border-primary focus:outline-none transition-colors',
+      errors[field] ? 'border-danger' : 'border-border-base',
+    )
   }
+
+  const breedPlaceholder =
+    form.species === 'dog' ? 'e.g. Golden Retriever' : 'e.g. Persian'
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -92,32 +143,51 @@ export function RegisterOwnerStep({
         </div>
 
         <div className="grid grid-cols-2 gap-3">
+          {/* Phone */}
           <div className="space-y-1">
             <label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
               Phone <span className="text-danger">*</span>
             </label>
-            <input
-              type="tel"
-              placeholder="+91 98765 43210"
-              value={form.phone}
-              onChange={(e) => set('phone', e.target.value)}
-              className={inputClass('phone')}
-            />
+            <div
+              className={cn(
+                'flex items-center rounded-[4px] border overflow-hidden transition-colors',
+                errors.phone ? 'border-danger' : 'border-border-base',
+              )}
+            >
+              <span className="flex-shrink-0 select-none border-r border-border-base bg-surface-2 px-3 py-[9px] text-[13px] font-semibold text-muted">
+                +91
+              </span>
+              <input
+                type="tel"
+                placeholder="98765 43210"
+                value={form.phone.slice(3)}
+                onChange={handlePhoneChange}
+                onBlur={handlePhoneBlur}
+                inputMode="numeric"
+                className="flex-1 bg-white px-3 py-[9px] text-[13px] font-medium text-foreground placeholder:text-muted focus:outline-none"
+              />
+            </div>
             {errors.phone && (
               <p className="text-[11px] text-danger">{errors.phone}</p>
             )}
           </div>
+
+          {/* Email */}
           <div className="space-y-1">
             <label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
               Email
             </label>
             <input
-              type="email"
+              type="text"
               placeholder="owner@email.com"
               value={form.email}
               onChange={(e) => set('email', e.target.value)}
+              onBlur={handleEmailBlur}
               className={inputClass('email')}
             />
+            {errors.email && (
+              <p className="text-[11px] text-danger">{errors.email}</p>
+            )}
           </div>
         </div>
       </div>
@@ -144,35 +214,80 @@ export function RegisterOwnerStep({
           )}
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        {/* Species toggle */}
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
+            Species <span className="text-danger">*</span>
+          </label>
+          <div className="grid grid-cols-3 rounded-[4px] border border-border-base overflow-hidden">
+            {SPECIES_OPTIONS.map((opt, i) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => {
+                  set('species', opt.value)
+                  if (opt.value !== 'other') set('speciesName', '')
+                  set('breed', '')
+                }}
+                className={cn(
+                  'py-[9px] text-[13px] font-semibold transition-colors',
+                  i < SPECIES_OPTIONS.length - 1 && 'border-r border-border-base',
+                  form.species === opt.value
+                    ? 'bg-primary text-white'
+                    : 'bg-surface text-muted hover:bg-surface-2 hover:text-foreground',
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Custom species name */}
+        {form.species === 'other' && (
           <div className="space-y-1">
             <label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
-              Species
+              Species Name <span className="text-danger">*</span>
             </label>
-            <select
-              value={form.species}
-              onChange={(e) => set('species', e.target.value as NewOwnerFormData['species'])}
-              className="w-full rounded-[4px] border border-border-base bg-white px-3 py-[9px] text-[13px] font-medium text-foreground focus:border-primary focus:outline-none transition-colors"
-            >
-              {SPECIES_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+            <input
+              type="text"
+              placeholder="e.g. Hamster, Parrot, Turtle…"
+              value={form.speciesName}
+              onChange={(e) => set('speciesName', e.target.value)}
+              className={inputClass('speciesName')}
+              autoFocus
+            />
+            {errors.speciesName && (
+              <p className="text-[11px] text-danger">{errors.speciesName}</p>
+            )}
           </div>
+        )}
+
+        {/* Breed + Age */}
+        <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
               Breed
             </label>
-            <input
-              type="text"
-              placeholder="Optional"
-              value={form.breed}
-              onChange={(e) => set('breed', e.target.value)}
-              className={inputClass('breed')}
-            />
+            {form.species !== 'other' ? (
+              <BreedSelect
+                value={form.breed}
+                onChange={(v) => set('breed', v)}
+                breeds={breeds}
+                placeholder={breedPlaceholder}
+                hasError={!!errors.breed}
+              />
+            ) : (
+              <input
+                type="text"
+                placeholder="e.g. Mix, Dwarf…"
+                value={form.breed}
+                onChange={(e) => set('breed', e.target.value)}
+                className={inputClass('breed')}
+              />
+            )}
           </div>
+
           <div className="space-y-1">
             <label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
               Age (years)
@@ -188,17 +303,23 @@ export function RegisterOwnerStep({
           </div>
         </div>
 
+        {/* Microchip */}
         <div className="space-y-1">
           <label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
             Microchip No.
           </label>
           <input
             type="text"
-            placeholder="15-digit chip number (if available)"
+            placeholder="15-digit chip number"
             value={form.microchipNumber}
             onChange={(e) => set('microchipNumber', e.target.value)}
+            maxLength={15}
+            onBlur={handleMicrochipBlur}
             className={inputClass('microchipNumber')}
           />
+          {errors.microchipNumber && (
+            <p className="text-[11px] text-danger">{errors.microchipNumber}</p>
+          )}
         </div>
       </div>
 

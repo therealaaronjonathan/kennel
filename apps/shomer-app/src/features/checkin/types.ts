@@ -16,12 +16,19 @@ export interface Pet {
   ownerId: string
   clinicId: string
   name: string
+  petNameLower: string
   species: 'dog' | 'cat' | 'bird' | 'rabbit' | 'other'
+  speciesName?: string   // custom species label when species === 'other'
   breed?: string
   age?: number
   microchipNumber?: string
   createdAt: Timestamp
   updatedAt: Timestamp
+}
+
+export interface PetWithOwner {
+  pet: Pet
+  owner: PetOwner
 }
 
 export interface Doctor {
@@ -44,7 +51,8 @@ export interface NewOwnerFormData {
   phone: string
   email: string
   petName: string
-  species: 'dog' | 'cat' | 'bird' | 'rabbit' | 'other'
+  species: 'dog' | 'cat' | 'other'
+  speciesName: string   // required when species === 'other'
   breed: string
   age: string
   microchipNumber: string

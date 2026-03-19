@@ -1,7 +1,15 @@
 {
   "projects": {
-    "shomer-app": "shomer-b6212"
+    "default": "shomer-b6212"
   },
-  "targets": {},
+  "targets": {
+    "shomer-b6212": {
+      "hosting": {
+        "landing": ["shomer-b6212"],
+        "app-test": ["shomer-app-test"],
+        "app-prod": ["shomer-app-prod"]
+      }
+    }
+  },
   "etags": {}
 }

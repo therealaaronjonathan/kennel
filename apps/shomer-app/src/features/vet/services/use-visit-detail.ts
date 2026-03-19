@@ -84,11 +84,21 @@ export function useVisitDetail(
             getDocs(collection(db, `clinics/${clinicId}/branches/${branchId}/visits/${lastVisitId}/prescriptions`)),
           ])
 
+          // New data model: diagnoses and prescriptions are arrays of structured docs
+          const diagNames = diagSnap.docs
+            .map((d) => (d.data().name as string) ?? d.data().text ?? '')
+            .filter(Boolean)
+            .join(', ')
+          const medNames = presSnap.docs
+            .map((d) => (d.data().name as string) ?? d.data().text ?? '')
+            .filter(Boolean)
+            .join(', ')
+
           lastVisit = {
             visitId: lastVisitId,
             date: lastDoc.data().date,
-            diagnosis: diagSnap.empty ? undefined : diagSnap.docs[0].data().text,
-            medicines: presSnap.empty ? undefined : presSnap.docs[0].data().text,
+            diagnosis: diagNames || undefined,
+            medicines: medNames || undefined,
           }
         }
       }

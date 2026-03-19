@@ -50,7 +50,7 @@ export function useVetQueue(
       (snap) => {
         const all = snap.docs
           .map((d) => ({ id: d.id, ...d.data() }) as VetQueueEntry)
-          .filter((v) => v.status !== 'completed' && v.status !== 'cancelled')
+          .filter((v) => v.status !== 'completed' && v.status !== 'cancelled' && v.status !== 'billed')
 
         all.sort((a, b) => {
           if (a.isEmergency && !b.isEmergency) return -1

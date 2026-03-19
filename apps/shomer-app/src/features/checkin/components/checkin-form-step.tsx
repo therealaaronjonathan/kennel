@@ -10,6 +10,8 @@ interface CheckinFormStepProps {
   branchId: string
   pets: Pet[]            // empty if new owner (pet already captured in registration)
   isNewOwner: boolean
+  selectedPetId?: string // pre-selected from pet search
+  onDutyIds: string[]    // only show these doctors in the dropdown
   onSubmit: (data: CheckinFormData, doctorName: string) => void
   onBack: () => void
   isSubmitting: boolean
@@ -20,13 +22,16 @@ export function CheckinFormStep({
   branchId,
   pets,
   isNewOwner,
+  selectedPetId,
+  onDutyIds,
   onSubmit,
   onBack,
   isSubmitting,
 }: CheckinFormStepProps) {
-  const { data: doctors = [], isLoading: doctorsLoading } = useDoctors(clinicId, branchId)
+  const { data: allDoctors = [], isLoading: doctorsLoading } = useDoctors(clinicId, branchId)
+  const doctors = onDutyIds.length > 0 ? allDoctors.filter((d) => onDutyIds.includes(d.id)) : []
 
-  const [petId, setPetId] = useState(pets.length === 1 ? pets[0].id : '')
+  const [petId, setPetId] = useState(selectedPetId ?? (pets.length === 1 ? pets[0].id : ''))
   const [complaints, setComplaints] = useState<string[]>([])
   const [doctorId, setDoctorId] = useState('')
   const [isEmergency, setIsEmergency] = useState(false)
@@ -137,7 +142,7 @@ export function CheckinFormStep({
         )}
         {!doctorsLoading && doctors.length === 0 && (
           <p className="text-[11px] text-muted">
-            No active doctors found. Add doctors in the clinic settings.
+            No doctors on duty. Go to Settings to mark doctors as on duty.
           </p>
         )}
       </div>
@@ -147,9 +152,11 @@ export function CheckinFormStep({
         <div
           role="switch"
           aria-checked={isEmergency}
+          tabIndex={0}
           onClick={() => setIsEmergency((v) => !v)}
+          onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setIsEmergency((v) => !v) } }}
           className={cn(
-            'relative h-5 w-9 rounded-full transition-colors cursor-pointer',
+            'relative h-5 w-9 rounded-full transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2',
             isEmergency ? 'bg-danger' : 'bg-border-base',
           )}
         >

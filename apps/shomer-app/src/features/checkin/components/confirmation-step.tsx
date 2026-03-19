@@ -1,4 +1,5 @@
-import { Link2, RotateCcw } from 'lucide-react'
+import { useState } from 'react'
+import { Link2, Check, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { CheckinResult } from '../types'
 
@@ -8,10 +9,13 @@ interface ConfirmationStepProps {
 }
 
 export function ConfirmationStep({ result, onNewCheckin }: ConfirmationStepProps) {
+  const [copied, setCopied] = useState(false)
   const queueLink = `${window.location.origin}/queue/${result.doctorId}?token=${result.tokenDisplay}&clinicId=${result.clinicId}&branchId=${result.branchId}`
 
   function copyLink() {
     navigator.clipboard.writeText(queueLink)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   return (
@@ -78,11 +82,14 @@ export function ConfirmationStep({ result, onNewCheckin }: ConfirmationStepProps
             type="button"
             onClick={copyLink}
             className={cn(
-              'flex items-center gap-1.5 rounded-[4px] border border-border-base px-2.5 py-1.5 text-[11px] font-semibold text-muted hover:text-foreground hover:border-foreground/20 transition-colors flex-shrink-0',
+              'flex items-center gap-1.5 rounded-[4px] border px-2.5 py-1.5 text-[11px] font-semibold transition-colors flex-shrink-0',
+              copied
+                ? 'border-success/40 bg-success/5 text-success'
+                : 'border-border-base text-muted hover:text-foreground hover:border-foreground/20',
             )}
           >
-            <Link2 size={11} />
-            Copy
+            {copied ? <Check size={11} /> : <Link2 size={11} />}
+            {copied ? 'Copied!' : 'Copy'}
           </button>
         </div>
       </div>

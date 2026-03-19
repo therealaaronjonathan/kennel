@@ -3,7 +3,14 @@ import { useMutation } from '@tanstack/react-query'
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useVisitDetail } from '../services/use-visit-detail'
+import { useClinicDiagnoses } from '../services/use-clinic-diagnoses'
+import { useClinicMedicines } from '../services/use-clinic-medicines'
+import { useClinicServices } from '../services/use-clinic-services'
 import { completeVisit, type ConsultationFormData } from '../services/complete-visit'
+import { addClinicDiagnosis } from '@/features/settings/services/clinic-lists-service'
+import { DiagnosisSelect, type DiagnosisEntry } from './diagnosis-select'
+import { MedicineSelect, type PrescriptionEntry } from './medicine-select'
+import { ServicesSelect, type ServiceEntry } from './services-select'
 import type { VetQueueEntry } from '../services/use-vet-queue'
 
 interface ConsultationViewProps {
@@ -29,25 +36,37 @@ export function ConsultationView({ entry, clinicId, branchId, onCompleted }: Con
     entry.petId,
     entry.ownerId,
   )
+  const { diagnoses, loading: diagLoading } = useClinicDiagnoses(clinicId)
+  const { medicines, loading: medLoading } = useClinicMedicines(clinicId)
+  const { services: serviceItems, loading: svcLoading } = useClinicServices(clinicId)
 
-  const [form, setForm] = useState<ConsultationFormData>({
-    diagnosis: '',
-    medicines: '',
-    vaccineName: '',
-    vaccineBatch: '',
-    vaccineNextDue: '',
-    services: '',
-  })
+  const [selectedDiagnoses, setSelectedDiagnoses] = useState<DiagnosisEntry[]>([])
+  const [consultationNotes, setConsultationNotes] = useState('')
+  const [selectedMedicines, setSelectedMedicines] = useState<PrescriptionEntry[]>([])
+  const [selectedServices, setSelectedServices] = useState<ServiceEntry[]>([])
   const [vaccineOpen, setVaccineOpen] = useState(false)
+  const [vaccineName, setVaccineName] = useState('')
+  const [vaccineBatch, setVaccineBatch] = useState('')
+  const [vaccineNextDue, setVaccineNextDue] = useState('')
 
   const complete = useMutation({
-    mutationFn: () => completeVisit(clinicId, branchId, entry.id, form),
+    mutationFn: () => {
+      const form: ConsultationFormData = {
+        diagnoses: selectedDiagnoses,
+        consultationNotes,
+        medicines: selectedMedicines,
+        services: selectedServices,
+        vaccineName,
+        vaccineBatch,
+        vaccineNextDue,
+      }
+      return completeVisit(clinicId, branchId, entry.id, form)
+    },
     onSuccess: onCompleted,
   })
 
-  function setField(key: keyof ConsultationFormData) {
-    return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-      setForm((prev) => ({ ...prev, [key]: e.target.value }))
+  async function handleSaveToClinic(name: string) {
+    await addClinicDiagnosis(clinicId, name)
   }
 
   const pet = detail?.pet
@@ -94,15 +113,18 @@ export function ConsultationView({ entry, clinicId, branchId, onCompleted }: Con
 
         {/* Complaints */}
         {entry.complaints.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {entry.complaints.map((c) => (
-              <span
-                key={c}
-                className="rounded-[3px] bg-surface-2 border border-border-base px-2 py-0.5 text-[11px] font-medium text-muted"
-              >
-                {c}
-              </span>
-            ))}
+          <div className="mt-3">
+            <p className={cn(labelClass, 'mb-1.5')}>Complaints</p>
+            <div className="flex flex-wrap gap-1.5">
+              {entry.complaints.map((c) => (
+                <span
+                  key={c}
+                  className="rounded-[3px] bg-surface-2 border border-border-base px-2 py-0.5 text-[11px] font-medium text-muted"
+                >
+                  {c}
+                </span>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -148,26 +170,39 @@ export function ConsultationView({ entry, clinicId, branchId, onCompleted }: Con
             )}
 
             {/* Consultation form */}
-            <div className="space-y-4">
+            <div className="space-y-5">
+              {/* Diagnosis */}
               <div className="space-y-1.5">
                 <label className={labelClass}>Diagnosis</label>
+                <DiagnosisSelect
+                  selected={selectedDiagnoses}
+                  onChange={setSelectedDiagnoses}
+                  items={diagnoses}
+                  loading={diagLoading}
+                  onSaveToClinic={handleSaveToClinic}
+                />
+              </div>
+
+              {/* Overall consultation notes */}
+              <div className="space-y-1.5">
+                <label className={labelClass}>Consultation Notes</label>
                 <textarea
                   rows={3}
-                  placeholder="Clinical findings and diagnosis…"
-                  value={form.diagnosis}
-                  onChange={setField('diagnosis')}
+                  placeholder="Overall clinical findings, observations…"
+                  value={consultationNotes}
+                  onChange={(e) => setConsultationNotes(e.target.value)}
                   className={inputClass}
                 />
               </div>
 
+              {/* Medicines */}
               <div className="space-y-1.5">
                 <label className={labelClass}>Medicines Prescribed</label>
-                <textarea
-                  rows={3}
-                  placeholder="Drug name, dose, frequency, duration…"
-                  value={form.medicines}
-                  onChange={setField('medicines')}
-                  className={inputClass}
+                <MedicineSelect
+                  selected={selectedMedicines}
+                  onChange={setSelectedMedicines}
+                  items={medicines}
+                  loading={medLoading}
                 />
               </div>
 
@@ -192,8 +227,8 @@ export function ConsultationView({ entry, clinicId, branchId, onCompleted }: Con
                       <input
                         type="text"
                         placeholder="e.g. Rabies, Parvo"
-                        value={form.vaccineName}
-                        onChange={setField('vaccineName')}
+                        value={vaccineName}
+                        onChange={(e) => setVaccineName(e.target.value)}
                         className={cn(inputClass, 'resize-none')}
                       />
                     </div>
@@ -203,8 +238,8 @@ export function ConsultationView({ entry, clinicId, branchId, onCompleted }: Con
                         <input
                           type="text"
                           placeholder="Batch number"
-                          value={form.vaccineBatch}
-                          onChange={setField('vaccineBatch')}
+                          value={vaccineBatch}
+                          onChange={(e) => setVaccineBatch(e.target.value)}
                           className={cn(inputClass, 'resize-none')}
                         />
                       </div>
@@ -212,8 +247,8 @@ export function ConsultationView({ entry, clinicId, branchId, onCompleted }: Con
                         <label className={labelClass}>Next Due</label>
                         <input
                           type="date"
-                          value={form.vaccineNextDue}
-                          onChange={setField('vaccineNextDue')}
+                          value={vaccineNextDue}
+                          onChange={(e) => setVaccineNextDue(e.target.value)}
                           className={cn(inputClass, 'resize-none')}
                         />
                       </div>
@@ -222,14 +257,14 @@ export function ConsultationView({ entry, clinicId, branchId, onCompleted }: Con
                 )}
               </div>
 
+              {/* Services */}
               <div className="space-y-1.5">
                 <label className={labelClass}>Services Availed</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Grooming, X-ray, Blood panel"
-                  value={form.services}
-                  onChange={setField('services')}
-                  className={cn(inputClass, 'resize-none')}
+                <ServicesSelect
+                  selected={selectedServices}
+                  onChange={setSelectedServices}
+                  items={serviceItems}
+                  loading={svcLoading}
                 />
               </div>
             </div>
@@ -237,7 +272,7 @@ export function ConsultationView({ entry, clinicId, branchId, onCompleted }: Con
         )}
       </div>
 
-      {/* Footer: Mark Complete */}
+      {/* Footer */}
       <div className="border-t border-border-base px-6 py-4 flex-shrink-0">
         {complete.isError && (
           <p className="mb-3 text-[12px] text-danger">

@@ -14,12 +14,15 @@ clinics/{clinicId}
 ├── doctors/{doctorId}                # clinic-level — branchIds for assignment
 ├── petOwners/{ownerId}               # clinic-level — branchIds for branches visited
 ├── pets/{petId}                      # clinic-level — not branch-specific
+├── diagnoses/{diagnosisId}           # clinic-level — master diagnosis list
+├── medicines/{medicineId}            # clinic-level — master medicine list
+├── services/{serviceId}              # clinic-level — services with prices
 ├── branches/{branchId}
 │   ├── queues/{queueId}              # one per doctor per day
 │   └── visits/{visitId}              # flat under branch for cross-cutting queries
-│       ├── diagnoses/{diagnosisId}
-│       ├── prescriptions/{prescriptionId}
-│       └── bills/{billId}
+│       ├── diagnoses/{diagnosisId}   # one doc per selected diagnosis
+│       ├── prescriptions/{prescriptionId}  # one doc per prescribed medicine
+│       └── vaccines/{vaccineId}      # one doc per vaccine administered
 ```
 
 **Root-level `staff/{uid}` — auth bootstrap**: A minimal lookup document exists at the root (outside any clinic) for every staff member. It contains only `{ clinicId, branchIds }`. This solves the chicken-and-egg problem — the app needs `clinicId` to read anything under `clinics/{clinicId}`, but can't know `clinicId` before authenticating. On login, the app reads `staff/{uid}` directly by path (no query needed), gets `clinicId` and `branchIds`, then uses those for all subsequent reads. The full staff profile lives at `clinics/{clinicId}/staff/{uid}`.
@@ -30,6 +33,8 @@ Firestore rewards nesting for ownership/security but punishes it for cross-cutti
 
 **Doctors, Pet Owners, and Staff at clinic level**: these entities can operate across multiple branches. A single source of truth at clinic level with a `branchIds` array avoids duplication and data drift. Branch-specific context (like which doctor is available where) is derived from `branchIds` — no separate assignment subcollection needed for V1.
 
+**Master lists (diagnoses, medicines, services) at clinic level**: these are shared across all branches of the clinic. Vets can add to these lists inline during consultation. Settings page provides full CRUD. Each item has `isActive: boolean` for soft-delete — items are never hard deleted so historical visit data remains interpretable.
+
 **Visits under Branch**: three different roles query them:
 
 - **Receptionist**: "all visits today at this branch" → query `visits` where `date == today`
@@ -38,7 +43,7 @@ Firestore rewards nesting for ownership/security but punishes it for cross-cutti
 
 All three work with Visit at the branch level using indexed fields. If Visit were nested under `petOwners/{id}/pets/{id}/visits`, only the pet owner query would be simple.
 
-**Diagnosis, Prescription, and Bill** are subcollections of Visit because they are always accessed in the context of a specific visit — never queried across all visits in V1. Cross-branch pet history (all diagnoses/prescriptions for a pet) is available via collection group queries on `petId`.
+**Diagnosis, Prescription, and Vaccine** are subcollections of Visit because they are always accessed in the context of a specific visit — never queried across all visits in V1. One Firestore document per selected item (not a single doc with an array) for clean write semantics.
 
 ## Entity Definitions
 
@@ -145,6 +150,46 @@ interface Pet {
 
 **Known limitation**: different people bringing the same pet under different phone numbers will create duplicate pet records. This is an accepted V1 trade-off — to be resolved with a pet merge feature in a future increment.
 
+### ClinicDiagnosis
+Clinic-level master list of diagnoses. Vets can add to this inline during consultation or via Settings. Soft-deleted via `isActive`.
+
+```ts
+interface ClinicDiagnosis {
+  id: string
+  name: string        // e.g. "Parvovirus", "Skin Allergy"
+  isActive: boolean   // false = soft-deleted; hidden from vet console, shown in Settings for restore
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+```
+
+### ClinicMedicine
+Clinic-level master list of medicines. Managed via Settings page.
+
+```ts
+interface ClinicMedicine {
+  id: string
+  name: string        // e.g. "Amoxicillin 250mg", "Metronidazole"
+  isActive: boolean
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+```
+
+### ClinicService
+Clinic-level catalogue of services with fixed prices. Used for auto-billing.
+
+```ts
+interface ClinicService {
+  id: string
+  name: string        // e.g. "Consultation", "X-Ray", "Deworming"
+  price: number       // fixed price in INR
+  isActive: boolean
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+```
+
 ### Queue
 One per doctor per day. Tracks the ordered list of visits for real-time queue display.
 
@@ -172,84 +217,84 @@ interface Visit {
   branchId: string
   clinicId: string
   doctorId: string
+  doctorName: string      // denormalized for display
   ownerId: string
+  ownerName: string       // denormalized for display
   petId: string
+  petName: string         // denormalized for display
   tokenNumber: number
+  tokenDisplay: string    // e.g. "D-0001"
   type: 'consultation' | 'vaccination' | 'emergency' | 'follow-up'
   status: 'waiting' | 'in-progress' | 'completed' | 'cancelled'
-  queuePosition: number  // position in doctor's queue at time of check-in
-  date: string           // YYYY-MM-DD
-  startedAt?: Timestamp  // when vet begins consultation
-  completedAt?: Timestamp
-  notes?: string         // vet's general notes
+  isEmergency: boolean
+  complaints: string[]    // from check-in
+  queuePosition: number   // position in doctor's queue at time of check-in
+  date: string            // YYYY-MM-DD
+  // Set on completion:
+  consultationNotes?: string    // vet's overall free-text notes for the consultation
+  services?: ServiceLineItem[]  // services availed (denormalized from ClinicService at time of visit)
+  billAmount?: number           // sum of all service prices — auto-calculated on completion
   createdAt: Timestamp
   updatedAt: Timestamp
+}
+
+interface ServiceLineItem {
+  serviceId: string   // ref to clinics/{clinicId}/services/{serviceId}
+  name: string        // denormalized at write time — survives master list changes
+  price: number       // denormalized at write time — price locked at time of visit
 }
 ```
 
 **Status flow**: `waiting` → `in-progress` → `completed`
-Emergency visits skip the queue: they are inserted with `queuePosition: 0` and `type: 'emergency'`.
+Emergency visits skip the queue: they are inserted with `queuePosition: 0` and `isEmergency: true`.
 
-### Diagnosis
-Subcollection of Visit. Skipped for vaccination-type visits.
+**Services and billing on the Visit doc**: `services` (array of ServiceLineItem) and `billAmount` are written directly to the visit document when the vet marks it complete. This allows the receptionist dashboard to read billing info from a single document without subcollection reads.
+
+### Diagnosis (Visit subcollection)
+One document per selected diagnosis per visit. Multiple diagnoses per visit are supported.
 
 ```ts
-interface Diagnosis {
+interface VisitDiagnosis {
   id: string
-  visitId: string
-  petId: string          // denormalized for collection group queries
-  condition: string
-  severity?: 'mild' | 'moderate' | 'severe'
-  notes?: string
+  diagnosisId: string | null  // ref to clinics/{clinicId}/diagnoses/{id}
+                               // null if vet typed a custom diagnosis and chose not to save it
+  name: string                 // denormalized at write time
+  notes: string                // vet's per-diagnosis notes (may be empty)
+  isCustom: boolean            // true if not from the master list
   createdAt: Timestamp
 }
 ```
 
-### Prescription
-Subcollection of Visit. Present for all visit types (vaccinations include vaccine details here).
+**Custom diagnoses**: when a vet types a diagnosis name not in the master list, they are prompted to save it to the clinic list. Whether they save it or not, the diagnosis is recorded on the visit with `isCustom: true` and `diagnosisId: null`.
+
+### Prescription (Visit subcollection)
+One document per prescribed medicine per visit.
 
 ```ts
-interface Prescription {
+interface VisitPrescription {
   id: string
-  visitId: string
-  petId: string          // denormalized for collection group queries
-  items: PrescriptionItem[]
-  notes?: string
-  sentToOwner: boolean
-  sentVia?: 'whatsapp' | 'sms' | 'email'
-  sentAt?: Timestamp
+  medicineId: string | null  // ref to clinics/{clinicId}/medicines/{id}; null if custom
+  name: string               // denormalized at write time
+  morning: boolean
+  afternoon: boolean
+  evening: boolean
+  night: boolean
+  days: number               // number of days to take the medicine
+  isCustom: boolean
   createdAt: Timestamp
-}
-
-interface PrescriptionItem {
-  name: string           // medicine or vaccine name
-  dosage?: string
-  frequency?: string
-  duration?: string
-  batchNumber?: string   // for vaccines
-  nextDueDate?: Timestamp // for vaccines
 }
 ```
 
-### Bill
-Subcollection of Visit.
+### Vaccine (Visit subcollection)
+One document per vaccine administered per visit.
 
 ```ts
-interface Bill {
+interface VisitVaccine {
   id: string
-  visitId: string
-  items: BillItem[]
-  totalAmount: number
-  currency: string       // default: 'INR'
-  sentToOwner: boolean
-  sentVia?: 'whatsapp' | 'sms' | 'email'
-  sentAt?: Timestamp
+  name: string           // vaccine name
+  batch: string | null   // batch/lot number
+  nextDue: string | null // next due date (YYYY-MM-DD string)
   createdAt: Timestamp
-}
-
-interface BillItem {
-  description: string
-  amount: number
 }
 ```
 
@@ -261,6 +306,17 @@ interface BillItem {
 4. Selected branch is stored in app state for the session
 
 Users with a single branch skip the branch selector. Clinic owners with access to all branches see the full list.
+
+## Settings Page
+
+Route: `/settings` — accessible to all authenticated staff.
+
+Three tabs:
+- **Diagnoses**: Add/restore items in `clinics/{clinicId}/diagnoses`. Vets can also add inline during consultation.
+- **Medicines**: Add/restore items in `clinics/{clinicId}/medicines`.
+- **Services**: Add/restore items in `clinics/{clinicId}/services` — includes price configuration.
+
+Soft-delete pattern: toggling `isActive: false` hides an item from vet console dropdowns but keeps it visible in Settings (greyed out with a Restore button). Historical visit data always uses denormalized names so removing from master list never breaks old records.
 
 ## Firestore Conventions
 
@@ -277,11 +333,10 @@ Users with a single branch skip the branch selector. Clinic owners with access t
 
 ### Denormalization
 Firestore is not relational — denormalize where it avoids extra reads:
-- Visit carries `ownerId`, `petId`, `doctorId` as fields (not just path-based)
+- Visit carries `ownerId`, `petId`, `doctorId`, `ownerName`, `petName`, `doctorName` for display without extra reads
+- `services` and `billAmount` are denormalized onto the Visit doc at completion time
+- VisitDiagnosis and VisitPrescription denormalize `name` from the master list at write time — master list deletes/changes never break historical records
 - Pet carries `clinicId` for security rules (no `branchId` — pet is clinic-level)
-- Doctor and Staff carry `clinicId` and `branchIds` for security rules and branch filtering
-- Diagnosis and Prescription carry `petId` for collection group queries across branches
-- Do NOT denormalize names or labels — fetch those via separate reads when displaying
 
 ### Indexing
 Composite indexes needed for V1:
@@ -289,6 +344,9 @@ Composite indexes needed for V1:
 - `visits`: (`doctorId`, `date`, `status`) — vet queue view
 - `visits`: (`petId`, `date`) — pet history
 - `pets`: `microchipNumber` — single field index for chip-based lookup
+- `clinics/{id}/diagnoses`: `isActive` — vet console active filter
+- `clinics/{id}/medicines`: `isActive` — vet console active filter
+- `clinics/{id}/services`: `isActive` — vet console active filter
 
 Collection group indexes needed for cross-branch pet history:
 - `diagnoses`: `petId` (collection group scope)
@@ -296,15 +354,15 @@ Collection group indexes needed for cross-branch pet history:
 
 ### Security Rules Pattern
 - Branch-level documents (`visits`, `queues`): user's `clinicId` and selected `branchId` must match the document's fields
-- Clinic-level documents (`pets`, `petOwners`, `doctors`, `staff`): user's `clinicId` must match — any staff member across any branch of the clinic can access these
+- Clinic-level documents (`pets`, `petOwners`, `doctors`, `staff`, `diagnoses`, `medicines`, `services`): user's `clinicId` must match — any staff member across any branch of the clinic can access these
 
 ## Visit Type Flows
 
 ### Consultation / Follow-up
-Check-in → Visit created (`waiting`) → Vet starts (`in-progress`) → Diagnosis recorded → Prescription recorded → Vet completes (`completed`) → Receptionist sends Bill + Prescription
+Check-in → Visit created (`waiting`) → Vet starts (`in-progress`) → Selects diagnoses (from master list or custom) + writes consultation notes → Prescribes medicines (timing + days) → Selects services availed → Vet completes (`completed`) → `services[]` and `billAmount` written to visit doc → Receptionist sees itemized bill on dashboard → Sends Bill + Prescription
 
 ### Vaccination
-Check-in → Visit created (`waiting`, type `vaccination`) → Vet starts → **No diagnosis** → Prescription recorded (vaccine details) → Vet completes → Receptionist sends Bill + Prescription
+Check-in → Visit created (`waiting`, type `vaccination`) → Vet starts → **No diagnosis** → Vaccine details recorded (name, batch, next due) → Services availed selected → Vet completes → Receptionist sends Bill
 
 ### Emergency
-Vet hits emergency button → Visit created (`in-progress`, type `emergency`, queuePosition `0`) → Owner details collected during/after → Diagnosis → Prescription → Bill
+Vet hits emergency button → Visit created (`in-progress`, type `emergency`, `isEmergency: true`, `queuePosition: 0`) → Owner details collected during/after → Diagnosis → Prescription → Services + Bill

@@ -180,7 +180,11 @@ export async function registerAndCheckin(
       clinicId,
       ownerId: ownerRef.id,
       name: newOwner.petName,
+      petNameLower: newOwner.petName.toLowerCase().trim(),
       species: newOwner.species,
+      ...(newOwner.species === 'other' && newOwner.speciesName.trim()
+        ? { speciesName: newOwner.speciesName.trim() }
+        : {}),
       breed: newOwner.breed || null,
       age: newOwner.age ? parseInt(newOwner.age) : null,
       microchipNumber: newOwner.microchipNumber || null,

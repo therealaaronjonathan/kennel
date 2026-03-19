@@ -1,22 +1,36 @@
 import { lazy, Suspense } from 'react'
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
 import RootLayout from '@/app/root-layout'
+import ReceptionistLayout from '@/app/receptionist-layout'
 import { AuthGuard } from '@/features/auth/components/auth-guard'
 
 const LoginPage = lazy(() =>
   import('@/features/auth/components/login-page').then(m => ({ default: m.LoginPage }))
 )
-const DashboardPage = lazy(() =>
-  import('@/features/dashboard/components/dashboard-page').then(m => ({ default: m.DashboardPage }))
+const ReceptionHomePage = lazy(() =>
+  import('@/features/reception/components/reception-home').then(m => ({ default: m.ReceptionHomePage }))
 )
 const CheckinPage = lazy(() =>
   import('@/features/checkin/components/checkin-page').then(m => ({ default: m.CheckinPage }))
 )
-const QueuePage = lazy(() =>
-  import('@/features/queue/components/queue-page').then(m => ({ default: m.QueuePage }))
+const ReceptionQueuePage = lazy(() =>
+  import('@/features/reception/components/queue-page').then(m => ({ default: m.ReceptionQueuePage }))
+)
+const CheckoutPage = lazy(() =>
+  import('@/features/checkout/components/checkout-page').then(m => ({ default: m.CheckoutPage }))
+)
+const SettingsPage = lazy(() =>
+  import('@/features/settings/components/settings-page').then(m => ({ default: m.SettingsPage }))
 )
 const VetPage = lazy(() =>
   import('@/features/vet/components/vet-page').then(m => ({ default: m.VetPage }))
+)
+const QueuePage = lazy(() =>
+  import('@/features/queue/components/queue-page').then(m => ({ default: m.QueuePage }))
+)
+
+const suspense = (el: React.ReactNode) => (
+  <Suspense fallback={<div className="h-screen bg-background" />}>{el}</Suspense>
 )
 
 const router = createBrowserRouter([
@@ -30,50 +44,46 @@ const router = createBrowserRouter([
       },
       {
         path: 'login',
-        element: (
-          <Suspense fallback={<div className="min-h-screen bg-surface" />}>
-            <LoginPage />
-          </Suspense>
-        ),
+        element: suspense(<LoginPage />),
       },
+
+      // ── Old routes → redirect ─────────────────────────────────────────────
+      { path: 'dashboard', element: <Navigate to="/reception/queue" replace /> },
+      { path: 'checkin',   element: <Navigate to="/reception/checkin" replace /> },
+      { path: 'settings',  element: <Navigate to="/reception/settings" replace /> },
+
+      // ── Receptionist shell ────────────────────────────────────────────────
       {
-        path: 'dashboard',
+        path: 'reception',
         element: (
           <AuthGuard>
-            <Suspense fallback={<div className="min-h-screen bg-background" />}>
-              <DashboardPage />
-            </Suspense>
+            <ReceptionistLayout />
           </AuthGuard>
         ),
+        children: [
+          { index: true, element: <Navigate to="/reception/home" replace /> },
+          { path: 'home',     element: suspense(<ReceptionHomePage />) },
+          { path: 'checkin',  element: suspense(<CheckinPage />) },
+          { path: 'queue',    element: suspense(<ReceptionQueuePage />) },
+          { path: 'checkout', element: suspense(<CheckoutPage />) },
+          { path: 'settings', element: suspense(<SettingsPage />) },
+        ],
       },
-      {
-        path: 'checkin',
-        element: (
-          <AuthGuard>
-            <Suspense fallback={<div className="min-h-screen bg-background" />}>
-              <CheckinPage />
-            </Suspense>
-          </AuthGuard>
-        ),
-      },
+
+      // ── Vet console (unchanged) ───────────────────────────────────────────
       {
         path: 'vet',
         element: (
           <AuthGuard>
-            <Suspense fallback={<div className="h-screen bg-background" />}>
-              <VetPage />
-            </Suspense>
+            {suspense(<VetPage />)}
           </AuthGuard>
         ),
       },
+
+      // ── Public queue (owner-facing) ───────────────────────────────────────
       {
-        // Public — no AuthGuard
         path: 'queue/:doctorId',
-        element: (
-          <Suspense fallback={<div className="min-h-screen bg-background" />}>
-            <QueuePage />
-          </Suspense>
-        ),
+        element: suspense(<QueuePage />),
       },
     ],
   },
