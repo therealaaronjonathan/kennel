@@ -126,15 +126,22 @@ function CheckoutPanel({ visit, clinicId, branchId, onBilled, onToast }: Checkou
         </p>
 
         {visit.complaints.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {visit.complaints.map((c) => (
-              <span
-                key={c}
-                className="rounded-[3px] bg-surface-2 border border-border-base px-2 py-0.5 text-[11px] font-medium text-muted"
-              >
-                {c}
-              </span>
-            ))}
+          <div className="mt-3">
+            <div className="flex flex-wrap gap-1.5">
+              {visit.complaints.map((c) => (
+                <span
+                  key={c}
+                  className="rounded-[3px] bg-surface-2 border border-border-base px-2 py-0.5 text-[11px] font-medium text-muted"
+                >
+                  {c}
+                </span>
+              ))}
+            </div>
+            {visit.otherComplaintText && (
+              <p className="mt-1.5 text-[12px] text-foreground italic">
+                "{visit.otherComplaintText}"
+              </p>
+            )}
           </div>
         )}
       </div>

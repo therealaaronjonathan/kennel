@@ -3,6 +3,8 @@ import { ArrowLeft, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ComplaintsSelect } from './complaints-select'
 import { useDoctors } from '../services/use-doctors'
+import { useCheckinServices } from '../services/use-checkin-services'
+import { useGroomingServices } from '../services/use-grooming-services'
 import type { Pet, CheckinFormData } from '../types'
 
 interface CheckinFormStepProps {
@@ -30,17 +32,41 @@ export function CheckinFormStep({
 }: CheckinFormStepProps) {
   const { data: allDoctors = [], isLoading: doctorsLoading } = useDoctors(clinicId, branchId)
   const doctors = onDutyIds.length > 0 ? allDoctors.filter((d) => onDutyIds.includes(d.id)) : []
+  const { services: checkinServices, loading: servicesLoading } = useCheckinServices(clinicId)
+  const { groomingServices, loading: groomingLoading } = useGroomingServices(clinicId)
 
   const [petId, setPetId] = useState(selectedPetId ?? (pets.length === 1 ? pets[0].id : ''))
+  const [service, setService] = useState('')
   const [complaints, setComplaints] = useState<string[]>([])
+  const [otherComplaintText, setOtherComplaintText] = useState('')
+  const [selectedGroomingServices, setSelectedGroomingServices] = useState<string[]>([])
   const [doctorId, setDoctorId] = useState('')
   const [isEmergency, setIsEmergency] = useState(false)
-  const [errors, setErrors] = useState<{ pet?: string; complaints?: string; doctor?: string }>({})
+  const [errors, setErrors] = useState<{
+    pet?: string
+    service?: string
+    complaints?: string
+    otherComplaint?: string
+    groomingServices?: string
+    doctor?: string
+  }>({})
+
+  const isConsultation = service.toLowerCase() === 'consultation'
+  const isGrooming = service.toLowerCase() === 'grooming'
 
   function validate(): boolean {
     const next: typeof errors = {}
     if (!isNewOwner && pets.length > 1 && !petId) next.pet = 'Select a pet'
-    if (complaints.length === 0) next.complaints = 'Select at least one complaint'
+    if (!service) next.service = 'Select a service'
+    if (isConsultation) {
+      if (complaints.length === 0) next.complaints = 'Select at least one complaint'
+      if (complaints.includes('Other') && !otherComplaintText.trim()) {
+        next.otherComplaint = 'Please describe the complaint'
+      }
+    }
+    if (isGrooming && selectedGroomingServices.length === 0) {
+      next.groomingServices = 'Select at least one grooming service'
+    }
     if (!doctorId) next.doctor = 'Select a doctor'
     setErrors(next)
     return Object.keys(next).length === 0
@@ -49,12 +75,27 @@ export function CheckinFormStep({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!validate()) return
-    const selectedPetId = isNewOwner ? '' : (pets.length === 1 ? pets[0].id : petId)
+    const resolvedPetId = isNewOwner ? '' : (pets.length === 1 ? pets[0].id : petId)
     const doctor = doctors.find((d) => d.id === doctorId)
     onSubmit(
-      { petId: selectedPetId, complaints, doctorId, isEmergency },
+      {
+        petId: resolvedPetId,
+        service,
+        complaints: isConsultation ? complaints : [],
+        otherComplaintText: isConsultation && complaints.includes('Other') ? otherComplaintText.trim() : undefined,
+        groomingServices: isGrooming ? selectedGroomingServices : [],
+        doctorId,
+        isEmergency,
+      },
       doctor?.name ?? '',
     )
+  }
+
+  function toggleGroomingService(name: string) {
+    setSelectedGroomingServices((prev) =>
+      prev.includes(name) ? prev.filter((s) => s !== name) : [...prev, name],
+    )
+    setErrors((p) => ({ ...p, groomingServices: undefined }))
   }
 
   const showPetSelector = !isNewOwner && pets.length > 1
@@ -100,16 +141,113 @@ export function CheckinFormStep({
         </div>
       )}
 
-      {/* Complaints */}
+      {/* Service selector */}
       <div className="space-y-1">
         <label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
-          Complaints <span className="text-danger">*</span>
+          Service <span className="text-danger">*</span>
         </label>
-        <ComplaintsSelect selected={complaints} onChange={setComplaints} />
-        {errors.complaints && (
-          <p className="text-[11px] text-danger">{errors.complaints}</p>
+        <select
+          value={service}
+          onChange={(e) => {
+            setService(e.target.value)
+            setComplaints([])
+            setOtherComplaintText('')
+            setSelectedGroomingServices([])
+            setErrors((p) => ({ ...p, service: undefined, complaints: undefined, groomingServices: undefined }))
+          }}
+          disabled={servicesLoading}
+          className={cn(
+            'w-full rounded-[4px] border bg-white px-3 py-[9px] text-[13px] font-medium text-foreground focus:border-primary focus:outline-none transition-colors disabled:opacity-50',
+            errors.service ? 'border-danger' : 'border-border-base',
+          )}
+        >
+          <option value="">
+            {servicesLoading ? 'Loading services…' : 'Select a service…'}
+          </option>
+          {checkinServices.map((svc) => (
+            <option key={svc.id} value={svc.name}>
+              {svc.name}
+            </option>
+          ))}
+        </select>
+        {errors.service && (
+          <p className="text-[11px] text-danger">{errors.service}</p>
         )}
       </div>
+
+      {/* Complaints — only for Consultation */}
+      {isConsultation && (
+        <div className="space-y-1">
+          <label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
+            Complaints <span className="text-danger">*</span>
+          </label>
+          <ComplaintsSelect
+            selected={complaints}
+            onChange={(val) => {
+              setComplaints(val)
+              setErrors((p) => ({ ...p, complaints: undefined }))
+            }}
+            otherText={otherComplaintText}
+            onOtherTextChange={(val) => {
+              setOtherComplaintText(val)
+              setErrors((p) => ({ ...p, otherComplaint: undefined }))
+            }}
+          />
+          {errors.complaints && (
+            <p className="text-[11px] text-danger">{errors.complaints}</p>
+          )}
+          {errors.otherComplaint && (
+            <p className="text-[11px] text-danger">{errors.otherComplaint}</p>
+          )}
+        </div>
+      )}
+
+      {/* Grooming services — only for Grooming */}
+      {isGrooming && (
+        <div className="space-y-1">
+          <label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
+            Grooming Services <span className="text-danger">*</span>
+          </label>
+          {groomingLoading ? (
+            <p className="text-[12px] text-muted">Loading grooming services…</p>
+          ) : groomingServices.length === 0 ? (
+            <p className="text-[12px] text-muted">
+              No grooming services configured. Add them in Firestore under{' '}
+              <code className="text-[11px] bg-surface-2 px-1 rounded">
+                clinics/{'{'}clinicId{'}'}/groomingServices
+              </code>.
+            </p>
+          ) : (
+            <div className="rounded-[4px] border border-border-base bg-white">
+              {groomingServices.map((svc) => {
+                const isSelected = selectedGroomingServices.includes(svc.name)
+                return (
+                  <label
+                    key={svc.id}
+                    className={cn(
+                      'flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors hover:bg-surface',
+                      isSelected && 'bg-surface-2',
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleGroomingService(svc.name)}
+                      className="accent-primary h-3.5 w-3.5 flex-shrink-0"
+                    />
+                    <span className="text-[13px] font-medium text-foreground">
+                      {svc.name}
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+          )}
+          {errors.groomingServices && (
+            <p className="text-[11px] text-danger">{errors.groomingServices}</p>
+          )}
+        </div>
+      )}
 
       {/* Doctor */}
       <div className="space-y-1">

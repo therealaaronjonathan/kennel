@@ -111,6 +111,15 @@ export function ConsultationView({ entry, clinicId, branchId, onCompleted }: Con
           </div>
         </div>
 
+        {/* Service badge */}
+        {entry.service && (
+          <div className="mt-2">
+            <span className="inline-flex rounded-[3px] bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em] text-primary">
+              {entry.service}
+            </span>
+          </div>
+        )}
+
         {/* Complaints */}
         {entry.complaints.length > 0 && (
           <div className="mt-3">
@@ -122,6 +131,28 @@ export function ConsultationView({ entry, clinicId, branchId, onCompleted }: Con
                   className="rounded-[3px] bg-surface-2 border border-border-base px-2 py-0.5 text-[11px] font-medium text-muted"
                 >
                   {c}
+                </span>
+              ))}
+            </div>
+            {entry.otherComplaintText && (
+              <p className="mt-1.5 text-[12px] text-foreground italic">
+                "{entry.otherComplaintText}"
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Grooming services */}
+        {entry.groomingServices && entry.groomingServices.length > 0 && (
+          <div className="mt-3">
+            <p className={cn(labelClass, 'mb-1.5')}>Grooming Services</p>
+            <div className="flex flex-wrap gap-1.5">
+              {entry.groomingServices.map((svc) => (
+                <span
+                  key={svc}
+                  className="rounded-[3px] bg-surface-2 border border-border-base px-2 py-0.5 text-[11px] font-medium text-muted"
+                >
+                  {svc}
                 </span>
               ))}
             </div>

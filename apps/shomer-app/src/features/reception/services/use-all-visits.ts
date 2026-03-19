@@ -14,6 +14,7 @@ export interface AllVisit {
   status: string
   isEmergency: boolean
   complaints: string[]
+  otherComplaintText?: string
   createdAt: Timestamp | null
 }
 
@@ -56,6 +57,7 @@ export function useAllVisits(clinicId: string | null, branchId: string | null) {
             status: data.status ?? 'waiting',
             isEmergency: data.isEmergency ?? false,
             complaints: data.complaints ?? [],
+            otherComplaintText: data.otherComplaintText ?? undefined,
             createdAt: data.createdAt ?? null,
           } as AllVisit
         })

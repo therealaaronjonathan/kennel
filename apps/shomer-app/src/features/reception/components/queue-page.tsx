@@ -50,6 +50,7 @@ function toCompletedVisit(v: AllVisit): CompletedVisit {
     doctorName: v.doctorName,
     doctorId: v.doctorId,
     complaints: v.complaints,
+    otherComplaintText: v.otherComplaintText,
     completedAt: null,
     date: '',
   }

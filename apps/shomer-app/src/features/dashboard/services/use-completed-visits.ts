@@ -18,6 +18,7 @@ export interface CompletedVisit {
   doctorName: string
   doctorId: string
   complaints: string[]
+  otherComplaintText?: string
   isEmergency?: boolean
   services?: ServiceEntry[]
   billAmount?: number
@@ -65,6 +66,7 @@ export function useCompletedVisits(clinicId: string | null, branchId: string | n
             doctorName: data.doctorName ?? '',
             doctorId: data.doctorId ?? '',
             complaints: data.complaints ?? [],
+            otherComplaintText: data.otherComplaintText ?? undefined,
             isEmergency: data.isEmergency ?? false,
             services: data.services ?? undefined,
             billAmount: data.billAmount ?? undefined,

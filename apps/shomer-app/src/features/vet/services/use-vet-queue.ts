@@ -13,7 +13,10 @@ export interface VetQueueEntry {
   doctorId: string
   status: string
   isEmergency: boolean
+  service?: string
   complaints: string[]
+  otherComplaintText?: string
+  groomingServices?: string[]
   date: string
 }
 

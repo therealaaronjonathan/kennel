@@ -86,6 +86,11 @@ export function VisitDetailPanel({ visit, clinicId, branchId, onToast }: VisitDe
                 </span>
               ))}
             </div>
+            {visit.otherComplaintText && (
+              <p className="mt-1.5 text-[12px] text-foreground italic">
+                "{visit.otherComplaintText}"
+              </p>
+            )}
           </div>
         )}
       </div>

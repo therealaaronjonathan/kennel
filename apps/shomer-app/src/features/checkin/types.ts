@@ -41,7 +41,10 @@ export interface Doctor {
 
 export interface CheckinFormData {
   petId: string
-  complaints: string[]
+  service: string              // selected check-in service name, e.g. 'Consultation' | 'Grooming'
+  complaints: string[]         // required when service === 'Consultation'
+  otherComplaintText?: string  // required when 'Other' is in complaints
+  groomingServices: string[]   // required when service === 'Grooming'
   doctorId: string
   isEmergency: boolean
 }
@@ -72,30 +75,30 @@ export interface CheckinResult {
 }
 
 export const COMPLAINTS = [
+  'Skin problem (itching/rashes/hair loss)',
+  'Tick/flea infestation',
   'Vomiting',
-  'Diarrhea',
-  'Lethargy',
-  'Loss of appetite',
-  'Limping',
-  'Skin irritation',
-  'Ear scratching',
-  'Eye discharge',
+  'Diarrhea/loose stools',
+  'Not eating/loss of appetite',
+  'Fever',
+  'Lethargy/weakness',
+  'Limping/lameness',
+  'Wound/injury',
+  'Swelling/lump',
+  'Ear infection/discharge',
+  'Eye discharge/redness',
   'Coughing',
-  'Sneezing',
   'Difficulty breathing',
-  'Excessive thirst',
-  'Frequent urination',
-  'Weight loss',
-  'Swelling',
-  'Bleeding',
-  'Seizures',
-  'Aggression',
-  'Anxiety',
-  'Routine checkup',
+  'Urinary problem (straining/blood)',
   'Vaccination',
   'Deworming',
-  'Dental issue',
-  'Post-surgery followup',
+  'Health checkup',
+  'Follow-up visit',
+  'Behavioral concern',
+  'Weight issue',
+  'Pregnancy/delivery related',
+  'Post-surgery care',
+  'Certificate request',
   'Other',
 ] as const
 

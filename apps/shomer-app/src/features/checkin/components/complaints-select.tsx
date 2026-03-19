@@ -6,11 +6,12 @@ import { COMPLAINTS } from '../types'
 interface ComplaintsSelectProps {
   selected: string[]
   onChange: (selected: string[]) => void
+  otherText: string
+  onOtherTextChange: (text: string) => void
 }
 
-export function ComplaintsSelect({ selected, onChange }: ComplaintsSelectProps) {
+export function ComplaintsSelect({ selected, onChange, otherText, onOtherTextChange }: ComplaintsSelectProps) {
   const [filter, setFilter] = useState('')
-  const [otherText, setOtherText] = useState('')
 
   const filtered = COMPLAINTS.filter(
     (c) =>
@@ -23,7 +24,7 @@ export function ComplaintsSelect({ selected, onChange }: ComplaintsSelectProps) 
     if (complaint === 'Other') {
       if (selected.includes('Other')) {
         onChange(selected.filter((s) => s !== 'Other'))
-        setOtherText('')
+        onOtherTextChange('')
       } else {
         onChange([...selected, 'Other'])
       }
@@ -37,7 +38,7 @@ export function ComplaintsSelect({ selected, onChange }: ComplaintsSelectProps) 
   }
 
   function removeTag(tag: string) {
-    if (tag === 'Other') setOtherText('')
+    if (tag === 'Other') onOtherTextChange('')
     onChange(selected.filter((s) => s !== tag))
   }
 
@@ -133,7 +134,7 @@ export function ComplaintsSelect({ selected, onChange }: ComplaintsSelectProps) 
           type="text"
           placeholder="Describe the complaint…"
           value={otherText}
-          onChange={(e) => setOtherText(e.target.value)}
+          onChange={(e) => onOtherTextChange(e.target.value)}
           className="w-full rounded-[4px] border border-border-base bg-white px-3 py-[9px] text-[13px] font-medium text-foreground placeholder:text-muted focus:border-primary focus:outline-none transition-colors"
         />
       )}
