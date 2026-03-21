@@ -105,6 +105,7 @@ export function VetPage() {
   }
 
   const waitingCount = entries.filter((e) => e.status === 'waiting').length
+  const hasInProgress = entries.some((e) => e.status === 'in-progress')
 
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
@@ -112,9 +113,9 @@ export function VetPage() {
       <header className="h-[52px] border-b border-border-base bg-surface flex items-center justify-between px-5 flex-shrink-0">
         <div className="flex items-center gap-3">
           <img
-            src="/logos/shomer-purple-on-light.png"
+            src="/logos/shomer-full-icon.png"
             alt="Shomer"
-            className="h-6 w-auto"
+            className="h-8 w-auto rounded-[4px]"
           />
           <span className="text-[13px] text-muted">/</span>
           <div className="flex items-center gap-1.5">
@@ -191,6 +192,7 @@ export function VetPage() {
               entry={selectedEntry}
               clinicId={clinicId}
               branchId={branchId}
+              hasInProgress={hasInProgress}
               onCompleted={handleCompleted}
             />
           ) : (

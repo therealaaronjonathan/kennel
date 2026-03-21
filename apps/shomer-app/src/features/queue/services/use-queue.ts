@@ -45,7 +45,6 @@ export function useQueue(doctorId: string, clinicId: string, branchId: string) {
       (snap) => {
         const all = snap.docs
           .map((d) => ({ id: d.id, ...d.data() }) as QueueEntry)
-          .filter((v) => v.status !== 'completed' && v.status !== 'cancelled')
 
         all.sort((a, b) => {
           if (a.isEmergency && !b.isEmergency) return -1

@@ -1,11 +1,13 @@
+import { useEffect, useRef, useState } from 'react'
 import { signOut } from 'firebase/auth'
-import { LayoutDashboard, UserPlus, LayoutList, ReceiptText, Settings, LogOut } from 'lucide-react'
+import { LayoutDashboard, UserPlus, LayoutList, ReceiptText, Settings, LogOut, Stethoscope } from 'lucide-react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { auth } from '@/lib/firebase'
 import { useAuth } from '@/features/auth'
 import { useClinic } from '@/features/clinic'
 import { useCompletedVisits } from '@/features/dashboard/services/use-completed-visits'
+import { useAllVisits } from '@/features/reception/services/use-all-visits'
 
 const NAV_ITEMS = [
   { to: '/reception/home', label: 'Home', Icon: LayoutDashboard },
@@ -15,12 +17,60 @@ const NAV_ITEMS = [
   { to: '/reception/settings', label: 'Settings', Icon: Settings },
 ]
 
+function InProgressToast({ message, onDone }: { message: string; onDone: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 5000)
+    return () => clearTimeout(t)
+  }, [onDone])
+
+  return (
+    <div className="fixed top-4 right-4 z-50 flex items-center gap-3 rounded-[4px] border border-primary/30 bg-surface px-4 py-3 shadow-lg max-w-[300px]">
+      <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+        <Stethoscope size={14} className="text-white" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-primary mb-0.5">
+          Call Patient
+        </p>
+        <p className="text-[13px] font-bold text-foreground leading-snug">{message}</p>
+      </div>
+    </div>
+  )
+}
+
 export default function ReceptionistLayout() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { clinicId, branchId } = useClinic()
   const { visits: unbilledVisits } = useCompletedVisits(clinicId, branchId)
+  const { visits, loading } = useAllVisits(clinicId, branchId)
   const unbilledCount = unbilledVisits.length
+
+  const [inProgressToast, setInProgressToast] = useState<string | null>(null)
+  const seenInProgressIds = useRef(new Set<string>())
+  const initialized = useRef(false)
+
+  // Detect transitions to in-progress and fire toast.
+  // Guard on clinicId too: useAllVisits returns loading=false immediately when
+  // clinicId is null, which would seed an empty set before real data arrives.
+  useEffect(() => {
+    if (loading || !clinicId) return
+
+    if (!initialized.current) {
+      // Seed with current in-progress IDs so we don't toast on page load
+      visits.filter((v) => v.status === 'in-progress').forEach((v) => seenInProgressIds.current.add(v.id))
+      initialized.current = true
+      return
+    }
+
+    for (const visit of visits) {
+      if (visit.status === 'in-progress' && !seenInProgressIds.current.has(visit.id)) {
+        seenInProgressIds.current.add(visit.id)
+        setInProgressToast(`Call ${visit.tokenDisplay} — ${visit.petName} is ready`)
+        break
+      }
+    }
+  }, [visits, loading, clinicId])
 
   function handleSignOut() {
     signOut(auth).then(() => navigate('/login'))
@@ -87,6 +137,11 @@ export default function ReceptionistLayout() {
       <div className="flex-1 min-w-0 overflow-hidden flex flex-col">
         <Outlet />
       </div>
+
+      {/* In-progress notification */}
+      {inProgressToast && (
+        <InProgressToast message={inProgressToast} onDone={() => setInProgressToast(null)} />
+      )}
     </div>
   )
 }

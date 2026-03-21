@@ -16,11 +16,33 @@ export interface OwnerDetail {
   email?: string
 }
 
+export interface LastVisitDiagnosis {
+  name: string
+  notes?: string
+}
+
+export interface LastVisitMedicine {
+  name: string
+  morning: boolean
+  afternoon: boolean
+  evening: boolean
+  night: boolean
+  days: number
+}
+
+export interface LastVisitVaccine {
+  name: string
+  batch?: string
+  nextDue?: string
+}
+
 export interface LastVisitSummary {
   visitId: string
   date: string
-  diagnosis?: string
-  medicines?: string
+  consultationNotes?: string
+  diagnoses: LastVisitDiagnosis[]
+  medicines: LastVisitMedicine[]
+  vaccines: LastVisitVaccine[]
 }
 
 export interface VisitDetail {
@@ -69,7 +91,6 @@ export function useVisitDetail(
       let lastVisit: LastVisitSummary | null = null
 
       if (!visitsSnap.empty) {
-        // Sort client-side by date desc, exclude current visit
         const sorted = visitsSnap.docs
           .filter((d) => d.id !== currentVisitId)
           .sort((a, b) => b.data().date.localeCompare(a.data().date))
@@ -77,28 +98,48 @@ export function useVisitDetail(
         if (sorted.length > 0) {
           const lastDoc = sorted[0]
           const lastVisitId = lastDoc.id
+          const visitData = lastDoc.data()
 
-          // Fetch diagnosis and prescription subdocs
-          const [diagSnap, presSnap] = await Promise.all([
+          // Fetch diagnoses, prescriptions, and vaccines subcollections in parallel
+          const [diagSnap, presSnap, vaccineSnap] = await Promise.all([
             getDocs(collection(db, `clinics/${clinicId}/branches/${branchId}/visits/${lastVisitId}/diagnoses`)),
             getDocs(collection(db, `clinics/${clinicId}/branches/${branchId}/visits/${lastVisitId}/prescriptions`)),
+            getDocs(collection(db, `clinics/${clinicId}/branches/${branchId}/visits/${lastVisitId}/vaccines`)),
           ])
 
-          // New data model: diagnoses and prescriptions are arrays of structured docs
-          const diagNames = diagSnap.docs
-            .map((d) => (d.data().name as string) ?? d.data().text ?? '')
-            .filter(Boolean)
-            .join(', ')
-          const medNames = presSnap.docs
-            .map((d) => (d.data().name as string) ?? d.data().text ?? '')
-            .filter(Boolean)
-            .join(', ')
+          const diagnoses: LastVisitDiagnosis[] = diagSnap.docs
+            .map((d) => ({
+              name: (d.data().name as string) ?? '',
+              notes: (d.data().notes as string) || undefined,
+            }))
+            .filter((d) => d.name.length > 0)
+
+          const medicines: LastVisitMedicine[] = presSnap.docs
+            .map((d) => ({
+              name: (d.data().name as string) ?? '',
+              morning: d.data().morning ?? false,
+              afternoon: d.data().afternoon ?? false,
+              evening: d.data().evening ?? false,
+              night: d.data().night ?? false,
+              days: d.data().days ?? 1,
+            }))
+            .filter((m) => m.name.length > 0)
+
+          const vaccines: LastVisitVaccine[] = vaccineSnap.docs
+            .map((d) => ({
+              name: (d.data().name as string) ?? '',
+              batch: (d.data().batch as string) || undefined,
+              nextDue: (d.data().nextDue as string) || undefined,
+            }))
+            .filter((v) => v.name.length > 0)
 
           lastVisit = {
             visitId: lastVisitId,
-            date: lastDoc.data().date,
-            diagnosis: diagNames || undefined,
-            medicines: medNames || undefined,
+            date: visitData.date,
+            consultationNotes: (visitData.consultationNotes as string) || undefined,
+            diagnoses,
+            medicines,
+            vaccines,
           }
         }
       }

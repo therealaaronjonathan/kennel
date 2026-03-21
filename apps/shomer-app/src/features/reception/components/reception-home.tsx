@@ -111,6 +111,9 @@ export function ReceptionHomePage() {
                 const inProgress = countFor(doctor.id, ['in-progress'])
                 const completed = countFor(doctor.id, ['completed', 'billed'])
                 const initial = doctor.name.charAt(0).toUpperCase()
+                const activeVisit = visits.find(
+                  (v) => v.doctorId === doctor.id && v.status === 'in-progress',
+                )
 
                 return (
                   <div
@@ -122,7 +125,7 @@ export function ReceptionHomePage() {
                       <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                         <span className="text-[13px] font-bold text-primary">{initial}</span>
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="text-[13px] font-semibold text-foreground truncate">
                           {doctor.name}
                         </p>
@@ -131,6 +134,17 @@ export function ReceptionHomePage() {
                           <span className="text-[10px] font-medium text-muted">On duty</span>
                         </div>
                       </div>
+                      {/* Active token badge */}
+                      {activeVisit && (
+                        <div className="flex-shrink-0 text-right">
+                          <p className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted leading-none mb-0.5">
+                            Now Serving
+                          </p>
+                          <p className="font-display text-[16px] font-bold text-warning leading-none">
+                            {activeVisit.tokenDisplay}
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     {/* Stats */}

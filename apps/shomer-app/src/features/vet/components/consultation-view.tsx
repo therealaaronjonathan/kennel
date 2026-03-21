@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
+import { AlertTriangle, ChevronDown, ChevronUp, PhoneCall, PauseCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useVisitDetail } from '../services/use-visit-detail'
 import { useClinicDiagnoses } from '../services/use-clinic-diagnoses'
 import { useClinicMedicines } from '../services/use-clinic-medicines'
 import { useClinicServices } from '../services/use-clinic-services'
 import { completeVisit, type ConsultationFormData } from '../services/complete-visit'
+import { markVisitInProgress } from '../services/mark-in-progress'
+import { pauseVisit } from '../services/pause-visit'
 import { addClinicDiagnosis } from '@/features/settings/services/clinic-lists-service'
 import { DiagnosisSelect, type DiagnosisEntry } from './diagnosis-select'
 import { MedicineSelect, type PrescriptionEntry } from './medicine-select'
@@ -17,6 +19,7 @@ interface ConsultationViewProps {
   entry: VetQueueEntry
   clinicId: string
   branchId: string
+  hasInProgress: boolean
   onCompleted: () => void
 }
 
@@ -28,7 +31,7 @@ const SPECIES_LABEL: Record<string, string> = {
   other: 'Other',
 }
 
-export function ConsultationView({ entry, clinicId, branchId, onCompleted }: ConsultationViewProps) {
+export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onCompleted }: ConsultationViewProps) {
   const { detail, loading: detailLoading } = useVisitDetail(
     clinicId,
     branchId,
@@ -48,6 +51,14 @@ export function ConsultationView({ entry, clinicId, branchId, onCompleted }: Con
   const [vaccineName, setVaccineName] = useState('')
   const [vaccineBatch, setVaccineBatch] = useState('')
   const [vaccineNextDue, setVaccineNextDue] = useState('')
+
+  const callPatient = useMutation({
+    mutationFn: () => markVisitInProgress(clinicId, branchId, entry.id),
+  })
+
+  const pause = useMutation({
+    mutationFn: () => pauseVisit(clinicId, branchId, entry.id),
+  })
 
   const complete = useMutation({
     mutationFn: () => {
@@ -160,7 +171,40 @@ export function ConsultationView({ entry, clinicId, branchId, onCompleted }: Con
         )}
       </div>
 
-      {/* Scrollable body */}
+      {/* Call Patient gate — shown when patient is still waiting */}
+      {entry.status === 'waiting' && (
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 px-8 text-center">
+          <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+            <PhoneCall size={20} className="text-primary" />
+          </div>
+          <div>
+            <p className="text-[14px] font-semibold text-foreground">Ready to call this patient?</p>
+            <p className="mt-1 text-[12px] text-muted">
+              Calling will mark this token as in-progress and notify the receptionist.
+            </p>
+          </div>
+          {hasInProgress && (
+            <p className="text-[11px] text-warning font-semibold">
+              Another patient is already in consultation. Complete it first.
+            </p>
+          )}
+          <button
+            type="button"
+            disabled={hasInProgress || callPatient.isPending}
+            onClick={() => callPatient.mutate()}
+            className="flex items-center gap-2 rounded-[4px] bg-primary px-5 py-[10px] text-[13px] font-semibold text-white hover:opacity-85 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <PhoneCall size={14} />
+            {callPatient.isPending ? 'Calling…' : 'Call Patient'}
+          </button>
+          {callPatient.isError && (
+            <p className="text-[11px] text-danger">Failed to update status. Try again.</p>
+          )}
+        </div>
+      )}
+
+      {/* Scrollable body — shown when in-progress */}
+      {entry.status === 'in-progress' && (
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
         {detailLoading ? (
           <p className="text-[12px] text-muted">Loading patient details…</p>
@@ -168,21 +212,72 @@ export function ConsultationView({ entry, clinicId, branchId, onCompleted }: Con
           <>
             {/* Last visit summary */}
             {lastVisit ? (
-              <div className="rounded-[4px] border border-border-base bg-surface-2 p-4 space-y-2">
-                <p className={cn(labelClass, 'mb-1')}>Last Visit · {lastVisit.date}</p>
-                {lastVisit.diagnosis && (
-                  <div>
-                    <p className="text-[11px] text-muted font-medium">Diagnosis</p>
-                    <p className="text-[13px] text-foreground">{lastVisit.diagnosis}</p>
+              <div className="rounded-[4px] border border-border-base bg-surface-2 p-4 space-y-3">
+                <p className={cn(labelClass)}>Last Visit · {lastVisit.date}</p>
+
+                {/* Diagnoses */}
+                {lastVisit.diagnoses.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted">Diagnosis</p>
+                    {lastVisit.diagnoses.map((d, i) => (
+                      <div key={i}>
+                        <p className="text-[13px] font-semibold text-foreground">{d.name}</p>
+                        {d.notes && (
+                          <p className="text-[12px] text-muted leading-relaxed">{d.notes}</p>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
-                {lastVisit.medicines && (
-                  <div>
-                    <p className="text-[11px] text-muted font-medium">Medicines</p>
-                    <p className="text-[13px] text-foreground">{lastVisit.medicines}</p>
+
+                {/* Consultation notes */}
+                {lastVisit.consultationNotes && (
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted">Doctor's Notes</p>
+                    <p className="text-[12px] text-foreground leading-relaxed whitespace-pre-wrap">
+                      {lastVisit.consultationNotes}
+                    </p>
                   </div>
                 )}
-                {!lastVisit.diagnosis && !lastVisit.medicines && (
+
+                {/* Medicines */}
+                {lastVisit.medicines.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted">Medicines</p>
+                    {lastVisit.medicines.map((m, i) => {
+                      const times = [
+                        m.morning && 'Morning',
+                        m.afternoon && 'Afternoon',
+                        m.evening && 'Evening',
+                        m.night && 'Night',
+                      ].filter(Boolean).join(' · ')
+                      return (
+                        <div key={i}>
+                          <p className="text-[13px] font-semibold text-foreground">{m.name}</p>
+                          <p className="text-[11px] text-muted">
+                            {times || 'As prescribed'} · {m.days} day{m.days !== 1 ? 's' : ''}
+                          </p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* Vaccines */}
+                {lastVisit.vaccines.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted">Vaccines</p>
+                    {lastVisit.vaccines.map((v, i) => (
+                      <div key={i} className="rounded-[4px] bg-surface px-3 py-2 space-y-0.5">
+                        <p className="text-[12px] font-semibold text-foreground">{v.name}</p>
+                        {v.batch && <p className="text-[11px] text-muted">Batch: {v.batch}</p>}
+                        {v.nextDue && <p className="text-[11px] text-muted">Next due: {v.nextDue}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {lastVisit.diagnoses.length === 0 && !lastVisit.consultationNotes && lastVisit.medicines.length === 0 && lastVisit.vaccines.length === 0 && (
                   <p className="text-[12px] text-muted">No notes recorded for last visit.</p>
                 )}
               </div>
@@ -302,23 +397,35 @@ export function ConsultationView({ entry, clinicId, branchId, onCompleted }: Con
           </>
         )}
       </div>
+      )}
 
-      {/* Footer */}
-      <div className="border-t border-border-base px-6 py-4 flex-shrink-0">
-        {complete.isError && (
-          <p className="mb-3 text-[12px] text-danger">
-            {(complete.error as Error)?.message ?? 'Failed to save. Try again.'}
-          </p>
-        )}
-        <button
-          type="button"
-          disabled={complete.isPending}
-          onClick={() => complete.mutate()}
-          className="w-full rounded-[4px] bg-primary px-4 py-[10px] text-[13px] font-semibold text-white hover:opacity-85 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {complete.isPending ? 'Saving…' : 'Mark Complete'}
-        </button>
-      </div>
+      {/* Footer — only shown when in-progress */}
+      {entry.status === 'in-progress' && (
+        <div className="border-t border-border-base px-6 py-4 flex-shrink-0 space-y-2">
+          {complete.isError && (
+            <p className="mb-1 text-[12px] text-danger">
+              {(complete.error as Error)?.message ?? 'Failed to save. Try again.'}
+            </p>
+          )}
+          <button
+            type="button"
+            disabled={complete.isPending || pause.isPending}
+            onClick={() => complete.mutate()}
+            className="w-full rounded-[4px] bg-primary px-4 py-[10px] text-[13px] font-semibold text-white hover:opacity-85 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {complete.isPending ? 'Saving…' : 'Mark Complete'}
+          </button>
+          <button
+            type="button"
+            disabled={pause.isPending || complete.isPending}
+            onClick={() => pause.mutate()}
+            className="w-full flex items-center justify-center gap-2 rounded-[4px] border border-border-base px-4 py-[9px] text-[13px] font-semibold text-muted hover:text-foreground hover:border-foreground/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <PauseCircle size={14} />
+            {pause.isPending ? 'Pausing…' : 'Pause — Patient Not Present'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
