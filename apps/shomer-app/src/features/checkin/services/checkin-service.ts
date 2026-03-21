@@ -21,6 +21,16 @@ function getTodayString(): string {
   return `${year}-${month}-${day}`
 }
 
+/**
+ * Derive token prefix from doctor name.
+ * Takes the last word of the name, grabs the last 3 chars, uppercased.
+ * e.g. "Dr. Rajesh" → "ESH", "Dr. Kumar" → "MAR", "Dr. Li" → "LI"
+ */
+function getTokenPrefix(doctorName: string): string {
+  const lastWord = doctorName.trim().split(/\s+/).pop() ?? doctorName
+  return lastWord.slice(-3).toUpperCase()
+}
+
 async function performCheckin(
   clinicId: string,
   branchId: string,
@@ -33,31 +43,27 @@ async function performCheckin(
   doctorName: string,
 ): Promise<CheckinResult> {
   const today = getTodayString()
-  const queueDocId = `${formData.doctorId}_${today}`
-  const queueDocRef = doc(
+  const tokenCounterRef = doc(
     db,
-    `clinics/${clinicId}/branches/${branchId}/queues/${queueDocId}`,
+    `clinics/${clinicId}/branches/${branchId}/tokenCounters/${today}`,
   )
   const visitRef = doc(
     collection(db, `clinics/${clinicId}/branches/${branchId}/visits`),
   )
 
-  const doctorInitial = doctorName.charAt(0).toUpperCase()
+  const prefix = getTokenPrefix(doctorName)
   let tokenNumber = 0
   let tokenDisplay = ''
 
   await runTransaction(db, async (transaction) => {
-    const queueSnap = await transaction.get(queueDocRef)
-    const nextToken = (queueSnap.exists() ? (queueSnap.data().currentToken as number) : 0) + 1
+    const counterSnap = await transaction.get(tokenCounterRef)
+    const nextToken = (counterSnap.exists() ? (counterSnap.data().currentToken as number) : 0) + 1
     tokenNumber = nextToken
-    tokenDisplay = `${doctorInitial}-${String(nextToken).padStart(4, '0')}`
+    tokenDisplay = `${prefix}-${String(nextToken).padStart(4, '0')}`
 
     transaction.set(
-      queueDocRef,
+      tokenCounterRef,
       {
-        doctorId: formData.doctorId,
-        branchId,
-        clinicId,
         date: today,
         currentToken: nextToken,
         updatedAt: serverTimestamp(),
@@ -146,10 +152,9 @@ export async function registerAndCheckin(
   doctorName: string,
 ): Promise<CheckinResult> {
   const today = getTodayString()
-  const queueDocId = `${formData.doctorId}_${today}`
-  const queueDocRef = doc(
+  const tokenCounterRef = doc(
     db,
-    `clinics/${clinicId}/branches/${branchId}/queues/${queueDocId}`,
+    `clinics/${clinicId}/branches/${branchId}/tokenCounters/${today}`,
   )
   const ownerRef = doc(collection(db, `clinics/${clinicId}/petOwners`))
   const petRef = doc(collection(db, `clinics/${clinicId}/pets`))
@@ -157,15 +162,15 @@ export async function registerAndCheckin(
     collection(db, `clinics/${clinicId}/branches/${branchId}/visits`),
   )
 
-  const doctorInitial = doctorName.charAt(0).toUpperCase()
+  const prefix = getTokenPrefix(doctorName)
   let tokenNumber = 0
   let tokenDisplay = ''
 
   await runTransaction(db, async (transaction) => {
-    const queueSnap = await transaction.get(queueDocRef)
-    const nextToken = (queueSnap.exists() ? (queueSnap.data().currentToken as number) : 0) + 1
+    const counterSnap = await transaction.get(tokenCounterRef)
+    const nextToken = (counterSnap.exists() ? (counterSnap.data().currentToken as number) : 0) + 1
     tokenNumber = nextToken
-    tokenDisplay = `${doctorInitial}-${String(nextToken).padStart(4, '0')}`
+    tokenDisplay = `${prefix}-${String(nextToken).padStart(4, '0')}`
 
     // Create owner
     transaction.set(ownerRef, {
@@ -195,13 +200,10 @@ export async function registerAndCheckin(
       updatedAt: serverTimestamp(),
     })
 
-    // Update queue counter
+    // Update branch-wide token counter
     transaction.set(
-      queueDocRef,
+      tokenCounterRef,
       {
-        doctorId: formData.doctorId,
-        branchId,
-        clinicId,
         date: today,
         currentToken: nextToken,
         updatedAt: serverTimestamp(),

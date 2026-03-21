@@ -3,29 +3,52 @@ import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/features/auth'
 
+export type StaffRole = 'doctor' | 'receptionist' | 'admin' | 'owner'
+
 interface ClinicContextValue {
   clinicId: string | null
   branchId: string | null
+  branchIds: string[]
+  branchName: string | null
   doctorId: string | null
+  role: StaffRole | null
   loading: boolean
   error: string | null
+  selectBranch: (branchId: string) => void
 }
 
 const ClinicContext = createContext<ClinicContextValue>({
   clinicId: null,
   branchId: null,
+  branchIds: [],
+  branchName: null,
   doctorId: null,
+  role: null,
   loading: true,
   error: null,
+  selectBranch: () => {},
 })
+
+function resolveRole(data: Record<string, unknown>): StaffRole {
+  if (data.role) return data.role as StaffRole
+  // Legacy fallback: no role field
+  return data.doctorId ? 'doctor' : 'receptionist'
+}
 
 export function ClinicProvider({ children }: { children: React.ReactNode }) {
   const { user, loading: authLoading } = useAuth()
+
   const [clinicId, setClinicId] = useState<string | null>(null)
   const [branchId, setBranchId] = useState<string | null>(null)
+  const [branchIds, setBranchIds] = useState<string[]>([])
+  const [branchName, setBranchName] = useState<string | null>(null)
   const [doctorId, setDoctorId] = useState<string | null>(null)
+  const [role, setRole] = useState<StaffRole | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Holds resolved branch names keyed by branchId
+  const [branchNameMap, setBranchNameMap] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (authLoading) return
@@ -33,7 +56,10 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
     if (!user) {
       setClinicId(null)
       setBranchId(null)
+      setBranchIds([])
+      setBranchName(null)
       setDoctorId(null)
+      setRole(null)
       setLoading(false)
       return
     }
@@ -42,19 +68,49 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
       try {
         console.log('[clinic] looking up staff uid:', user.uid)
         const staffSnap = await getDoc(doc(db, 'staff', user.uid))
-        console.log('[clinic] doc exists:', staffSnap.exists())
-        if (staffSnap.exists()) {
-          const data = staffSnap.data()
-          console.log('[clinic] data:', data)
-          setClinicId(data.clinicId ?? null)
-          // branchIds is an array — for V1 single-branch clinics take the first entry
-          const branchIds: string[] = data.branchIds ?? []
-          setBranchId(branchIds[0] ?? null)
-          setDoctorId(data.doctorId ?? null)
-          setError(null)
-        } else {
-          setError('Staff profile not found. Contact your administrator.')
+        if (!staffSnap.exists()) {
+          setError('No account found. Contact your administrator.')
+          setLoading(false)
+          return
         }
+
+        const data = staffSnap.data() as Record<string, unknown>
+        const cid = data.clinicId as string
+        const ids: string[] = (data.branchIds as string[]) ?? []
+        const did = (data.doctorId as string | undefined) ?? null
+        const resolvedRole = resolveRole(data)
+
+        setClinicId(cid)
+        setBranchIds(ids)
+        setDoctorId(did)
+        setRole(resolvedRole)
+
+        // Fetch branch names
+        const nameMap: Record<string, string> = {}
+        await Promise.all(
+          ids.map(async (bid) => {
+            try {
+              const bSnap = await getDoc(doc(db, `clinics/${cid}/branches/${bid}`))
+              if (bSnap.exists()) {
+                nameMap[bid] = (bSnap.data().name as string) ?? bid
+              } else {
+                nameMap[bid] = bid
+              }
+            } catch {
+              nameMap[bid] = bid
+            }
+          }),
+        )
+        setBranchNameMap(nameMap)
+
+        // Auto-select if single branch
+        if (ids.length === 1) {
+          setBranchId(ids[0])
+          setBranchName(nameMap[ids[0]] ?? null)
+        }
+        // Multi-branch: branchId stays null until selectBranch() is called
+
+        setError(null)
       } catch (err) {
         console.error('[clinic] error:', err)
         setError('Failed to load clinic info. Check your connection.')
@@ -66,8 +122,15 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
     fetchStaff()
   }, [user, authLoading])
 
+  function selectBranch(bid: string) {
+    setBranchId(bid)
+    setBranchName(branchNameMap[bid] ?? bid)
+  }
+
   return (
-    <ClinicContext.Provider value={{ clinicId, branchId, doctorId, loading, error }}>
+    <ClinicContext.Provider
+      value={{ clinicId, branchId, branchIds, branchName, doctorId, role, loading, error, selectBranch }}
+    >
       {children}
     </ClinicContext.Provider>
   )

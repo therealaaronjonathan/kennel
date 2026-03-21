@@ -3,7 +3,7 @@ import { db } from '@/lib/firebase'
 
 // Diagnoses
 export async function addClinicDiagnosis(clinicId: string, name: string): Promise<void> {
-  await addDoc(collection(db, `clinics/${clinicId}/diagnoses`), {
+  await addDoc(collection(db, `clinics/${clinicId}/diagnosisCatalog`), {
     name,
     isActive: true,
     createdAt: serverTimestamp(),
@@ -24,7 +24,7 @@ export async function setClinicDiagnosisActive(
 
 // Medicines
 export async function addClinicMedicine(clinicId: string, name: string): Promise<void> {
-  await addDoc(collection(db, `clinics/${clinicId}/medicines`), {
+  await addDoc(collection(db, `clinics/${clinicId}/medicinesCatalog`), {
     name,
     isActive: true,
     createdAt: serverTimestamp(),

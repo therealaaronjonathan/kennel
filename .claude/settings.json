@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Check if the stop_hook_active field is true in the input. If it is, respond with {\"ok\": true}. Otherwise, look at the conversation context. Were any significant code changes made (new features, bug fixes, refactors, data model changes)? If yes, respond with {\"ok\": false, \"reason\": \"Session produced code changes. Summarize what was built or changed to the user and ask if they want to update docs/app-updates.md with a new changelog entry and bump the version.\"}. If the session was only discussion or planning with no code written, respond with {\"ok\": true}."
+          }
+        ]
+      }
+    ]
+  }
+}

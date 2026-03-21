@@ -42,7 +42,8 @@
       "Bash(ls:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "Bash(firebase deploy:*)"
+      "Bash(firebase deploy:*)",
+      "Bash(bun --print \"require\\(''''./src/app''''\\)\")"
     ]
   }
 }

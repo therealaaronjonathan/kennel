@@ -39,7 +39,6 @@ function getFriendlyError(err: unknown): string | null {
   return 'Something went wrong. Please try again.'
 }
 
-
 function GoogleIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
@@ -63,20 +62,37 @@ function GoogleIcon() {
   )
 }
 
+type StaffRole = 'doctor' | 'receptionist' | 'admin' | 'owner'
+
+function resolveRole(data: Record<string, unknown>): StaffRole {
+  if (data.role) return data.role as StaffRole
+  return data.doctorId ? 'doctor' : 'receptionist'
+}
+
+function getRoleDestination(role: StaffRole): string {
+  if (role === 'admin' || role === 'owner') return '/admin'
+  if (role === 'doctor') return '/vet'
+  return '/reception/home'
+}
+
 async function getDestination(uid: string): Promise<string> {
   try {
     const snap = await getDoc(doc(db, 'staff', uid))
-    if (snap.exists() && snap.data().doctorId) return '/vet'
+    if (!snap.exists()) return '/login'
+    const data = snap.data() as Record<string, unknown>
+    const role = resolveRole(data)
+    const branchIds: string[] = (data.branchIds as string[]) ?? []
+    if (branchIds.length > 1) return '/select-branch'
+    return getRoleDestination(role)
   } catch {
-    // fall through to default
+    return '/reception/home'
   }
-  return '/dashboard'
 }
 
 export function LoginPage() {
   const navigate = useNavigate()
   const { user, loading } = useAuth()
-  const { doctorId, loading: clinicLoading } = useClinic()
+  const { role, branchIds, loading: clinicLoading } = useClinic()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -86,10 +102,14 @@ export function LoginPage() {
 
   // Already authenticated — redirect based on role once clinic data is ready
   useEffect(() => {
-    if (!loading && !clinicLoading && user) {
-      navigate(doctorId ? '/vet' : '/dashboard', { replace: true })
+    if (!loading && !clinicLoading && user && role) {
+      if (branchIds.length > 1) {
+        navigate('/select-branch', { replace: true })
+      } else {
+        navigate(getRoleDestination(role), { replace: true })
+      }
     }
-  }, [user, loading, clinicLoading, doctorId, navigate])
+  }, [user, loading, clinicLoading, role, branchIds, navigate])
 
   async function redirectAfterSignIn(cred: UserCredential) {
     const dest = await getDestination(cred.user.uid)
@@ -118,7 +138,7 @@ export function LoginPage() {
       await redirectAfterSignIn(cred)
     } catch (err) {
       const msg = getFriendlyError(err)
-      if (msg) setError(msg) // silently ignore popup-closed-by-user
+      if (msg) setError(msg)
     } finally {
       setGoogleLoading(false)
     }
@@ -136,14 +156,12 @@ export function LoginPage() {
           backgroundImage: 'repeating-linear-gradient(-45deg, rgba(250,232,199,0.05) 0px, rgba(250,232,199,0.05) 1px, transparent 1px, transparent 32px)',
         }}
       >
-        {/* Top: staff + textmark logo */}
         <img
           src="/logos/shomer-full-icon.png"
           alt=""
           className="h-20 w-auto object-contain object-left select-none -ml-3"
         />
 
-        {/* Middle: bold statement */}
         <div>
           <div
             className="mb-7 h-px w-12"
@@ -163,7 +181,6 @@ export function LoginPage() {
           </p>
         </div>
 
-        {/* Bottom: byline */}
         <p
           className="text-[11px] font-semibold uppercase tracking-[0.12em]"
           style={{ color: 'rgba(250, 232, 199, 0.35)' }}
@@ -179,7 +196,6 @@ export function LoginPage() {
       >
         <div className="w-full max-w-[380px]">
 
-          {/* Mobile logo — hidden on desktop */}
           <div className="lg:hidden mb-10 animate-fade-up">
             <img
               src="/logos/shomer-full-icon.png"
@@ -188,7 +204,6 @@ export function LoginPage() {
             />
           </div>
 
-          {/* Heading */}
           <div
             className="mb-10 animate-fade-up"
             style={{ animationDelay: '0ms' }}
@@ -207,7 +222,6 @@ export function LoginPage() {
             </p>
           </div>
 
-          {/* Form */}
           <form
             onSubmit={handleEmailSignIn}
             noValidate
@@ -266,7 +280,6 @@ export function LoginPage() {
               />
             </div>
 
-            {/* Error */}
             {error && (
               <p role="alert" className="animate-fade-up text-[13px] font-semibold text-danger">
                 {error}
@@ -283,7 +296,6 @@ export function LoginPage() {
             </Button>
           </form>
 
-          {/* Divider */}
           <div
             className="relative my-6 animate-fade-up"
             style={{ animationDelay: '140ms' }}
@@ -301,7 +313,6 @@ export function LoginPage() {
             </div>
           </div>
 
-          {/* Google sign-in */}
           <Button
             type="button"
             variant="ghost"

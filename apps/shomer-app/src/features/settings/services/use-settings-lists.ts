@@ -29,7 +29,7 @@ export function useAllClinicDiagnoses(clinicId: string | null) {
     if (!clinicId) return
     setLoading(true)
 
-    const q = query(collection(db, `clinics/${clinicId}/diagnoses`), orderBy('name'))
+    const q = query(collection(db, `clinics/${clinicId}/diagnosisCatalog`), orderBy('name'))
     const unsub = onSnapshot(q, (snap) => {
       setItems(
         snap.docs.map((d) => ({
@@ -55,7 +55,7 @@ export function useAllClinicMedicines(clinicId: string | null) {
     if (!clinicId) return
     setLoading(true)
 
-    const q = query(collection(db, `clinics/${clinicId}/medicines`), orderBy('name'))
+    const q = query(collection(db, `clinics/${clinicId}/medicinesCatalog`), orderBy('name'))
     const unsub = onSnapshot(q, (snap) => {
       setItems(
         snap.docs.map((d) => ({

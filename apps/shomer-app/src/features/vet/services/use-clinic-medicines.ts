@@ -16,7 +16,7 @@ export function useClinicMedicines(clinicId: string | null) {
     setLoading(true)
 
     const q = query(
-      collection(db, `clinics/${clinicId}/medicines`),
+      collection(db, `clinics/${clinicId}/medicinesCatalog`),
       where('isActive', '==', true),
     )
 

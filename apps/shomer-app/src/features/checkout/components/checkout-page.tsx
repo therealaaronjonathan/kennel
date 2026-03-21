@@ -95,8 +95,10 @@ function CheckoutPanel({ visit, clinicId, branchId, onBilled, onToast }: Checkou
     const phone = detail.ownerPhone.replace('+', '')
     const petName = visit.petName
     const ownerName = visit.ownerName
+    const domain = import.meta.env.VITE_APP_DOMAIN ?? 'shomer-app-test'
+    const summaryLink = `https://${domain}.web.app/visit/${visit.id}/summary?clinicId=${clinicId}&branchId=${branchId}`
     const msg = encodeURIComponent(
-      `Hi ${ownerName}, ${petName}'s consultation is complete. Please visit the reception for billing. Thank you for choosing us! 🐾`,
+      `Hi ${ownerName}, ${petName}'s consultation is complete. View the summary here: ${summaryLink}\n\nPlease visit the reception for billing. Thank you for choosing us! 🐾`,
     )
     window.open(`https://wa.me/${phone}?text=${msg}`, '_blank')
   }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { signOut } from 'firebase/auth'
-import { LayoutDashboard, UserPlus, LayoutList, ReceiptText, Settings, LogOut, Stethoscope } from 'lucide-react'
+import { LayoutDashboard, UserPlus, LayoutList, ReceiptText, Settings, LogOut, Stethoscope, CheckCircle, X } from 'lucide-react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { auth } from '@/lib/firebase'
@@ -17,48 +17,121 @@ const NAV_ITEMS = [
   { to: '/reception/settings', label: 'Settings', Icon: Settings },
 ]
 
-function InProgressToast({ message, onDone }: { message: string; onDone: () => void }) {
+interface ToastItem {
+  id: string
+  type: 'in-progress' | 'completed'
+  tokenDisplay: string
+  petName: string
+  doctorName: string
+}
+
+function NotificationToast({
+  toast,
+  index,
+  onDone,
+}: {
+  toast: ToastItem
+  index: number
+  onDone: (id: string) => void
+}) {
   useEffect(() => {
-    const t = setTimeout(onDone, 5000)
+    const t = setTimeout(() => onDone(toast.id), 6000)
     return () => clearTimeout(t)
-  }, [onDone])
+  }, [toast.id, onDone])
+
+  const isInProgress = toast.type === 'in-progress'
+
+  const borderColor = isInProgress ? 'border-l-primary' : 'border-l-[#22C55E]'
+  const iconBg = isInProgress ? 'bg-primary' : 'bg-[#22C55E]'
+  const titleColor = isInProgress ? 'text-primary' : 'text-[#22C55E]'
+  const title = isInProgress ? 'Call Patient' : 'Consultation Complete'
+  const body = isInProgress
+    ? `${toast.tokenDisplay} — ${toast.petName} (${toast.doctorName})`
+    : `${toast.tokenDisplay} — ${toast.petName} is done`
+  const Icon = isInProgress ? Stethoscope : CheckCircle
+
+  const topOffset = 16 + index * 80
 
   return (
-    <div className="fixed top-4 right-4 z-50 flex items-center gap-3 rounded-[4px] border border-primary/30 bg-surface px-4 py-3 shadow-lg max-w-[300px]">
-      <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-        <Stethoscope size={14} className="text-white" />
+    <div
+      className={cn(
+        'fixed right-4 z-50 flex items-start gap-3 rounded-[4px] border border-border-base border-l-4 bg-surface px-4 py-3 shadow-lg max-w-[300px] w-[300px] transition-all',
+        borderColor,
+      )}
+      style={{ top: `${topOffset}px` }}
+    >
+      <div
+        className={cn(
+          'h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5',
+          iconBg,
+        )}
+      >
+        <Icon size={14} className="text-white" />
       </div>
-      <div className="min-w-0">
-        <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-primary mb-0.5">
-          Call Patient
+      <div className="min-w-0 flex-1">
+        <p className={cn('text-[10px] font-bold uppercase tracking-[0.08em] mb-0.5', titleColor)}>
+          {title}
         </p>
-        <p className="text-[13px] font-bold text-foreground leading-snug">{message}</p>
+        <p className="text-[13px] font-bold text-foreground leading-snug">{body}</p>
       </div>
+      <button
+        type="button"
+        onClick={() => onDone(toast.id)}
+        className="flex-shrink-0 text-muted hover:text-foreground transition-colors mt-0.5"
+      >
+        <X size={13} />
+      </button>
     </div>
   )
+}
+
+function playNotificationSound() {
+  try {
+    new Audio('/sounds/notification.mp3').play()
+  } catch {
+    // Browser autoplay restrictions — acceptable
+  }
 }
 
 export default function ReceptionistLayout() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { clinicId, branchId } = useClinic()
+  const { clinicId, branchId, branchIds, branchName, selectBranch } = useClinic()
   const { visits: unbilledVisits } = useCompletedVisits(clinicId, branchId)
   const { visits, loading } = useAllVisits(clinicId, branchId)
   const unbilledCount = unbilledVisits.length
 
-  const [inProgressToast, setInProgressToast] = useState<string | null>(null)
+  const [toasts, setToasts] = useState<ToastItem[]>([])
   const seenInProgressIds = useRef(new Set<string>())
+  const seenCompletedIds = useRef(new Set<string>())
   const initialized = useRef(false)
 
-  // Detect transitions to in-progress and fire toast.
-  // Guard on clinicId too: useAllVisits returns loading=false immediately when
-  // clinicId is null, which would seed an empty set before real data arrives.
+  function removeToast(id: string) {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+  }
+
+  function addToast(toast: Omit<ToastItem, 'id'>) {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    setToasts((prev) => {
+      // Keep at most 3 visible at once; queue additional by appending (earlier ones dismiss)
+      const next = [...prev, { id, ...toast }]
+      return next.slice(-3)
+    })
+    playNotificationSound()
+  }
+
+  // Detect transitions to in-progress and completed, then fire the appropriate toast.
+  // Guard on clinicId: useAllVisits returns loading=false immediately when clinicId is
+  // null, which would seed an empty set before real data arrives.
   useEffect(() => {
     if (loading || !clinicId) return
 
     if (!initialized.current) {
-      // Seed with current in-progress IDs so we don't toast on page load
-      visits.filter((v) => v.status === 'in-progress').forEach((v) => seenInProgressIds.current.add(v.id))
+      // Seed both seen-sets with current state so we don't toast on page load
+      visits.forEach((v) => {
+        if (v.status === 'in-progress') seenInProgressIds.current.add(v.id)
+        if (v.status === 'completed') seenCompletedIds.current.add(v.id)
+      })
       initialized.current = true
       return
     }
@@ -66,8 +139,22 @@ export default function ReceptionistLayout() {
     for (const visit of visits) {
       if (visit.status === 'in-progress' && !seenInProgressIds.current.has(visit.id)) {
         seenInProgressIds.current.add(visit.id)
-        setInProgressToast(`Call ${visit.tokenDisplay} — ${visit.petName} is ready`)
-        break
+        addToast({
+          type: 'in-progress',
+          tokenDisplay: visit.tokenDisplay,
+          petName: visit.petName,
+          doctorName: visit.doctorName,
+        })
+      }
+
+      if (visit.status === 'completed' && !seenCompletedIds.current.has(visit.id)) {
+        seenCompletedIds.current.add(visit.id)
+        addToast({
+          type: 'completed',
+          tokenDisplay: visit.tokenDisplay,
+          petName: visit.petName,
+          doctorName: visit.doctorName,
+        })
       }
     }
   }, [visits, loading, clinicId])
@@ -76,17 +163,37 @@ export default function ReceptionistLayout() {
     signOut(auth).then(() => navigate('/login'))
   }
 
+  // Show up to 3 toasts stacked from top-right
+  const visibleToasts = toasts.slice(-3)
+
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       {/* Sidebar */}
       <aside className="w-[220px] flex-shrink-0 bg-surface border-r border-border-base flex flex-col">
-        {/* Logo */}
+        {/* Logo + branch */}
         <div className="px-4 py-4 border-b border-border-base flex-shrink-0">
           <img
             src="/logos/shomer-full-icon.png"
             alt="Shomer"
             className="h-[44px] w-auto rounded-[6px]"
           />
+          {branchName && (
+            <div className="mt-2">
+              {branchIds.length > 1 ? (
+                <select
+                  value={branchId ?? ''}
+                  onChange={(e) => selectBranch(e.target.value)}
+                  className="w-full text-[11px] font-semibold text-primary bg-transparent border-none outline-none cursor-pointer truncate"
+                >
+                  {branchIds.map((bid) => (
+                    <option key={bid} value={bid}>{bid === branchId ? branchName : bid}</option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-[11px] font-semibold text-primary truncate">{branchName}</p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Nav items */}
@@ -138,10 +245,15 @@ export default function ReceptionistLayout() {
         <Outlet />
       </div>
 
-      {/* In-progress notification */}
-      {inProgressToast && (
-        <InProgressToast message={inProgressToast} onDone={() => setInProgressToast(null)} />
-      )}
+      {/* Stacked notification toasts */}
+      {visibleToasts.map((toast, index) => (
+        <NotificationToast
+          key={toast.id}
+          toast={toast}
+          index={index}
+          onDone={removeToast}
+        />
+      ))}
     </div>
   )
 }

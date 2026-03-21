@@ -67,9 +67,15 @@ kennel/
 
 ---
 
+## Rules
+
+- When you modify Firestore collection paths, document fields, or data model structures, update `.claude/skills/data-model/SKILL.md` to reflect the change before ending the session.
+
+---
+
 ## Constraints
 
-- Two user roles only: **Veterinarian** and **Receptionist**
+- Roles: **Veterinarian**, **Receptionist**, **Admin**, **Owner**
 - All shared types live in `packages/shared` — never duplicate across apps
 - API runs as standalone Bun server — not on Firebase Hosting
 - Frontend deployed to Firebase Hosting with SPA fallback only

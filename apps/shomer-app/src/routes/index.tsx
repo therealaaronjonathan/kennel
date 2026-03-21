@@ -7,6 +7,9 @@ import { AuthGuard } from '@/features/auth/components/auth-guard'
 const LoginPage = lazy(() =>
   import('@/features/auth/components/login-page').then(m => ({ default: m.LoginPage }))
 )
+const SelectBranchPage = lazy(() =>
+  import('@/features/clinic/components/select-branch-page').then(m => ({ default: m.SelectBranchPage }))
+)
 const ReceptionHomePage = lazy(() =>
   import('@/features/reception/components/reception-home').then(m => ({ default: m.ReceptionHomePage }))
 )
@@ -28,6 +31,33 @@ const VetPage = lazy(() =>
 const QueuePage = lazy(() =>
   import('@/features/queue/components/queue-page').then(m => ({ default: m.QueuePage }))
 )
+const AdminLayout = lazy(() =>
+  import('@/app/admin-layout').then(m => ({ default: m.AdminLayout }))
+)
+const AdminDashboardPage = lazy(() =>
+  import('@/features/admin/components/admin-dashboard-page').then(m => ({ default: m.AdminDashboardPage }))
+)
+const AdminClinicsPage = lazy(() =>
+  import('@/features/admin/components/admin-clinics-page').then(m => ({ default: m.AdminClinicsPage }))
+)
+const AdminClinicDetailPage = lazy(() =>
+  import('@/features/admin/components/admin-clinic-detail-page').then(m => ({ default: m.AdminClinicDetailPage }))
+)
+const AdminBranchesPage = lazy(() =>
+  import('@/features/admin/components/admin-branches-page').then(m => ({ default: m.AdminBranchesPage }))
+)
+const AdminDoctorsPage = lazy(() =>
+  import('@/features/admin/components/admin-doctors-page').then(m => ({ default: m.AdminDoctorsPage }))
+)
+const AdminStaffPage = lazy(() =>
+  import('@/features/admin/components/admin-staff-page').then(m => ({ default: m.AdminStaffPage }))
+)
+const AdminCatalogsPage = lazy(() =>
+  import('@/features/admin/components/admin-catalogs-page').then(m => ({ default: m.AdminCatalogsPage }))
+)
+const VisitSummaryPage = lazy(() =>
+  import('@/features/summary/components/visit-summary-page').then(m => ({ default: m.VisitSummaryPage }))
+)
 
 const suspense = (el: React.ReactNode) => (
   <Suspense fallback={<div className="h-screen bg-background" />}>{el}</Suspense>
@@ -45,6 +75,16 @@ const router = createBrowserRouter([
       {
         path: 'login',
         element: suspense(<LoginPage />),
+      },
+
+      // ── Branch selector ───────────────────────────────────────────────────
+      {
+        path: 'select-branch',
+        element: (
+          <AuthGuard>
+            {suspense(<SelectBranchPage />)}
+          </AuthGuard>
+        ),
       },
 
       // ── Old routes → redirect ─────────────────────────────────────────────
@@ -70,7 +110,7 @@ const router = createBrowserRouter([
         ],
       },
 
-      // ── Vet console (unchanged) ───────────────────────────────────────────
+      // ── Vet console ───────────────────────────────────────────────────────
       {
         path: 'vet',
         element: (
@@ -80,10 +120,35 @@ const router = createBrowserRouter([
         ),
       },
 
+      // ── Admin panel ───────────────────────────────────────────────────────
+      {
+        path: 'admin',
+        element: (
+          <AuthGuard>
+            {suspense(<AdminLayout />)}
+          </AuthGuard>
+        ),
+        children: [
+          { index: true, element: suspense(<AdminDashboardPage />) },
+          { path: 'clinics', element: suspense(<AdminClinicsPage />) },
+          { path: 'clinics/:id', element: suspense(<AdminClinicDetailPage />) },
+          { path: 'clinics/:id/branches', element: suspense(<AdminBranchesPage />) },
+          { path: 'clinics/:id/doctors', element: suspense(<AdminDoctorsPage />) },
+          { path: 'clinics/:id/staff', element: suspense(<AdminStaffPage />) },
+          { path: 'clinics/:id/catalogs', element: suspense(<AdminCatalogsPage />) },
+        ],
+      },
+
       // ── Public queue (owner-facing) ───────────────────────────────────────
       {
         path: 'queue/:doctorId',
         element: suspense(<QueuePage />),
+      },
+
+      // ── Consultation summary (public) ─────────────────────────────────────
+      {
+        path: 'visit/:visitId/summary',
+        element: suspense(<VisitSummaryPage />),
       },
     ],
   },

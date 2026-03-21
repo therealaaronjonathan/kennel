@@ -60,7 +60,7 @@ function QueueRow({
 
 export function VetPage() {
   const navigate = useNavigate()
-  const { clinicId, branchId, doctorId, loading: clinicLoading, error: clinicError } = useClinic()
+  const { clinicId, branchId, branchName, branchIds, doctorId, loading: clinicLoading, error: clinicError, selectBranch } = useClinic()
   const { entries, loading: queueLoading, error: queueError } = useVetQueue(clinicId, branchId, doctorId)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const selectedEntry = entries.find((e) => e.id === selectedId) ?? null
@@ -122,6 +122,24 @@ export function VetPage() {
             <Stethoscope size={13} className="text-muted" />
             <span className="text-[13px] font-semibold text-foreground">Vet Console</span>
           </div>
+          {branchName && (
+            <>
+              <span className="text-[13px] text-muted">·</span>
+              {branchIds.length > 1 ? (
+                <select
+                  value={branchId ?? ''}
+                  onChange={(e) => selectBranch(e.target.value)}
+                  className="text-[12px] font-semibold text-primary bg-transparent border-none outline-none cursor-pointer"
+                >
+                  {branchIds.map((bid) => (
+                    <option key={bid} value={bid}>{bid === branchId ? branchName : bid}</option>
+                  ))}
+                </select>
+              ) : (
+                <span className="text-[12px] font-semibold text-primary">{branchName}</span>
+              )}
+            </>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <button
