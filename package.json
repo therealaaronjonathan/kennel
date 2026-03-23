@@ -8,6 +8,12 @@
     "dev:api": "bun run --cwd apps/backend dev",
     "build:web": "bun run --cwd apps/web build",
     "build:app": "bun run --cwd apps/shomer-app build",
-    "build:api": "bun run --cwd apps/backend build"
+    "build:app:test": "bun run --cwd apps/shomer-app build:test",
+    "build:app:prod": "bun run --cwd apps/shomer-app build:prod",
+    "build:api": "bun run --cwd apps/backend build",
+    "deploy:web": "bun run build:web && firebase deploy --only hosting:landing",
+    "deploy:app:test": "bun run build:app:test && firebase deploy --only hosting:app-test",
+    "deploy:app:prod": "bun run build:app:prod && firebase deploy --only hosting:app-prod",
+    "deploy:backend": "cd apps/backend && railway up -s shomer-backend -d"
   }
 }

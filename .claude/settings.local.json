@@ -43,7 +43,13 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(firebase deploy:*)",
-      "Bash(bun --print \"require\\(''''./src/app''''\\)\")"
+      "Bash(bun --print \"require\\(''''./src/app''''\\)\")",
+      "Bash(railway service:*)",
+      "Bash(railway --help)",
+      "Bash(railway up:*)",
+      "Bash(npx tsc:*)",
+      "Bash(pkill -f esbuild)",
+      "Bash(bun install:*)"
     ]
   }
 }

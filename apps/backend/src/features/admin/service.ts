@@ -31,9 +31,17 @@ export async function createUser(body: CreateUserBodyType) {
   }
 
   // 4. Generate password reset link (acts as invite link)
-  const inviteLink = await adminAuth.generatePasswordResetLink(body.email)
+  let inviteLink: string | null = null
+  let inviteLinkError: string | null = null
+  try {
+    inviteLink = await adminAuth.generatePasswordResetLink(body.email)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error'
+    console.error('[createUser] failed to generate invite link:', msg)
+    inviteLinkError = msg
+  }
 
-  return { uid, email: body.email, role: body.role, inviteLink }
+  return { uid, email: body.email, role: body.role, inviteLink, inviteLinkError }
 }
 
 export async function updateUser(uid: string, body: UpdateUserBodyType) {

@@ -14,6 +14,7 @@ export const adminRoutes = new Elysia({ prefix: '/admin' })
         set.status = 201
         return ok(result)
       } catch (err) {
+        console.error('[POST /admin/users] error:', err)
         const msg = err instanceof Error ? err.message : 'Failed to create user'
         set.status = 400
         return fail(msg)

@@ -106,16 +106,6 @@ function formatVisitDate(visit: VisitData): string {
   return '—'
 }
 
-function dosageLabel(p: PrescriptionItem): string {
-  const slots = [
-    p.morning && 'M',
-    p.afternoon && 'A',
-    p.evening && 'E',
-    p.night && 'N',
-  ].filter(Boolean) as string[]
-  return slots.length ? slots.join(' · ') : 'As prescribed'
-}
-
 // ── Loading / Error states ─────────────────────────────────────────────────────
 
 function LoadingState() {

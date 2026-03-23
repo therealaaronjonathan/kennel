@@ -1,4 +1,5 @@
 import admin from 'firebase-admin'
+import { getFirestore } from 'firebase-admin/firestore'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 
@@ -14,11 +15,18 @@ if (Bun.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
   throw new Error('Set FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_SERVICE_ACCOUNT_PATH')
 }
 
+const sa = serviceAccount as admin.ServiceAccount & { project_id?: string }
+
 if (!admin.apps.length) {
   admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
+    credential: admin.credential.cert(sa),
+    projectId: sa.project_id,
   })
 }
 
 export const adminAuth = admin.auth()
-export const adminDb = admin.firestore()
+
+const databaseId = Bun.env.FIREBASE_DATABASE_ID
+export const adminDb = databaseId && databaseId !== '(default)'
+  ? getFirestore(admin.app(), databaseId)
+  : getFirestore()

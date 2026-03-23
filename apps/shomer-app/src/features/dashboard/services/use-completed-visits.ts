@@ -23,6 +23,7 @@ export interface CompletedVisit {
   services?: ServiceEntry[]
   billAmount?: number
   consultationNotes?: string
+  status?: string
   completedAt: Timestamp | null
   date: string
 }

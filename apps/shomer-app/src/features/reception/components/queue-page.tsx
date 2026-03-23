@@ -51,6 +51,7 @@ function toCompletedVisit(v: AllVisit): CompletedVisit {
     doctorId: v.doctorId,
     complaints: v.complaints,
     otherComplaintText: v.otherComplaintText,
+    status: v.status,
     completedAt: null,
     date: '',
   }

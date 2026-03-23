@@ -5,7 +5,9 @@ export const errorHandler = new Elysia({ name: 'error-handler' }).onError(
   ({ code, error, set }) => {
     if (code === 'VALIDATION') {
       set.status = 422
-      return fail(error.message)
+      const first = error.all?.[0]
+      const msg = first?.message ?? error.message ?? 'Validation failed'
+      return fail(typeof msg === 'string' ? msg : 'Validation failed')
     }
     if (code === 'NOT_FOUND') {
       set.status = 404

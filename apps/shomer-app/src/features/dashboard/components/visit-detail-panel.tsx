@@ -1,4 +1,4 @@
-import { Send, Pill } from 'lucide-react'
+import { MessageCircle, ExternalLink, Pill } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useVisitBill } from '../services/use-visit-bill'
 import type { CompletedVisit } from '../services/use-completed-visits'
@@ -43,18 +43,27 @@ export function VisitDetailPanel({ visit, clinicId, branchId, onToast }: VisitDe
   const billAmount = visit.billAmount ?? 0
   const consultationNotes = visit.consultationNotes ?? ''
 
-  function handleSendBill() {
-    if (!detail) return
-    const contact = detail.ownerPhone || detail.ownerEmail || visit.ownerName
-    onToast(`Bill sent to ${contact}`)
+  function handleShareConsultation() {
+    if (!detail?.ownerPhone) {
+      onToast('No phone number on file for this owner')
+      return
+    }
+    const phone = detail.ownerPhone.replace('+', '')
+    const domain = import.meta.env.VITE_APP_DOMAIN ?? 'shomer-app-test'
+    const summaryLink = `https://${domain}.web.app/visit/${visit.id}/summary?clinicId=${clinicId}&branchId=${branchId}`
+    const msg = encodeURIComponent(
+      `Hi ${visit.ownerName}, ${visit.petName}'s consultation is complete.\n\nView the summary here:\n${summaryLink}\n\nThank you for choosing us! 🐾`,
+    )
+    window.open(`https://wa.me/${phone}?text=${msg}`, '_blank')
   }
 
-  function handleSendPrescription() {
-    if (!detail) return
-    const contact = detail.ownerPhone || detail.ownerEmail || visit.ownerName
-    onToast(`Prescription sent to ${contact}`)
+  function handleViewConsultation() {
+    const domain = import.meta.env.VITE_APP_DOMAIN ?? 'shomer-app-test'
+    const summaryLink = `https://${domain}.web.app/visit/${visit.id}/summary?clinicId=${clinicId}&branchId=${branchId}`
+    window.open(summaryLink, '_blank')
   }
 
+  const isConsultationDone = visit.status === 'completed' || visit.status === 'billed'
   const hasDiagnosis = detail && detail.diagnoses.length > 0
   const hasRxContent = detail && (detail.medicines.length > 0 || detail.vaccines.length > 0)
   const hasServices = services.length > 0
@@ -195,29 +204,31 @@ export function VisitDetailPanel({ visit, clinicId, branchId, onToast }: VisitDe
       <div className="border-t border-border-base px-6 py-4 flex-shrink-0 flex gap-3">
         <button
           type="button"
-          disabled={!detail || loading}
-          onClick={handleSendBill}
+          disabled={!isConsultationDone || !detail || loading}
+          onClick={handleShareConsultation}
           className={cn(
             'flex-1 flex items-center justify-center gap-2 rounded-[4px] border border-border-base px-4 py-[9px] text-[13px] font-semibold transition-colors',
-            detail && !loading
+            isConsultationDone && detail && !loading
               ? 'text-foreground hover:border-primary hover:text-primary'
               : 'text-muted opacity-50 cursor-not-allowed',
           )}
         >
-          <Send size={13} />
-          Send Bill
+          <MessageCircle size={13} />
+          Share Consultation
         </button>
         <button
           type="button"
-          disabled={!detail || loading}
-          onClick={handleSendPrescription}
+          disabled={!isConsultationDone}
+          onClick={handleViewConsultation}
           className={cn(
             'flex-1 flex items-center justify-center gap-2 rounded-[4px] bg-primary px-4 py-[9px] text-[13px] font-semibold text-white transition-opacity',
-            detail && !loading ? 'hover:opacity-85' : 'opacity-50 cursor-not-allowed',
+            isConsultationDone
+              ? 'hover:opacity-85'
+              : 'opacity-50 cursor-not-allowed',
           )}
         >
-          <Pill size={13} />
-          Send Prescription
+          <ExternalLink size={13} />
+          View Consultation
         </button>
       </div>
     </div>

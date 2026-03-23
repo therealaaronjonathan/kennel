@@ -2,10 +2,10 @@ import { t } from 'elysia'
 
 export const CreateUserBody = t.Object({
   clinicId: t.String({ minLength: 1, error: 'clinicId is required' }),
-  branchIds: t.Array(t.String(), { minItems: 1, error: 'At least one branchId is required' }),
+  branchIds: t.Array(t.String()),
   name: t.String({ minLength: 1, error: 'name is required' }),
   email: t.String({ format: 'email', error: 'Valid email is required' }),
-  phone: t.String({ minLength: 1, error: 'phone is required' }),
+  phone: t.Optional(t.String()),
   role: t.Union([t.Literal('doctor'), t.Literal('receptionist'), t.Literal('admin')], {
     error: 'role must be doctor, receptionist, or admin',
   }),

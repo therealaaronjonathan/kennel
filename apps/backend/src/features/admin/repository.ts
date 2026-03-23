@@ -28,7 +28,7 @@ export async function createDoctorDoc(
     clinicId: string
     branchIds: string[]
     name: string
-    phone: string
+    phone?: string
     specialization: string
   },
 ): Promise<void> {

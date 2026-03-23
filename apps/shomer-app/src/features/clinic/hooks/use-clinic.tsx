@@ -39,7 +39,9 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
   const { user, loading: authLoading } = useAuth()
 
   const [clinicId, setClinicId] = useState<string | null>(null)
-  const [branchId, setBranchId] = useState<string | null>(null)
+  const [branchId, setBranchIdState] = useState<string | null>(
+    () => sessionStorage.getItem('shomer:branchId'),
+  )
   const [branchIds, setBranchIds] = useState<string[]>([])
   const [branchName, setBranchName] = useState<string | null>(null)
   const [doctorId, setDoctorId] = useState<string | null>(null)
@@ -49,6 +51,15 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
 
   // Holds resolved branch names keyed by branchId
   const [branchNameMap, setBranchNameMap] = useState<Record<string, string>>({})
+
+  function setBranchId(id: string | null) {
+    setBranchIdState(id)
+    if (id) {
+      sessionStorage.setItem('shomer:branchId', id)
+    } else {
+      sessionStorage.removeItem('shomer:branchId')
+    }
+  }
 
   useEffect(() => {
     if (authLoading) return
@@ -60,6 +71,7 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
       setBranchName(null)
       setDoctorId(null)
       setRole(null)
+      sessionStorage.removeItem('shomer:branchId')
       setLoading(false)
       return
     }
@@ -103,12 +115,15 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
         )
         setBranchNameMap(nameMap)
 
-        // Auto-select if single branch
+        // Auto-select: single branch, or restore persisted branch for multi-branch
+        const saved = sessionStorage.getItem('shomer:branchId')
         if (ids.length === 1) {
           setBranchId(ids[0])
           setBranchName(nameMap[ids[0]] ?? null)
+        } else if (saved && ids.includes(saved)) {
+          setBranchId(saved)
+          setBranchName(nameMap[saved] ?? null)
         }
-        // Multi-branch: branchId stays null until selectBranch() is called
 
         setError(null)
       } catch (err) {

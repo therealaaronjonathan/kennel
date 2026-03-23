@@ -53,6 +53,8 @@ export function AdminDoctorsPage() {
       ])
       setDoctors(doctorsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Doctor)))
       setBranches(branchesSnap.docs.map((d) => ({ id: d.id, name: (d.data() as Branch).name })))
+    } catch {
+      // silently ignore reload errors
     } finally {
       setLoading(false)
     }
@@ -107,7 +109,11 @@ export function AdminDoctorsPage() {
         return
       }
 
-      setInviteLink(json.data.inviteLink)
+      if (json.data.inviteLink) {
+        setInviteLink(json.data.inviteLink)
+      } else if (json.data.inviteLinkError) {
+        setError(`Doctor created, but invite link failed: ${json.data.inviteLinkError}`)
+      }
       resetForm()
       setShowForm(false)
       await loadData()
