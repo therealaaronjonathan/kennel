@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { AlertTriangle, ChevronDown, ChevronUp, PhoneCall, PauseCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -13,6 +13,8 @@ import { addClinicDiagnosis } from '@/features/settings/services/clinic-lists-se
 import { DiagnosisSelect, type DiagnosisEntry } from './diagnosis-select'
 import { MedicineSelect, type PrescriptionEntry } from './medicine-select'
 import { ServicesSelect, type ServiceEntry } from './services-select'
+import { VoiceRecorderBar } from './voice-recorder-bar'
+import type { AIExtractedData } from '../services/ai-extract-service'
 import type { VetQueueEntry } from '../services/use-vet-queue'
 
 interface ConsultationViewProps {
@@ -80,6 +82,78 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
     await addClinicDiagnosis(clinicId, name)
   }
 
+  // --- AI auto-fill handler ---
+  const handleAIFill = useCallback(
+    (data: AIExtractedData, _transcript: string) => {
+      // Helper: fuzzy match a name against a list (exact > includes > skip)
+      function fuzzyFind<T extends { name: string }>(items: T[], target: string): T | undefined {
+        const t = target.toLowerCase()
+        // Exact match first
+        const exact = items.find((i) => i.name.toLowerCase() === t)
+        if (exact) return exact
+        // Partial match (either direction)
+        return items.find(
+          (i) => i.name.toLowerCase().includes(t) || t.includes(i.name.toLowerCase()),
+        )
+      }
+
+      // 1. Diagnoses — match to clinic list or create custom
+      if (data.diagnoses.length > 0) {
+        const mapped: DiagnosisEntry[] = data.diagnoses.map((d) => {
+          const match = fuzzyFind(diagnoses, d.name)
+          return match
+            ? { diagnosisId: match.id, name: match.name, notes: d.notes || '', isCustom: false }
+            : { diagnosisId: null, name: d.name, notes: d.notes || '', isCustom: true }
+        })
+        setSelectedDiagnoses(mapped)
+      }
+
+      // 2. Consultation notes
+      if (data.consultationNotes) {
+        setConsultationNotes(data.consultationNotes)
+      }
+
+      // 3. Medicines — match to clinic list or create custom
+      if (data.medicines.length > 0) {
+        const mapped: PrescriptionEntry[] = data.medicines.map((m) => {
+          const match = fuzzyFind(medicines, m.name)
+          return {
+            medicineId: match?.id ?? null,
+            name: match?.name ?? m.name,
+            morning: m.morning ?? false,
+            afternoon: m.afternoon ?? false,
+            evening: m.evening ?? false,
+            night: m.night ?? false,
+            days: m.days || 1,
+            isCustom: !match,
+          }
+        })
+        setSelectedMedicines(mapped)
+      }
+
+      // 4. Vaccines
+      if (data.vaccineName) {
+        setVaccineName(data.vaccineName)
+        setVaccineOpen(true)
+      }
+      if (data.vaccineBatch) setVaccineBatch(data.vaccineBatch)
+      if (data.vaccineNextDue) setVaccineNextDue(data.vaccineNextDue)
+
+      // 5. Services — match to clinic list only
+      if (data.services.length > 0) {
+        const mapped: ServiceEntry[] = []
+        for (const svcName of data.services) {
+          const match = fuzzyFind(serviceItems, svcName)
+          if (match && !mapped.some((m) => m.serviceId === match.id)) {
+            mapped.push({ serviceId: match.id, name: match.name, price: match.price })
+          }
+        }
+        if (mapped.length > 0) setSelectedServices(mapped)
+      }
+    },
+    [diagnoses, medicines, serviceItems],
+  )
+
   const pet = detail?.pet
   const owner = detail?.owner
   const lastVisit = detail?.lastVisit
@@ -89,10 +163,21 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
     'w-full rounded-[4px] border border-border-base bg-surface px-3 py-2 text-[13px] text-foreground placeholder:text-muted/50 focus:border-primary focus:outline-none transition-colors resize-none'
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
       {/* Header */}
       <div className="border-b border-border-base px-6 py-4 flex-shrink-0">
-        <div className="flex items-start gap-3">
+        <div className="flex items-start justify-between gap-3">
+          {/* Voice recorder — only when in-progress */}
+          {entry.status === 'in-progress' && (
+            <div className="absolute right-6 top-4 z-10">
+              <VoiceRecorderBar
+                diagnosisList={diagnoses.map((d) => d.name)}
+                medicineList={medicines.map((m) => m.name)}
+                serviceList={serviceItems.map((s) => s.name)}
+                onExtracted={handleAIFill}
+              />
+            </div>
+          )}
           <div>
             <div className="flex items-center gap-2">
               <span className="font-display text-[22px] font-bold text-primary leading-none">
