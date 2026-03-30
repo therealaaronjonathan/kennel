@@ -102,10 +102,14 @@ export function MedicineSelect({ selected, onChange, items, loading }: MedicineS
                 type="number"
                 min={1}
                 max={365}
-                value={entry.days}
-                onChange={(e) =>
-                  updateEntry(i, { days: Math.max(1, parseInt(e.target.value) || 1) })
-                }
+                value={entry.days === 0 ? '' : entry.days}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value)
+                  updateEntry(i, { days: isNaN(val) ? 0 : Math.min(val, 365) })
+                }}
+                onBlur={() => {
+                  if (!entry.days || entry.days < 1) updateEntry(i, { days: 1 })
+                }}
                 className="w-16 rounded-[3px] border border-border-base bg-surface-2 px-2 py-1 text-[12px] text-foreground text-center focus:border-primary focus:outline-none"
               />
               <span className="text-[12px] text-muted">days</span>

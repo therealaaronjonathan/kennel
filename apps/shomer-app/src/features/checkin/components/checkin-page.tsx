@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCheckinSession } from '../services/use-checkin-session'
 import { AlertCircle, PawPrint, User } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
@@ -19,7 +19,7 @@ import type {
 } from '../types'
 import type { SpeciesFilter } from '../services/use-pet-search'
 
-type FlowStep =
+export type FlowStep =
   | { type: 'search' }
   | { type: 'pet-results'; results: PetWithOwner[]; petName: string; breed: string }
   | { type: 'found'; owner: PetOwner; pets: Pet[]; selectedPetId: string }
@@ -46,7 +46,8 @@ export function CheckinPage() {
   const navigate = useNavigate()
   const { clinicId, branchId, loading: clinicLoading, error: clinicError } = useClinic()
   const { onDuty, loading: rosterLoading } = useDutyRoster(clinicId, branchId)
-  const [step, setStep] = useState<FlowStep>({ type: 'search' })
+  const { session, updateStep, updateFormInputs, clear: clearSession } = useCheckinSession(clinicId ?? undefined, branchId ?? undefined)
+  const step = session.step
 
   const existingCheckin = useMutation({
     mutationFn: ({
@@ -60,7 +61,7 @@ export function CheckinPage() {
       formData: CheckinFormData
       doctorName: string
     }) => checkinExistingOwner(clinicId!, branchId!, owner, petName, formData, doctorName),
-    onSuccess: (result) => setStep({ type: 'confirmation', result }),
+    onSuccess: (result) => updateStep({ type: 'confirmation', result }),
   })
 
   const newCheckin = useMutation({
@@ -73,7 +74,7 @@ export function CheckinPage() {
       formData: CheckinFormData
       doctorName: string
     }) => registerAndCheckin(clinicId!, branchId!, newOwner, formData, doctorName),
-    onSuccess: (result) => setStep({ type: 'confirmation', result }),
+    onSuccess: (result) => updateStep({ type: 'confirmation', result }),
   })
 
   const isSubmitting = existingCheckin.isPending || newCheckin.isPending
@@ -93,7 +94,7 @@ export function CheckinPage() {
   function reset() {
     existingCheckin.reset()
     newCheckin.reset()
-    setStep({ type: 'search' })
+    clearSession()
   }
 
   if (clinicLoading || rosterLoading) {
@@ -177,10 +178,10 @@ export function CheckinPage() {
           <PetSearchStep
             clinicId={clinicId}
             onFound={({ pet, owner }) => {
-              setStep({ type: 'found', owner, pets: [pet], selectedPetId: pet.id })
+              updateStep({ type: 'found', owner, pets: [pet], selectedPetId: pet.id })
             }}
             onNotFound={(petName, breed, species) =>
-              setStep({ type: 'register', prefillPetName: petName, prefillBreed: breed, prefillSpecies: species })
+              updateStep({ type: 'register', prefillPetName: petName, prefillBreed: breed, prefillSpecies: species })
             }
           />
         )}
@@ -219,7 +220,7 @@ export function CheckinPage() {
             <button
               type="button"
               onClick={() =>
-                setStep({
+                updateStep({
                   type: 'checkin-form',
                   owner: step.owner,
                   pets: step.pets,
@@ -249,7 +250,7 @@ export function CheckinPage() {
             prefillSpecies={step.prefillSpecies}
             onBack={reset}
             onSubmit={(data) =>
-              setStep({
+              updateStep({
                 type: 'checkin-form',
                 owner: null,
                 pets: [],
@@ -269,17 +270,19 @@ export function CheckinPage() {
               pets={step.pets}
               isNewOwner={step.owner === null}
               selectedPetId={step.selectedPetId}
+              defaultValues={session.formInputs ?? undefined}
+              onFormChange={updateFormInputs}
               onDutyIds={onDuty}
               onSubmit={handleCheckinFormSubmit}
               onBack={() =>
                 step.owner
-                  ? setStep({
+                  ? updateStep({
                       type: 'found',
                       owner: step.owner,
                       pets: step.pets,
                       selectedPetId: step.selectedPetId,
                     })
-                  : setStep({ type: 'search' })
+                  : updateStep({ type: 'search' })
               }
               isSubmitting={isSubmitting}
             />

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { MessageCircle, CheckCheck, Plus, X, Pill, CheckCircle } from 'lucide-react'
 import { useMutation } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
+import { WhatsAppShareModal } from '@/components/blocks/whatsapp-share-modal'
 import { useClinic } from '@/features/clinic'
 import { useCompletedVisits, type CompletedVisit, type ServiceEntry } from '@/features/dashboard/services/use-completed-visits'
 import { useCheckoutDetail } from '../services/use-checkout-detail'
@@ -60,6 +61,7 @@ function CheckoutPanel({ visit, clinicId, branchId, onBilled, onToast }: Checkou
 
   const [editedServices, setEditedServices] = useState<ServiceEntry[]>(visit.services ?? [])
   const [addingServiceId, setAddingServiceId] = useState('')
+  const [showWAModal, setShowWAModal] = useState(false)
 
   // Reset services when a different visit is opened
   useEffect(() => {
@@ -90,18 +92,9 @@ function CheckoutPanel({ visit, clinicId, branchId, onBilled, onToast }: Checkou
     },
   })
 
-  function sendWhatsApp() {
-    if (!detail?.ownerPhone) return
-    const phone = detail.ownerPhone.replace('+', '')
-    const petName = visit.petName
-    const ownerName = visit.ownerName
-    const domain = import.meta.env.VITE_APP_DOMAIN ?? 'shomer-app-test'
-    const summaryLink = `https://${domain}.web.app/visit/${visit.id}/summary?clinicId=${clinicId}&branchId=${branchId}`
-    const msg = encodeURIComponent(
-      `Hi ${ownerName}, ${petName}'s consultation is complete. View the summary here: ${summaryLink}\n\nPlease visit the reception for billing. Thank you for choosing us! 🐾`,
-    )
-    window.open(`https://wa.me/${phone}?text=${msg}`, '_blank')
-  }
+  const domain = import.meta.env.VITE_APP_DOMAIN ?? 'shomer-app-test'
+  const summaryLink = `https://${domain}.web.app/visit/${visit.id}/summary?clinicId=${clinicId}&branchId=${branchId}`
+  const waMessage = `Hi ${visit.ownerName}, ${visit.petName}'s consultation is complete. View the summary here: ${summaryLink}\n\nPlease visit the reception for billing. Thank you for choosing us! 🐾`
 
   const hasDiagnosis = detail && detail.diagnoses.length > 0
   const hasMeds = detail && detail.medicines.length > 0
@@ -271,7 +264,7 @@ function CheckoutPanel({ visit, clinicId, branchId, onBilled, onToast }: Checkou
           <button
             type="button"
             disabled={!detail}
-            onClick={sendWhatsApp}
+            onClick={() => setShowWAModal(true)}
             className={cn(
               'flex-1 flex items-center justify-center gap-2 rounded-[4px] border border-border-base px-4 py-[9px] text-[13px] font-semibold transition-colors',
               detail
@@ -293,6 +286,16 @@ function CheckoutPanel({ visit, clinicId, branchId, onBilled, onToast }: Checkou
           </button>
         </div>
       </div>
+
+      {detail?.ownerPhone && (
+        <WhatsAppShareModal
+          open={showWAModal}
+          onClose={() => setShowWAModal(false)}
+          phone={detail.ownerPhone}
+          ownerName={visit.ownerName}
+          message={waMessage}
+        />
+      )}
     </div>
   )
 }

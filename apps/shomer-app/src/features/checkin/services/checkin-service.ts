@@ -38,6 +38,7 @@ async function performCheckin(
   petId: string,
   ownerEmail: string | undefined,
   ownerName: string,
+  ownerPhone: string | undefined,
   petName: string,
   formData: CheckinFormData,
   doctorName: string,
@@ -107,6 +108,9 @@ async function performCheckin(
     complaints: formData.complaints,
     isEmergency: formData.isEmergency,
     ownerEmail,
+    ownerName,
+    ownerPhone,
+    petName,
   }
 
   if (ownerEmail) {
@@ -138,6 +142,7 @@ export async function checkinExistingOwner(
     formData.petId,
     owner.email,
     owner.name,
+    owner.phone,
     petName,
     formData,
     doctorName,
@@ -248,6 +253,9 @@ export async function registerAndCheckin(
     complaints: formData.complaints,
     isEmergency: formData.isEmergency,
     ownerEmail: newOwner.email || undefined,
+    ownerName: newOwner.ownerName,
+    ownerPhone: newOwner.phone,
+    petName: newOwner.petName,
   }
 
   if (newOwner.email) {

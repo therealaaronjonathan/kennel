@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { MessageCircle, ExternalLink, Pill } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { WhatsAppShareModal } from '@/components/blocks/whatsapp-share-modal'
 import { useVisitBill } from '../services/use-visit-bill'
 import type { CompletedVisit } from '../services/use-completed-visits'
 
@@ -36,6 +38,7 @@ function formatDosage(m: {
 
 export function VisitDetailPanel({ visit, clinicId, branchId, onToast }: VisitDetailPanelProps) {
   const { detail, loading } = useVisitBill(clinicId, branchId, visit.id, visit.ownerId)
+  const [showWAModal, setShowWAModal] = useState(false)
 
   // Services, bill, and consultation notes come directly from the visit doc —
   // no extra fetch needed, avoids putting arrays in useEffect deps.
@@ -43,18 +46,16 @@ export function VisitDetailPanel({ visit, clinicId, branchId, onToast }: VisitDe
   const billAmount = visit.billAmount ?? 0
   const consultationNotes = visit.consultationNotes ?? ''
 
+  const domain = import.meta.env.VITE_APP_DOMAIN ?? 'shomer-app-test'
+  const summaryLink = `https://${domain}.web.app/visit/${visit.id}/summary?clinicId=${clinicId}&branchId=${branchId}`
+  const waMessage = `Hi ${visit.ownerName}, ${visit.petName}'s consultation is complete.\n\nView the summary here:\n${summaryLink}\n\nThank you for choosing us! 🐾`
+
   function handleShareConsultation() {
     if (!detail?.ownerPhone) {
       onToast('No phone number on file for this owner')
       return
     }
-    const phone = detail.ownerPhone.replace('+', '')
-    const domain = import.meta.env.VITE_APP_DOMAIN ?? 'shomer-app-test'
-    const summaryLink = `https://${domain}.web.app/visit/${visit.id}/summary?clinicId=${clinicId}&branchId=${branchId}`
-    const msg = encodeURIComponent(
-      `Hi ${visit.ownerName}, ${visit.petName}'s consultation is complete.\n\nView the summary here:\n${summaryLink}\n\nThank you for choosing us! 🐾`,
-    )
-    window.open(`https://wa.me/${phone}?text=${msg}`, '_blank')
+    setShowWAModal(true)
   }
 
   function handleViewConsultation() {
@@ -231,6 +232,16 @@ export function VisitDetailPanel({ visit, clinicId, branchId, onToast }: VisitDe
           View Consultation
         </button>
       </div>
+
+      {detail?.ownerPhone && (
+        <WhatsAppShareModal
+          open={showWAModal}
+          onClose={() => setShowWAModal(false)}
+          phone={detail.ownerPhone}
+          ownerName={visit.ownerName}
+          message={waMessage}
+        />
+      )}
     </div>
   )
 }

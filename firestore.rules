@@ -1,0 +1,41 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Public: clinic branding (summary page header) ─────────────────────────
+    match /clinics/{clinicId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // ── Public: branch info (summary page) ───────────────────────────────────
+    match /clinics/{clinicId}/branches/{branchId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // ── Public: visits — queue page (collection query) + summary (single doc) ─
+    match /clinics/{clinicId}/branches/{branchId}/visits/{visitId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // ── Public: visit subcollections — diagnoses, prescriptions, vaccines ─────
+    match /clinics/{clinicId}/branches/{branchId}/visits/{visitId}/{sub}/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // ── Public: doctor info (summary page — optional read) ────────────────────
+    match /clinics/{clinicId}/doctors/{doctorId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // ── Everything else: requires authentication ──────────────────────────────
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

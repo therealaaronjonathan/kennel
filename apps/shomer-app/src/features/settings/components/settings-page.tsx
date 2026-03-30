@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Trash2, RotateCcw } from 'lucide-react'
+import { Plus, Trash2, RotateCcw, ArrowLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useClinic } from '@/features/clinic'
 import { useDutyRoster } from '../services/use-duty-roster'
@@ -427,7 +427,11 @@ function ServicesTab({ clinicId }: { clinicId: string }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
-export function SettingsPage() {
+interface SettingsPageProps {
+  onClose?: () => void
+}
+
+export function SettingsPage({ onClose }: SettingsPageProps = {}) {
   const { clinicId, branchId, loading: clinicLoading, error: clinicError } = useClinic()
   const [activeTab, setActiveTab] = useState<Tab>('duty')
 
@@ -457,7 +461,17 @@ export function SettingsPage() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Top bar */}
-      <header className="h-[52px] border-b border-border-base bg-surface flex items-center px-6 flex-shrink-0">
+      <header className="h-[52px] border-b border-border-base bg-surface flex items-center gap-3 px-6 flex-shrink-0">
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex items-center gap-1.5 text-[12px] font-semibold text-muted hover:text-foreground transition-colors"
+          >
+            <ArrowLeft size={13} />
+            Back to Console
+          </button>
+        )}
         <h1 className="font-display text-[18px] font-bold text-foreground leading-none">
           Settings
         </h1>

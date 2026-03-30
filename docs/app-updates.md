@@ -1,7 +1,7 @@
 # Shomer App — Current State
 
-## Version: 1.1.0
-## Last Updated: 2026-03-22
+## Version: 1.1.1
+## Last Updated: 2026-03-31
 
 ---
 
@@ -52,6 +52,11 @@
 - `DELETE /api/admin/users/:uid` — disable user
 - Auth middleware: verifies Firebase ID token, checks admin/owner role
 
+### Firestore Security
+- Public read access on visits, clinic branding, branch info, and visit subcollections — enables unauthenticated owners to open queue and summary links on mobile
+- All other paths (petOwners, pets, catalogs, staff, tokenCounters) require authentication
+- Rules live in `firestore.rules` at repo root, deployed via `firebase deploy --only firestore:rules`
+
 ### Token System
 - Branch-wide sequential counter (`tokenCounters/{date}` under branch)
 - Token prefix = last 3 chars of doctor's last name (e.g. `ESH-0001`)
@@ -63,5 +68,6 @@
 
 | Version | Date       | Changes |
 |---------|------------|---------|
+| 1.1.1   | 2026-03-31 | Bug fixes: check-in state persisted via sessionStorage (tab-switch safe), WhatsApp share replaced with web.whatsapp.com modal + phone validation, queue link mobile display fix + WA share on confirmation screen, doctor settings as overlay (no receptionist sidebar), Firestore public read rules for queue/summary pages (fixes mobile failures), medicine days input allows clearing |
 | 1.1.0   | 2026-03-22 | Multi-branch support, admin panel, token overhaul (branch-wide sequential + name prefix), enhanced toasts with sound, consultation summary page (public/white-label), backend API for user management, diagnosisCatalog/medicinesCatalog collection renames |
 | 1.0.0   | 2026-03-22 | Initial documented state — reception check-in, vet console, auth |

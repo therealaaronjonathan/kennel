@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { signOut } from 'firebase/auth'
 import { useNavigate } from 'react-router-dom'
 import { Stethoscope } from 'lucide-react'
+import { SettingsPage } from '@/features/settings/components/settings-page'
 import { cn } from '@/lib/utils'
 import { auth } from '@/lib/firebase'
 import { useClinic } from '@/features/clinic'
@@ -63,6 +64,7 @@ export function VetPage() {
   const { clinicId, branchId, branchName, branchIds, doctorId, loading: clinicLoading, error: clinicError, selectBranch } = useClinic()
   const { entries, loading: queueLoading, error: queueError } = useVetQueue(clinicId, branchId, doctorId)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [showSettings, setShowSettings] = useState(false)
   const selectedEntry = entries.find((e) => e.id === selectedId) ?? null
 
   function handleCompleted() {
@@ -144,7 +146,7 @@ export function VetPage() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => navigate('/settings')}
+            onClick={() => setShowSettings(true)}
             className="rounded-[4px] border border-border-base px-3 py-1.5 text-[12px] font-semibold text-muted hover:text-foreground hover:border-foreground/20 transition-colors"
           >
             Settings
@@ -228,6 +230,12 @@ export function VetPage() {
           )}
         </main>
       </div>
+
+      {showSettings && (
+        <div className="fixed inset-0 z-50 bg-background flex flex-col overflow-hidden">
+          <SettingsPage onClose={() => setShowSettings(false)} />
+        </div>
+      )}
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Link2, Check, RotateCcw } from 'lucide-react'
+import { Link2, Check, RotateCcw, MessageCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { WhatsAppShareModal } from '@/components/blocks/whatsapp-share-modal'
 import type { CheckinResult } from '../types'
 
 interface ConfirmationStepProps {
@@ -10,6 +11,7 @@ interface ConfirmationStepProps {
 
 export function ConfirmationStep({ result, onNewCheckin }: ConfirmationStepProps) {
   const [copied, setCopied] = useState(false)
+  const [showWAModal, setShowWAModal] = useState(false)
   const queueLink = `${window.location.origin}/queue/${result.doctorId}?token=${result.tokenDisplay}&clinicId=${result.clinicId}&branchId=${result.branchId}`
 
   function copyLink() {
@@ -17,6 +19,8 @@ export function ConfirmationStep({ result, onNewCheckin }: ConfirmationStepProps
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
+
+  const waMessage = `Hi ${result.ownerName}, ${result.petName} has been checked in!\n\nToken: ${result.tokenDisplay}\nDoctor: ${result.doctorName}\n\nTrack your position in queue:\n${queueLink}`
 
   return (
     <div className="space-y-6 text-center">
@@ -74,15 +78,16 @@ export function ConfirmationStep({ result, onNewCheckin }: ConfirmationStepProps
         <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
           Queue Link (share with owner)
         </p>
-        <div className="flex items-center gap-2 rounded-[4px] border border-border-base bg-white px-3 py-2">
-          <span className="flex-1 truncate text-left text-[12px] font-medium text-muted">
+        {/* URL row — stacks vertically on mobile so the copy button stays accessible */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 rounded-[4px] border border-border-base bg-surface px-3 py-2">
+          <span className="flex-1 text-left text-[12px] font-medium text-muted break-all">
             {queueLink}
           </span>
           <button
             type="button"
             onClick={copyLink}
             className={cn(
-              'flex items-center gap-1.5 rounded-[4px] border px-2.5 py-1.5 text-[11px] font-semibold transition-colors flex-shrink-0',
+              'flex items-center justify-center gap-1.5 rounded-[4px] border px-2.5 py-1.5 text-[11px] font-semibold transition-colors flex-shrink-0',
               copied
                 ? 'border-success/40 bg-success/5 text-success'
                 : 'border-border-base text-muted hover:text-foreground hover:border-foreground/20',
@@ -92,6 +97,23 @@ export function ConfirmationStep({ result, onNewCheckin }: ConfirmationStepProps
             {copied ? 'Copied!' : 'Copy'}
           </button>
         </div>
+
+        {/* WhatsApp share */}
+        <button
+          type="button"
+          disabled={!result.ownerPhone}
+          onClick={() => setShowWAModal(true)}
+          title={!result.ownerPhone ? 'No phone number on file' : undefined}
+          className={cn(
+            'w-full flex items-center justify-center gap-2 rounded-[4px] border px-4 py-[9px] text-[13px] font-semibold transition-colors',
+            result.ownerPhone
+              ? 'border-border-base text-muted hover:text-foreground hover:border-foreground/20'
+              : 'border-border-base text-muted opacity-40 cursor-not-allowed',
+          )}
+        >
+          <MessageCircle size={13} />
+          Share Queue Link via WhatsApp
+        </button>
       </div>
 
       {/* New check-in */}
@@ -103,6 +125,16 @@ export function ConfirmationStep({ result, onNewCheckin }: ConfirmationStepProps
         <RotateCcw size={13} />
         New Check-in
       </button>
+
+      {result.ownerPhone && (
+        <WhatsAppShareModal
+          open={showWAModal}
+          onClose={() => setShowWAModal(false)}
+          phone={result.ownerPhone}
+          ownerName={result.ownerName}
+          message={waMessage}
+        />
+      )}
     </div>
   )
 }

@@ -72,6 +72,9 @@ export interface CheckinResult {
   complaints: string[]
   isEmergency: boolean
   ownerEmail?: string
+  ownerName: string
+  ownerPhone?: string
+  petName: string
 }
 
 export const COMPLAINTS = [

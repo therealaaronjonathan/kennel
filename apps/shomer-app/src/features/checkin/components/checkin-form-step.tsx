@@ -13,6 +13,8 @@ interface CheckinFormStepProps {
   pets: Pet[]            // empty if new owner (pet already captured in registration)
   isNewOwner: boolean
   selectedPetId?: string // pre-selected from pet search
+  defaultValues?: CheckinFormData  // restored from session on tab-switch
+  onFormChange?: (inputs: CheckinFormData) => void  // persists form state to session
   onDutyIds: string[]    // only show these doctors in the dropdown
   onSubmit: (data: CheckinFormData, doctorName: string) => void
   onBack: () => void
@@ -25,6 +27,8 @@ export function CheckinFormStep({
   pets,
   isNewOwner,
   selectedPetId,
+  defaultValues,
+  onFormChange,
   onDutyIds,
   onSubmit,
   onBack,
@@ -35,13 +39,13 @@ export function CheckinFormStep({
   const { services: checkinServices, loading: servicesLoading } = useCheckinServices(clinicId)
   const { groomingServices, loading: groomingLoading } = useGroomingServices(clinicId)
 
-  const [petId, setPetId] = useState(selectedPetId ?? (pets.length === 1 ? pets[0].id : ''))
-  const [service, setService] = useState('')
-  const [complaints, setComplaints] = useState<string[]>([])
-  const [otherComplaintText, setOtherComplaintText] = useState('')
-  const [selectedGroomingServices, setSelectedGroomingServices] = useState<string[]>([])
-  const [doctorId, setDoctorId] = useState('')
-  const [isEmergency, setIsEmergency] = useState(false)
+  const [petId, setPetId] = useState(defaultValues?.petId ?? selectedPetId ?? (pets.length === 1 ? pets[0].id : ''))
+  const [service, setService] = useState(defaultValues?.service ?? '')
+  const [complaints, setComplaints] = useState<string[]>(defaultValues?.complaints ?? [])
+  const [otherComplaintText, setOtherComplaintText] = useState(defaultValues?.otherComplaintText ?? '')
+  const [selectedGroomingServices, setSelectedGroomingServices] = useState<string[]>(defaultValues?.groomingServices ?? [])
+  const [doctorId, setDoctorId] = useState(defaultValues?.doctorId ?? '')
+  const [isEmergency, setIsEmergency] = useState(defaultValues?.isEmergency ?? false)
   const [errors, setErrors] = useState<{
     pet?: string
     service?: string
@@ -92,10 +96,12 @@ export function CheckinFormStep({
   }
 
   function toggleGroomingService(name: string) {
-    setSelectedGroomingServices((prev) =>
-      prev.includes(name) ? prev.filter((s) => s !== name) : [...prev, name],
-    )
+    const newServices = selectedGroomingServices.includes(name)
+      ? selectedGroomingServices.filter((s) => s !== name)
+      : [...selectedGroomingServices, name]
+    setSelectedGroomingServices(newServices)
     setErrors((p) => ({ ...p, groomingServices: undefined }))
+    onFormChange?.({ petId, service, complaints, otherComplaintText, groomingServices: newServices, doctorId, isEmergency })
   }
 
   const showPetSelector = !isNewOwner && pets.length > 1
@@ -120,8 +126,10 @@ export function CheckinFormStep({
           <select
             value={petId}
             onChange={(e) => {
-              setPetId(e.target.value)
+              const v = e.target.value
+              setPetId(v)
               setErrors((p) => ({ ...p, pet: undefined }))
+              onFormChange?.({ petId: v, service, complaints, otherComplaintText, groomingServices: selectedGroomingServices, doctorId, isEmergency })
             }}
             className={cn(
               'w-full rounded-[4px] border bg-white px-3 py-[9px] text-[13px] font-medium text-foreground focus:border-primary focus:outline-none transition-colors',
@@ -149,11 +157,13 @@ export function CheckinFormStep({
         <select
           value={service}
           onChange={(e) => {
-            setService(e.target.value)
+            const v = e.target.value
+            setService(v)
             setComplaints([])
             setOtherComplaintText('')
             setSelectedGroomingServices([])
             setErrors((p) => ({ ...p, service: undefined, complaints: undefined, groomingServices: undefined }))
+            onFormChange?.({ petId, service: v, complaints: [], otherComplaintText: '', groomingServices: [], doctorId, isEmergency })
           }}
           disabled={servicesLoading}
           className={cn(
@@ -186,11 +196,13 @@ export function CheckinFormStep({
             onChange={(val) => {
               setComplaints(val)
               setErrors((p) => ({ ...p, complaints: undefined }))
+              onFormChange?.({ petId, service, complaints: val, otherComplaintText, groomingServices: selectedGroomingServices, doctorId, isEmergency })
             }}
             otherText={otherComplaintText}
             onOtherTextChange={(val) => {
               setOtherComplaintText(val)
               setErrors((p) => ({ ...p, otherComplaint: undefined }))
+              onFormChange?.({ petId, service, complaints, otherComplaintText: val, groomingServices: selectedGroomingServices, doctorId, isEmergency })
             }}
           />
           {errors.complaints && (
@@ -257,8 +269,10 @@ export function CheckinFormStep({
         <select
           value={doctorId}
           onChange={(e) => {
-            setDoctorId(e.target.value)
+            const v = e.target.value
+            setDoctorId(v)
             setErrors((p) => ({ ...p, doctor: undefined }))
+            onFormChange?.({ petId, service, complaints, otherComplaintText, groomingServices: selectedGroomingServices, doctorId: v, isEmergency })
           }}
           disabled={doctorsLoading}
           className={cn(
@@ -291,8 +305,19 @@ export function CheckinFormStep({
           role="switch"
           aria-checked={isEmergency}
           tabIndex={0}
-          onClick={() => setIsEmergency((v) => !v)}
-          onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setIsEmergency((v) => !v) } }}
+          onClick={() => {
+            const v = !isEmergency
+            setIsEmergency(v)
+            onFormChange?.({ petId, service, complaints, otherComplaintText, groomingServices: selectedGroomingServices, doctorId, isEmergency: v })
+          }}
+          onKeyDown={(e) => {
+            if (e.key === ' ' || e.key === 'Enter') {
+              e.preventDefault()
+              const v = !isEmergency
+              setIsEmergency(v)
+              onFormChange?.({ petId, service, complaints, otherComplaintText, groomingServices: selectedGroomingServices, doctorId, isEmergency: v })
+            }
+          }}
           className={cn(
             'relative h-5 w-9 rounded-full transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2',
             isEmergency ? 'bg-danger' : 'bg-border-base',
