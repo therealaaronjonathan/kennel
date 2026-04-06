@@ -11,6 +11,8 @@ export interface DiagnosisEntry {
 export interface PrescriptionEntry {
   medicineId: string | null
   name: string
+  type: 'tablet' | 'syrup' | 'injection'
+  quantity: string
   morning: boolean
   afternoon: boolean
   evening: boolean
@@ -74,6 +76,8 @@ export async function completeVisit(
       addDoc(collection(db, `${visitBase}/prescriptions`), {
         medicineId: medicine.medicineId,
         name: medicine.name,
+        type: medicine.type,
+        quantity: medicine.quantity,
         morning: medicine.morning,
         afternoon: medicine.afternoon,
         evening: medicine.evening,

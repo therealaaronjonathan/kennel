@@ -19,6 +19,7 @@ interface RegisterOwnerStepProps {
   prefillPetName?: string
   prefillBreed?: string
   prefillSpecies?: NewOwnerFormData['species']
+  prefillPhone?: string // full E.164 e.g. "+919876543210"
   onSubmit: (data: NewOwnerFormData) => void
   onBack: () => void
 }
@@ -29,12 +30,13 @@ export function RegisterOwnerStep({
   prefillPetName = '',
   prefillBreed = '',
   prefillSpecies = 'dog',
+  prefillPhone = '',
   onSubmit,
   onBack,
 }: RegisterOwnerStepProps) {
   const [form, setForm] = useState<NewOwnerFormData>({
     ownerName: '',
-    phone: '+91',
+    phone: prefillPhone || '+91',
     email: '',
     petName: prefillPetName,
     species: prefillSpecies,

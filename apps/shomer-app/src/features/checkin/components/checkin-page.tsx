@@ -23,7 +23,7 @@ export type FlowStep =
   | { type: 'search' }
   | { type: 'pet-results'; results: PetWithOwner[]; petName: string; breed: string }
   | { type: 'found'; owner: PetOwner; pets: Pet[]; selectedPetId: string }
-  | { type: 'register'; prefillPetName: string; prefillBreed: string; prefillSpecies: SpeciesFilter }
+  | { type: 'register'; prefillPetName: string; prefillBreed: string; prefillSpecies: SpeciesFilter; prefillPhone: string }
   | {
       type: 'checkin-form'
       owner: PetOwner | null
@@ -180,8 +180,8 @@ export function CheckinPage() {
             onFound={({ pet, owner }) => {
               updateStep({ type: 'found', owner, pets: [pet], selectedPetId: pet.id })
             }}
-            onNotFound={(petName, breed, species) =>
-              updateStep({ type: 'register', prefillPetName: petName, prefillBreed: breed, prefillSpecies: species })
+            onNotFound={(petName, breed, species, ownerPhone) =>
+              updateStep({ type: 'register', prefillPetName: petName, prefillBreed: breed, prefillSpecies: species, prefillPhone: ownerPhone })
             }
           />
         )}
@@ -248,6 +248,7 @@ export function CheckinPage() {
             prefillPetName={step.prefillPetName}
             prefillBreed={step.prefillBreed}
             prefillSpecies={step.prefillSpecies}
+            prefillPhone={step.prefillPhone}
             onBack={reset}
             onSubmit={(data) =>
               updateStep({

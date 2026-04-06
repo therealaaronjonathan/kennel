@@ -9,7 +9,7 @@ import type { PetWithOwner } from '../types'
 interface PetSearchStepProps {
   clinicId: string
   onFound: (result: PetWithOwner) => void
-  onNotFound: (petName: string, breed: string, species: SpeciesFilter) => void
+  onNotFound: (petName: string, breed: string, species: SpeciesFilter, ownerPhone: string) => void
 }
 
 const SPECIES_OPTIONS: { value: SpeciesFilter; label: string }[] = [
@@ -27,10 +27,12 @@ export function PetSearchStep({ clinicId, onFound, onNotFound }: PetSearchStepPr
   const [selectedSpecies, setSelectedSpecies] = useState<SpeciesFilter | null>(null)
   const [petName, setPetName] = useState('')
   const [breed, setBreed] = useState('')
+  const [phoneDigits, setPhoneDigits] = useState('')
   const [submitted, setSubmitted] = useState<{
     petName: string
     breed: string
     species: SpeciesFilter
+    ownerPhone: string
   } | null>(null)
 
   const breeds = useBreeds(selectedSpecies ?? 'dog')
@@ -41,11 +43,16 @@ export function PetSearchStep({ clinicId, onFound, onNotFound }: PetSearchStepPr
     submitted?.breed ?? '',
     submitted?.species ?? 'dog',
     !!submitted,
+    submitted?.ownerPhone || undefined,
   )
 
+  // Partial phone (1–9 digits) blocks search to prevent misleading results
+  const phoneIsPartial = phoneDigits.length > 0 && phoneDigits.length < 10
+
   function handleSearch() {
-    if (!petName.trim() || !selectedSpecies) return
-    setSubmitted({ petName: petName.trim(), breed: breed.trim(), species: selectedSpecies })
+    if (!petName.trim() || !selectedSpecies || phoneIsPartial) return
+    const ownerPhone = phoneDigits.length === 10 ? '+91' + phoneDigits : ''
+    setSubmitted({ petName: petName.trim(), breed: breed.trim(), species: selectedSpecies, ownerPhone })
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -69,6 +76,7 @@ export function PetSearchStep({ clinicId, onFound, onNotFound }: PetSearchStepPr
               onClick={() => {
                 setSelectedSpecies(opt.value)
                 setBreed('')
+                setPhoneDigits('')
                 setSubmitted(null)
               }}
               className={cn(
@@ -127,13 +135,44 @@ export function PetSearchStep({ clinicId, onFound, onNotFound }: PetSearchStepPr
             )}
           </div>
 
+          <div className="space-y-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
+              Owner Phone{' '}
+              <span className="text-muted font-normal normal-case">(optional — narrows results)</span>
+            </p>
+            <div className={cn(
+              'flex items-center rounded-[4px] border overflow-hidden transition-colors',
+              phoneIsPartial ? 'border-danger' : 'border-border-base',
+            )}>
+              <span className="flex-shrink-0 select-none border-r border-border-base bg-surface-2 px-3 py-[9px] text-[13px] font-semibold text-muted">
+                +91
+              </span>
+              <input
+                type="tel"
+                placeholder="98765 43210"
+                value={phoneDigits}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, '').slice(0, 10)
+                  setPhoneDigits(digits)
+                  setSubmitted(null)
+                }}
+                onKeyDown={handleKeyDown}
+                inputMode="numeric"
+                className="flex-1 bg-white px-3 py-[9px] text-[13px] font-medium text-foreground placeholder:text-muted focus:outline-none"
+              />
+            </div>
+            {phoneIsPartial && (
+              <p className="text-[11px] text-danger">Enter the full 10-digit number to filter by phone</p>
+            )}
+          </div>
+
           <button
             type="button"
             onClick={handleSearch}
-            disabled={!petName.trim() || isLoading}
+            disabled={!petName.trim() || isLoading || phoneIsPartial}
             className={cn(
               'flex w-full items-center justify-center gap-1.5 rounded-[4px] bg-primary px-4 py-[9px] text-[13px] font-semibold text-white transition-opacity',
-              !petName.trim() || isLoading ? 'opacity-40 cursor-not-allowed' : 'hover:opacity-85',
+              !petName.trim() || isLoading || phoneIsPartial ? 'opacity-40 cursor-not-allowed' : 'hover:opacity-85',
             )}
           >
             <Search size={14} />
@@ -184,7 +223,7 @@ export function PetSearchStep({ clinicId, onFound, onNotFound }: PetSearchStepPr
           <p className="text-[12px] text-muted">Not seeing the right patient?</p>
           <button
             type="button"
-            onClick={() => onNotFound(submitted.petName, submitted.breed, submitted.species)}
+            onClick={() => onNotFound(submitted.petName, submitted.breed, submitted.species, submitted.ownerPhone)}
             className="rounded-[4px] border border-primary px-4 py-[9px] text-[13px] font-semibold text-primary hover:opacity-85 transition-opacity"
           >
             Register as new patient
@@ -207,7 +246,7 @@ export function PetSearchStep({ clinicId, onFound, onNotFound }: PetSearchStepPr
           </p>
           <button
             type="button"
-            onClick={() => onNotFound(submitted!.petName, submitted!.breed, submitted!.species)}
+            onClick={() => onNotFound(submitted!.petName, submitted!.breed, submitted!.species, submitted!.ownerPhone)}
             className="rounded-[4px] border border-primary px-4 py-[9px] text-[13px] font-semibold text-primary hover:opacity-85 transition-opacity"
           >
             Register new patient

@@ -11,9 +11,10 @@ export function usePetSearch(
   breed: string,
   species: SpeciesFilter,
   enabled: boolean,
+  ownerPhone?: string, // full E.164 string e.g. "+919876543210"
 ) {
   return useQuery({
-    queryKey: ['petSearch', clinicId, petName, breed, species],
+    queryKey: ['petSearch', clinicId, petName, breed, species, ownerPhone ?? ''],
     queryFn: async (): Promise<PetWithOwner[]> => {
       const nameLower = petName.toLowerCase().trim()
 
@@ -64,6 +65,7 @@ export function usePetSearch(
       return pets
         .map((pet) => ({ pet, owner: ownerMap.get(pet.ownerId) }))
         .filter((r): r is PetWithOwner => r.owner !== undefined)
+        .filter((r) => !ownerPhone || r.owner.phone === ownerPhone)
     },
     enabled: enabled && !!petName.trim() && !!clinicId,
     retry: false,

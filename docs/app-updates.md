@@ -1,7 +1,7 @@
 # Shomer App — Current State
 
-## Version: 1.1.1
-## Last Updated: 2026-03-31
+## Version: 1.1.2
+## Last Updated: 2026-04-06
 
 ---
 
@@ -9,6 +9,8 @@
 
 ### Reception
 - Check-in flow (search/register owner + pet, select doctor, assign token)
+  - Search by Pet Name (required), Breed (optional), and Owner Phone (optional — +91 prefix hardcoded, exact 10-digit match)
+  - Phone entered in search pre-fills the phone field when registering a new patient
 - Queue view (all visits today, real-time updates)
 - Check-out/billing (mark billed, WhatsApp summary link)
 - Home dashboard (stats, doctor cards, recent completions)
@@ -19,6 +21,12 @@
 ### Vet Console
 - Queue sidebar (waiting patients, real-time)
 - Consultation form (diagnosis, prescription, vaccines, services, notes)
+  - Medicine catalog has `type` field: `tablet` | `syrup` | `injection` (injections include vaccines)
+  - Prescription card: full-width Morning/Afternoon/Evening/Night toggle buttons; Quantity + Duration side-by-side
+  - Tablet quantity: Full / Half / 1/3 / 1/4 dropdown
+  - Syrup quantity: ml dropdown (2.5 → 30 ml)
+  - Injection quantity: free numeric input (ml/units)
+  - Vaccine "Next Year" toggle — auto-sets next due date to same day next year
 - Mark in-progress / pause / complete
 - Last visit summary
 - Branch name shown in top bar (switcher for multi-branch)
@@ -68,6 +76,7 @@
 
 | Version | Date       | Changes |
 |---------|------------|---------|
+| 1.1.2   | 2026-04-06 | Check-in: owner phone search field (+91 hardcoded, 10-digit exact match, AND with name/breed); phone pre-fills registration form for new patients. Vet: medicine `type` field (tablet/syrup/injection) on catalog; prescription card redesigned with full-width timing toggles and side-by-side qty/duration; tablet qty options Full/Half/1/3/1/4; syrup ml dropdown; injection free input; vaccine "Next Year" toggle auto-sets next-due to +1 year. Confirmation: removed email sent message. |
 | 1.1.1   | 2026-03-31 | Bug fixes: check-in state persisted via sessionStorage (tab-switch safe), WhatsApp share replaced with web.whatsapp.com modal + phone validation, queue link mobile display fix + WA share on confirmation screen, doctor settings as overlay (no receptionist sidebar), Firestore public read rules for queue/summary pages (fixes mobile failures), medicine days input allows clearing |
 | 1.1.0   | 2026-03-22 | Multi-branch support, admin panel, token overhaul (branch-wide sequential + name prefix), enhanced toasts with sound, consultation summary page (public/white-label), backend API for user management, diagnosisCatalog/medicinesCatalog collection renames |
 | 1.0.0   | 2026-03-22 | Initial documented state — reception check-in, vet console, auth |

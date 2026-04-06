@@ -66,11 +66,6 @@ export function ConfirmationStep({ result, onNewCheckin }: ConfirmationStepProps
           </div>
         </div>
 
-        {result.ownerEmail && (
-          <p className="text-[11px] text-muted">
-            Confirmation sent to <span className="font-semibold">{result.ownerEmail}</span>
-          </p>
-        )}
       </div>
 
       {/* Queue link */}

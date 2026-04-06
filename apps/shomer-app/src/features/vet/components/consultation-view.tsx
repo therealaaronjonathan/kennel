@@ -51,6 +51,18 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
   const [vaccineName, setVaccineName] = useState('')
   const [vaccineBatch, setVaccineBatch] = useState('')
   const [vaccineNextDue, setVaccineNextDue] = useState('')
+  const [vaccineNextYear, setVaccineNextYear] = useState(false)
+
+  function toggleNextYear(on: boolean) {
+    setVaccineNextYear(on)
+    if (on) {
+      const d = new Date()
+      d.setFullYear(d.getFullYear() + 1)
+      setVaccineNextDue(d.toISOString().split('T')[0])
+    } else {
+      setVaccineNextDue('')
+    }
+  }
 
   const callPatient = useMutation({
     mutationFn: () => markVisitInProgress(clinicId, branchId, entry.id),
@@ -370,12 +382,34 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <label className={labelClass}>Next Due</label>
+                        <div className="flex items-center justify-between">
+                          <label className={labelClass}>Next Due</label>
+                          <button
+                            type="button"
+                            onClick={() => toggleNextYear(!vaccineNextYear)}
+                            className={cn(
+                              'flex items-center gap-1.5 rounded-[3px] border px-2 py-0.5 text-[10px] font-semibold transition-colors',
+                              vaccineNextYear
+                                ? 'border-primary/40 bg-primary/10 text-primary'
+                                : 'border-border-base text-muted hover:text-foreground',
+                            )}
+                          >
+                            <span className={cn(
+                              'inline-block h-2.5 w-2.5 rounded-full transition-colors',
+                              vaccineNextYear ? 'bg-primary' : 'bg-border-base',
+                            )} />
+                            Next Year
+                          </button>
+                        </div>
                         <input
                           type="date"
                           value={vaccineNextDue}
-                          onChange={(e) => setVaccineNextDue(e.target.value)}
-                          className={cn(inputClass, 'resize-none')}
+                          onChange={(e) => {
+                            setVaccineNextDue(e.target.value)
+                            setVaccineNextYear(false)
+                          }}
+                          disabled={vaccineNextYear}
+                          className={cn(inputClass, 'resize-none', vaccineNextYear && 'opacity-60 cursor-not-allowed')}
                         />
                       </div>
                     </div>

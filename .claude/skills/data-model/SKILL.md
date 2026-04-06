@@ -170,11 +170,14 @@ Clinic-level master list. Managed via Settings page and Admin panel.
 interface MedicinesCatalogItem {
   id: string
   name: string
+  type: 'tablet' | 'syrup' | 'injection'  // drives quantity UI in prescription
   isActive: boolean
   createdAt: Timestamp
   updatedAt: Timestamp
 }
 ```
+
+**Why `type` lives on the catalog item**: The quantity control shown when prescribing a medicine depends entirely on its form — tablets use a fixed-choice dropdown (Full / Half / 1/3), syrups use an ml dropdown, and injections use a free numeric input. Storing `type` on the catalog item means the vet view doesn't need to guess or ask; it renders the right control automatically. `injection` also covers vaccines so the prescription subcollection has a single unified shape. Any catalog document missing `type` defaults to `'tablet'` in the app as a safe fallback.
 
 ### ClinicService (collection: `services`)
 Clinic-level catalogue of services with fixed prices.
@@ -287,6 +290,8 @@ interface VisitPrescription {
   id: string
   medicineId: string | null  // ref to clinics/{clinicId}/medicinesCatalog/{id}; null if custom
   name: string
+  type: 'tablet' | 'syrup' | 'injection'
+  quantity: string           // "1" / "1/2" / "1/3" for tablets; "5" (ml) for syrups; free value for injections
   morning: boolean
   afternoon: boolean
   evening: boolean

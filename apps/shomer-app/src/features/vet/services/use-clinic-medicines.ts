@@ -2,9 +2,12 @@ import { useEffect, useState } from 'react'
 import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 
+export type MedicineType = 'tablet' | 'syrup' | 'injection'
+
 export interface ClinicMedicine {
   id: string
   name: string
+  type: MedicineType
 }
 
 export function useClinicMedicines(clinicId: string | null) {
@@ -22,7 +25,11 @@ export function useClinicMedicines(clinicId: string | null) {
 
     const unsub = onSnapshot(q, (snap) => {
       const items = snap.docs
-        .map((d) => ({ id: d.id, name: (d.data().name as string) ?? '' }))
+        .map((d) => ({
+          id: d.id,
+          name: (d.data().name as string) ?? '',
+          type: (d.data().type as MedicineType) ?? 'tablet',
+        }))
         .filter((d) => d.name.length > 0)
         .sort((a, b) => a.name.localeCompare(b.name))
       setMedicines(items)

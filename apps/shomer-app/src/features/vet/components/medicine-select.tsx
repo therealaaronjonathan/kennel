@@ -1,16 +1,34 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
-import type { ClinicMedicine } from '../services/use-clinic-medicines'
+import { cn } from '@/lib/utils'
+import type { ClinicMedicine, MedicineType } from '../services/use-clinic-medicines'
 
 export interface PrescriptionEntry {
   medicineId: string | null
   name: string
+  type: MedicineType
+  quantity: string
   morning: boolean
   afternoon: boolean
   evening: boolean
   night: boolean
   days: number
   isCustom: boolean
+}
+
+const TABLET_OPTIONS = [
+  { value: '1', label: 'Full' },
+  { value: '1/2', label: 'Half' },
+  { value: '1/3', label: '1/3' },
+  { value: '1/4', label: '1/4' },
+]
+
+const SYRUP_ML_OPTIONS = [2.5, 5, 7.5, 10, 15, 20, 25, 30]
+
+function defaultQuantity(type: MedicineType): string {
+  if (type === 'tablet') return '1'
+  if (type === 'syrup') return '5'
+  return '1'
 }
 
 interface MedicineSelectProps {
@@ -44,6 +62,8 @@ export function MedicineSelect({ selected, onChange, items, loading }: MedicineS
       {
         medicineId: item.id,
         name: item.name,
+        type: item.type,
+        quantity: defaultQuantity(item.type),
         morning: false,
         afternoon: false,
         evening: false,
@@ -70,34 +90,86 @@ export function MedicineSelect({ selected, onChange, items, loading }: MedicineS
       {/* Selected medicines */}
       {selected.map((entry, i) => (
         <div key={i} className="rounded-[4px] border border-border-base bg-surface overflow-hidden">
+
+          {/* Header: name + type badge + remove */}
           <div className="flex items-center justify-between px-3 py-2 border-b border-border-base">
-            <span className="text-[12px] font-semibold text-foreground">{entry.name}</span>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-[13px] font-semibold text-foreground truncate">{entry.name}</span>
+              <span className="flex-shrink-0 rounded-[3px] bg-surface-2 border border-border-base px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.05em] text-muted">
+                {entry.type}
+              </span>
+            </div>
             <button
               type="button"
               onClick={() => remove(i)}
-              className="text-muted hover:text-danger transition-colors ml-2"
+              className="flex-shrink-0 ml-2 text-muted hover:text-danger transition-colors"
             >
               <X size={12} />
             </button>
           </div>
-          <div className="px-3 py-2.5 space-y-2.5">
-            {/* Timing checkboxes */}
-            <div className="flex gap-4 flex-wrap">
-              {TIMINGS.map(({ key, label }) => (
-                <label key={key} className="flex items-center gap-1.5 cursor-pointer">
+
+          {/* Timing — full-width toggle buttons */}
+          <div className="grid grid-cols-4 border-b border-border-base">
+            {TIMINGS.map(({ key, label }, idx) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => updateEntry(i, { [key]: !entry[key] })}
+                className={cn(
+                  'py-2 text-[12px] font-semibold transition-colors',
+                  idx < 3 && 'border-r border-border-base',
+                  entry[key]
+                    ? 'bg-primary text-white'
+                    : 'bg-surface text-muted hover:bg-surface-2 hover:text-foreground',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Quantity + Duration — side by side */}
+          <div className="grid grid-cols-2 divide-x divide-border-base">
+            {/* Quantity */}
+            <div className="flex items-center gap-2 px-3 py-2.5">
+              <span className="text-[11px] font-medium text-muted flex-shrink-0">Qty</span>
+              {entry.type === 'tablet' ? (
+                <select
+                  value={entry.quantity}
+                  onChange={(e) => updateEntry(i, { quantity: e.target.value })}
+                  className="flex-1 min-w-0 rounded-[3px] border border-border-base bg-surface-2 px-2 py-1 text-[12px] text-foreground focus:border-primary focus:outline-none"
+                >
+                  {TABLET_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              ) : entry.type === 'syrup' ? (
+                <select
+                  value={entry.quantity}
+                  onChange={(e) => updateEntry(i, { quantity: e.target.value })}
+                  className="flex-1 min-w-0 rounded-[3px] border border-border-base bg-surface-2 px-2 py-1 text-[12px] text-foreground focus:border-primary focus:outline-none"
+                >
+                  {SYRUP_ML_OPTIONS.map((ml) => (
+                    <option key={ml} value={String(ml)}>{ml} ml</option>
+                  ))}
+                </select>
+              ) : (
+                <div className="flex items-center gap-1 flex-1 min-w-0">
                   <input
-                    type="checkbox"
-                    checked={entry[key]}
-                    onChange={(e) => updateEntry(i, { [key]: e.target.checked })}
-                    className="accent-primary h-3.5 w-3.5 flex-shrink-0"
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={entry.quantity}
+                    onChange={(e) => updateEntry(i, { quantity: e.target.value })}
+                    className="w-14 rounded-[3px] border border-border-base bg-surface-2 px-2 py-1 text-[12px] text-foreground text-center focus:border-primary focus:outline-none"
                   />
-                  <span className="text-[12px] text-foreground">{label}</span>
-                </label>
-              ))}
+                  <span className="text-[11px] text-muted">ml</span>
+                </div>
+              )}
             </div>
+
             {/* Duration */}
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-medium text-muted">Duration</span>
+            <div className="flex items-center gap-2 px-3 py-2.5">
               <input
                 type="number"
                 min={1}
@@ -110,11 +182,12 @@ export function MedicineSelect({ selected, onChange, items, loading }: MedicineS
                 onBlur={() => {
                   if (!entry.days || entry.days < 1) updateEntry(i, { days: 1 })
                 }}
-                className="w-16 rounded-[3px] border border-border-base bg-surface-2 px-2 py-1 text-[12px] text-foreground text-center focus:border-primary focus:outline-none"
+                className="w-14 rounded-[3px] border border-border-base bg-surface-2 px-2 py-1 text-[12px] text-foreground text-center focus:border-primary focus:outline-none"
               />
-              <span className="text-[12px] text-muted">days</span>
+              <span className="text-[11px] font-medium text-muted">days</span>
             </div>
           </div>
+
         </div>
       ))}
 
