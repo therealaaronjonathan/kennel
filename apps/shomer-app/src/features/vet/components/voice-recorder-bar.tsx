@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Mic, Pause, Play, Square, Loader2, CheckCircle2, X } from 'lucide-react'
+import { Mic, Pause, Play, Square, Loader2, CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useVoiceRecorder } from '../services/use-voice-recorder'
 import { transcribeAudio } from '../services/transcription-service'
@@ -64,6 +64,7 @@ export function VoiceRecorderBar({
       }
 
       setLastTranscript(transcript)
+      console.log('[Voice AI] Transcript:', transcript)
 
       // Step 2: AI extraction
       setPhase('analyzing')
@@ -73,6 +74,8 @@ export function VoiceRecorderBar({
         medicineList,
         serviceList,
       )
+
+      console.log('[Voice AI] Extracted:', JSON.stringify(extracted, null, 2))
 
       setPhase('idle')
       setShowSuccess(true)
@@ -97,21 +100,6 @@ export function VoiceRecorderBar({
             <CheckCircle2 size={12} />
             Fields auto-filled
           </p>
-        )}
-        {lastTranscript && !processError && (
-          <div className="flex items-start gap-1.5 max-w-[320px] rounded-[4px] border border-border-base bg-surface px-2.5 py-2">
-            <p className="text-[10px] text-muted leading-snug flex-1">
-              <span className="font-semibold text-foreground">Transcript: </span>
-              {lastTranscript.length > 120 ? lastTranscript.slice(0, 120) + '…' : lastTranscript}
-            </p>
-            <button
-              type="button"
-              onClick={() => setLastTranscript(null)}
-              className="text-muted hover:text-foreground flex-shrink-0 mt-0.5"
-            >
-              <X size={10} />
-            </button>
-          </div>
         )}
         <button
           type="button"

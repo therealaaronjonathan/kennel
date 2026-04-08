@@ -33,6 +33,7 @@ export interface ConsultationFormData {
   vaccineName: string
   vaccineBatch: string
   vaccineNextDue: string
+  transcript: string
 }
 
 export async function completeVisit(
@@ -50,6 +51,7 @@ export async function completeVisit(
     services: form.services,
     billAmount,
     consultationNotes: form.consultationNotes,
+    transcript: form.transcript || '',
     updatedAt: serverTimestamp(),
   })
   await batch.commit()

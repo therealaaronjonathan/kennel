@@ -53,6 +53,7 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
   const [vaccineName, setVaccineName] = useState('')
   const [vaccineBatch, setVaccineBatch] = useState('')
   const [vaccineNextDue, setVaccineNextDue] = useState('')
+  const [transcript, setTranscript] = useState('')
 
   const callPatient = useMutation({
     mutationFn: () => markVisitInProgress(clinicId, branchId, entry.id),
@@ -72,6 +73,7 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
         vaccineName,
         vaccineBatch,
         vaccineNextDue,
+        transcript,
       }
       return completeVisit(clinicId, branchId, entry.id, form)
     },
@@ -84,7 +86,10 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
 
   // --- AI auto-fill handler ---
   const handleAIFill = useCallback(
-    (data: AIExtractedData, _transcript: string) => {
+    (data: AIExtractedData, transcriptText: string) => {
+      // Save transcript for Firestore storage
+      setTranscript(transcriptText)
+
       // Helper: fuzzy match a name against a list (exact > includes > skip)
       function fuzzyFind<T extends { name: string }>(items: T[], target: string): T | undefined {
         const t = target.toLowerCase()

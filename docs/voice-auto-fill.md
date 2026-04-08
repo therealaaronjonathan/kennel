@@ -1,254 +1,210 @@
 # Voice-to-Form Auto-Fill — Feature Documentation
 
-## What It Does
+## Overview
 
-A **Record** button on the Vet Console lets the doctor **speak** their consultation (in Tamil, English, or a mix), and AI automatically fills in the form fields — Diagnosis, Consultation Notes, Medicines, Vaccines, and Services. The doctor reviews, edits if needed, and clicks Mark Complete.
+A **Record** button on the Vet Console allows the doctor to **speak** their consultation (in Tamil, English, or a mix), and AI automatically fills in the form fields — Diagnosis, Consultation Notes, Medicines, Vaccines, and Services. The doctor reviews, edits if needed, and clicks Mark Complete. The raw transcript is saved to Firestore for future reference.
 
-**Problem it solves:** Manually typing every field during a consultation is time-consuming. This reduces a 3–5 minute form-filling process to ~30 seconds of speaking + a quick review.
+**Problem:** Manually typing every field during a consultation takes 3–5 minutes.
+**Solution:** ~30 seconds of speaking + quick review.
 
 ---
 
-## Architecture
+## AI Models Used
 
-```mermaid
-graph TD
-    A["🎤 Doctor speaks<br/>(Tamil + English)"] --> B["Browser MediaRecorder API<br/>captures audio as WebM"]
-    B --> C["Groq Whisper API<br/>(whisper-large-v3)<br/>Transcribes to text"]
-    C --> D["Groq Llama 3.3 API<br/>(70B versatile)<br/>Extracts structured JSON"]
-    D --> E["Auto-fill form fields<br/>with fuzzy matching"]
-    E --> F["Doctor reviews & edits"]
-    F --> G["Mark Complete"]
+| Component | Model | Provider | Purpose |
+|-----------|-------|----------|---------|
+| **Speech-to-Text** | `whisper-large-v3` | Groq (free tier) | Converts doctor's voice to text. Supports Tamil, English, and code-switching. |
+| **Text Extraction** | `llama-3.3-70b-versatile` | Groq (free tier) | Parses transcript to extract structured data (diagnoses, medicines, vaccines, services). |
+
+**Why Groq?** Free tier, fast inference (~2-3s per request), and high-quality models.
+
+---
+
+## Architecture & Data Flow
+
+```
+┌─────────────┐
+│  🎤 Doctor   │  Speaks in Tamil + English
+│   speaks     │  (e.g., "Skin allergy irukku, Amoxicillin morning evening 5 days kudunga")
+└──────┬───────┘
+       │
+       ▼
+┌─────────────────────────────┐
+│  Browser MediaRecorder API  │  Captures audio as WebM/Opus
+│  (use-voice-recorder.ts)    │  Supports: Record / Pause / Resume / Stop
+└──────┬──────────────────────┘
+       │
+       ▼
+┌──────────────────────────────────────┐
+│  Audio Chunking (Web Audio API)      │  Splits long recordings into ~30s WAV segments
+│  (transcription-service.ts)          │  Prevents Whisper hallucination on long audio
+│                                      │
+│  5 min recording → [0:00-0:30] [0:30-1:00] [1:00-1:30] ... (10 chunks)
+└──────┬───────────────────────────────┘
+       │  All chunks sent in parallel
+       ▼
+┌──────────────────────────────────────┐
+│  Groq Whisper API                    │  Model: whisper-large-v3
+│  (transcription-service.ts)          │  Auto-detects language (Tamil/English)
+│                                      │  Vocabulary hints prime the decoder for
+│                                      │  medical terms (Amoxicillin, Rabies, etc.)
+│                                      │
+│  Output: "The dog has skin allergy,  │
+│  prescribe Amoxicillin morning       │
+│  evening for 5 days..."              │
+└──────┬───────────────────────────────┘
+       │  Combined transcript
+       ▼
+┌──────────────────────────────────────┐
+│  Groq Llama 3.3 70B API             │  Temperature: 0.1 (low randomness)
+│  (ai-extract-service.ts)            │  Response: JSON object
+│                                      │
+│  System prompt includes:             │
+│  - Clinic's diagnosis list           │
+│  - Clinic's medicine list            │
+│  - Clinic's service list             │
+│  - Tamil timing mappings             │
+│  - English-only output rule          │
+│                                      │
+│  Output: {                           │
+│    diagnoses: [...],                 │
+│    consultationNotes: "...",         │
+│    medicines: [...],                 │
+│    vaccineName: "Rabies",            │
+│    services: ["Consultation"]        │
+│  }                                   │
+└──────┬───────────────────────────────┘
+       │
+       ▼
+┌──────────────────────────────────────┐
+│  Fuzzy Matching & Form Fill          │  Matches AI output to clinic's actual items
+│  (consultation-view.tsx)             │  "Amoxicillin" → "Amoxicillin 250mg" ✓
+│                                      │  Fills: diagnoses, notes, medicines,
+│                                      │  timing checkboxes, vaccines, services
+└──────┬───────────────────────────────┘
+       │
+       ▼
+┌──────────────────────────────────────┐
+│  Doctor Reviews & Edits              │  Can manually change any field
+│                                      │  Can re-record if needed
+└──────┬───────────────────────────────┘
+       │  Clicks "Mark Complete"
+       ▼
+┌──────────────────────────────────────┐
+│  Firestore Write                     │  Saves all form data + transcript
+│  (complete-visit.ts)                 │  Path: clinics/{id}/branches/{id}/visits/{id}
+│                                      │  transcript field stored for future reference
+└──────────────────────────────────────┘
 ```
 
 ---
 
-## Files Overview
+## Files
 
 All files are in `apps/shomer-app/src/features/vet/`:
 
-| File | Type | Purpose |
-|------|------|---------|
-| [use-voice-recorder.ts](apps/shomer-app/src/features/vet/services/use-voice-recorder.ts) | Hook | Wraps browser MediaRecorder API (record/pause/resume/stop) |
-| [transcription-service.ts](apps/shomer-app/src/features/vet/services/transcription-service.ts) | Service | Sends audio to Groq Whisper for transcription |
-| [ai-extract-service.ts](apps/shomer-app/src/features/vet/services/ai-extract-service.ts) | Service | Sends transcript + clinic lists to Groq Llama 3 for extraction |
-| [voice-recorder-bar.tsx](apps/shomer-app/src/features/vet/components/voice-recorder-bar.tsx) | Component | UI for record/pause/finish buttons and processing states |
-| [consultation-view.tsx](apps/shomer-app/src/features/vet/components/consultation-view.tsx) | Component | Modified — integrates recorder and maps AI output to form fields |
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `services/use-voice-recorder.ts` | React hook wrapping browser MediaRecorder API (record/pause/resume/stop) |
+| `services/transcription-service.ts` | Sends audio to Groq Whisper. Includes audio chunking (splits long recordings into 30s WAV segments using Web Audio API) |
+| `services/ai-extract-service.ts` | Sends transcript + clinic lists to Groq Llama 3.3. Returns structured JSON with diagnoses, medicines, vaccines, services |
+| `components/voice-recorder-bar.tsx` | UI component for recording controls and processing status |
+
+### Modified Files
+
+| File | Change |
+|------|--------|
+| `components/consultation-view.tsx` | Integrated voice recorder, AI auto-fill handler with fuzzy matching, transcript state |
+| `services/complete-visit.ts` | Added `transcript` field to `ConsultationFormData` and Firestore write |
 
 ### Config
 
 | File | Change |
 |------|--------|
-| [.env](apps/shomer-app/.env) | Added `VITE_GROQ_API_KEY` |
+| `.env` | Added `VITE_GROQ_API_KEY` (gitignored, not pushed) |
 
 ---
 
-## How Each Part Works
+## Audio Chunking
 
-### 1. Voice Recording (`use-voice-recorder.ts`)
+Long recordings (>35 seconds) are automatically split into ~30-second WAV segments before transcription. This is critical because Whisper hallucinates and drops content on long bilingual audio.
 
-A custom React hook that manages the browser's `MediaRecorder` API.
+**How it works:**
+1. Full audio blob is decoded using Web Audio API (`AudioContext.decodeAudioData`)
+2. PCM samples are split into 30-second segments
+3. Each segment is encoded as a standalone WAV file (with proper RIFF/WAV headers)
+4. All chunks are transcribed **in parallel** via `Promise.all`
+5. Results are concatenated into a single transcript
 
-**States:** `idle` → `recording` → `paused` → `idle`
-
-**Key behaviors:**
-- Requests microphone permission via `navigator.mediaDevices.getUserMedia()`
-- Records in `audio/webm;codecs=opus` format (falls back to `audio/webm` or `audio/mp4`)
-- Collects audio chunks every 1 second
-- Tracks elapsed time with a `setInterval` timer
-- On `stop()`, combines all chunks into a single `Blob` and releases the microphone
-- **Cleanup on unmount** — if the component unmounts mid-recording, the mic is released
-
-**Error handling:**
-- `NotAllowedError` → "Microphone access denied. Please allow microphone access."
-- Other errors → "Failed to access microphone."
+**Performance:** Parallel transcription means chunked audio takes roughly the same time as a single request.
 
 ---
 
-### 2. Transcription (`transcription-service.ts`)
+## AI Extraction Prompt
 
-Sends the recorded audio blob to **Groq Whisper API** for speech-to-text.
+The system prompt sent to Llama 3.3 includes:
 
-**API endpoint:** `https://api.groq.com/openai/v1/audio/transcriptions`
-**Model:** `whisper-large-v3`
-
-**Key design decisions:**
-- **No language specified** — Whisper auto-detects language, which handles Tamil-English code-switching better than forcing a single language
-- **Context prompt** included: *"This is a veterinary consultation. The doctor speaks in Tamil and English..."* — helps Whisper recognize domain-specific terms
-- **Response format:** plain text (not JSON) for simplicity
+1. **Clinic's actual lists** — diagnoses, medicines, services configured in the clinic
+2. **English-only rule** — ALL output must be in English, Tamil speech is translated (not transliterated)
+3. **Tamil timing mappings** — காலை=morning, மதியம்=afternoon, மாலை=evening, இரவு=night
+4. **Extraction rules** — specific instructions for each field type
+5. **Services restriction** — only matches from the clinic's configured list (services have prices)
 
 ---
 
-### 3. AI Extraction (`ai-extract-service.ts`)
+## Fuzzy Matching
 
-Sends the transcribed text to **Groq Llama 3.3 70B** to extract structured consultation data.
+AI-extracted names are matched to the clinic's database using a two-tier strategy:
 
-**API endpoint:** `https://api.groq.com/openai/v1/chat/completions`
-**Model:** `llama-3.3-70b-versatile`
-**Temperature:** `0.1` (low randomness for consistent extraction)
-
-#### How the AI prompt works
-
-The system prompt includes three key sections:
-
-**1. Available clinic lists** — the AI receives the actual diagnoses, medicines, and services configured in the clinic:
 ```
-DIAGNOSES: ["Skin allergy", "Parvovirus", "Tick fever", ...]
-MEDICINES: ["Amoxicillin 250mg", "Metronidazole", ...]
-SERVICES:  ["Consultation ₹500", "Deworming ₹300", ...]
+1. Exact match (case-insensitive):  "Amoxicillin" === "Amoxicillin"  ✓
+2. Partial match (includes):        "Amoxicillin" ⊂ "Amoxicillin 250mg"  ✓
+3. No match:                        Creates custom entry (diagnoses/medicines only)
 ```
 
-**2. English-only rule** — ALL output must be in English. Tamil speech is translated, never transliterated.
+Services require a match — unmatched services are skipped because they need prices.
 
-**3. Extraction rules** — specific instructions for each field:
-- **Diagnoses** — match to clinic list when possible, create custom otherwise
-- **Notes** — professional English clinical summary
-- **Medicines** — match to list, extract timing (morning/afternoon/evening/night) and duration
-- **Vaccines** — only if explicitly mentioned
-- **Services** — ONLY from the clinic's configured list, skip unmatched ones
+---
 
-#### Tamil timing mapping
-The prompt knows these Tamil → English mappings:
-| Tamil | English |
-|-------|---------|
-| காலை | morning |
-| மதியம் | afternoon |
-| மாலை | evening |
-| இரவு | night |
-| இரண்டு வேளை | twice a day (morning + evening) |
-| மூன்று வேளை | thrice (morning + afternoon + evening) |
-| 5 நாள் | 5 days |
+## Transcript Storage
 
-#### Output format
-```json
+The raw Whisper transcript is saved to Firestore when the doctor clicks Mark Complete:
+
+```
+clinics/{clinicId}/branches/{branchId}/visits/{visitId}
 {
-  "diagnoses": [{"name": "Skin allergy", "notes": "Severe itching and hair loss"}],
-  "consultationNotes": "Dog presents with skin allergy...",
-  "medicines": [{"name": "Amoxicillin", "morning": true, "evening": true, "days": 5}],
-  "vaccineName": "",
-  "vaccineBatch": "",
-  "vaccineNextDue": "",
-  "services": ["Consultation"]
+  status: "completed",
+  consultationNotes: "...",
+  services: [...],
+  transcript: "The dog has skin allergy...",  ← saved here
+  billAmount: 500,
+  updatedAt: ...
 }
 ```
 
----
-
-### 4. Voice Recorder UI (`voice-recorder-bar.tsx`)
-
-A compact floating component positioned at the top-right of the consultation view.
-
-#### UI States
-
-````carousel
-**Idle State**
-```
-[🎤 Record]
-```
-Purple button with microphone icon. Shows "Re-record" if a previous transcript exists.
-<!-- slide -->
-**Recording State**
-```
-🔴 0:15  Recording  [⏸] [Finish]
-```
-Red pulsing dot + timer + Pause/Finish buttons. Red border.
-<!-- slide -->
-**Paused State**
-```
-🟡 0:15  Paused  [▶] [Finish]
-```
-Yellow dot + Resume/Finish buttons.
-<!-- slide -->
-**Processing State**
-```
-⏳ Transcribing...    →    ⏳ Analyzing with AI...
-```
-Spinner with phase-specific text (two phases shown sequentially).
-<!-- slide -->
-**Success State**
-```
-✅ Fields auto-filled
-[Transcript: "This dog has skin allergy..." ✕]
-[🎤 Re-record]
-```
-Checkmark (auto-hides after 4s) + dismissible transcript preview.
-<!-- slide -->
-**Error State**
-```
-"Transcription failed (429): Rate limit exceeded"
-[🎤 Record]
-```
-Red error text with full message, click Record to retry.
-````
+Not displayed in the UI — stored silently for future reference, auditing, or analytics.
 
 ---
 
-### 5. Form Auto-Fill Logic (`consultation-view.tsx`)
+## Environment Setup
 
-The `handleAIFill` callback receives the AI's extracted data and maps it to form fields.
-
-#### Fuzzy Matching
-
-Instead of requiring exact name matches, the system uses a two-tier fuzzy matching strategy:
+The Groq API key must be set in `apps/shomer-app/.env`:
 
 ```
-1. Exact match (case-insensitive):  "Amoxicillin" === "Amoxicillin"  ✅
-2. Partial match (includes):        "Amoxicillin" ⊂ "Amoxicillin 250mg"  ✅
-3. No match:                        Creates custom entry  ⚠️
+VITE_GROQ_API_KEY=gsk_xxxxxxxxxxxxx
 ```
 
-This ensures that when the AI says "Amoxicillin" but the clinic list has "Amoxicillin 250mg", it still matches correctly.
+Get a free API key at [console.groq.com](https://console.groq.com).
 
-#### Field mapping summary
-
-| AI Output | Form Field | Match Strategy |
-|-----------|------------|----------------|
-| `diagnoses[].name` | DiagnosisSelect | Fuzzy match → clinic list, else custom |
-| `diagnoses[].notes` | Diagnosis notes textarea | Direct fill |
-| `consultationNotes` | Consultation Notes textarea | Direct fill |
-| `medicines[].name` | MedicineSelect | Fuzzy match → clinic list, else custom |
-| `medicines[].morning/afternoon/evening/night` | Timing checkboxes | Direct fill |
-| `medicines[].days` | Duration input | Direct fill |
-| `vaccineName` | Vaccine name input | Direct fill |
-| `vaccineBatch` | Batch number input | Direct fill |
-| `vaccineNextDue` | Next due date input | Direct fill (YYYY-MM-DD) |
-| `services[]` | ServicesSelect | Fuzzy match → clinic list ONLY (skips unmatched) |
-
-> [!NOTE]
-> Services are the only field that **requires** a clinic list match. This is because each service has a price attached — adding an unmatched service would have no price.
+> **Security note:** The API key is currently in the frontend bundle. For production, it should be proxied through a backend Cloud Function.
 
 ---
 
-## Error Handling
+## API Usage & Limits
 
-| Scenario | What Happens |
-|----------|-------------|
-| Microphone denied | Shows "Microphone access denied. Please allow microphone access." |
-| No speech detected | Shows "Could not detect any speech. Please try again." |
-| Groq API rate limit (429) | Shows the rate limit error message, doctor can retry |
-| Network failure | Shows "Transcription failed" or "AI extraction failed" with status code |
-| AI returns invalid JSON | Shows "Failed to parse AI response as JSON" |
-| Doctor navigates away mid-recording | Mic automatically released (cleanup on unmount) |
-| API key missing | Shows "Groq API key not configured (VITE_GROQ_API_KEY)" |
-
----
-
-## Limitations
-
-1. **API key in frontend** — The Groq API key is in the browser bundle via `VITE_GROQ_API_KEY`. Fine for internal/test use, but for production it should be proxied through the backend.
-2. **No streaming** — The entire audio is sent after recording finishes. Long consultations (>5 min) may take longer to process.
-3. **Whisper file size limit** — Groq Whisper has a 25MB file size limit per request. Very long recordings may exceed this.
-4. **Single recording** — Re-recording replaces the previous fill (doesn't append). Doctor must capture everything in one recording.
-5. **No offline support** — Requires internet for both Whisper and Llama 3 API calls.
-
----
-
-## API Costs
-
-Both APIs use **Groq's free tier**:
-
-| API | Model | Free Tier Limit |
-|-----|-------|----------------|
-| Whisper | whisper-large-v3 | ~12,000 audio-seconds/day |
-| Chat | llama-3.3-70b-versatile | 6,000 tokens/min, 100k/day |
-
-For a typical clinic with ~30 consultations/day averaging 1 min each, this stays well within free tier limits.
+| API | Model | Free Tier Limit | Typical Usage |
+|-----|-------|----------------|---------------|
+| Whisper | whisper-large-v3 | ~12,000 audio-seconds/day | ~30 consultations × 2 min = 3,600s/day ✓ |
+| Chat | llama-3.3-70b-versatile | 100k tokens/day | ~30 consultations × 2k tokens = 60k/day ✓ |
