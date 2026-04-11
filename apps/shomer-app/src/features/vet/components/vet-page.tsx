@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { signOut } from 'firebase/auth'
 import { useNavigate } from 'react-router-dom'
 import { Stethoscope } from 'lucide-react'
+import { LogoutConfirmDialog } from '@/components/blocks/logout-confirm-dialog'
 import { SettingsPage } from '@/features/settings/components/settings-page'
 import { cn } from '@/lib/utils'
 import { auth } from '@/lib/firebase'
@@ -65,6 +66,12 @@ export function VetPage() {
   const { entries, loading: queueLoading, error: queueError } = useVetQueue(clinicId, branchId, doctorId)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false)
+
+  async function handleSignOut() {
+    await signOut(auth)
+    navigate('/login')
+  }
   const selectedEntry = entries.find((e) => e.id === selectedId) ?? null
 
   function handleCompleted() {
@@ -153,7 +160,7 @@ export function VetPage() {
           </button>
           <button
             type="button"
-            onClick={() => signOut(auth).then(() => navigate('/login'))}
+            onClick={() => setShowLogoutDialog(true)}
             className="rounded-[4px] border border-border-base px-3 py-1.5 text-[12px] font-semibold text-muted hover:text-foreground hover:border-foreground/20 transition-colors"
           >
             Sign out
@@ -236,6 +243,12 @@ export function VetPage() {
           <SettingsPage onClose={() => setShowSettings(false)} />
         </div>
       )}
+
+      <LogoutConfirmDialog
+        open={showLogoutDialog}
+        onCancel={() => setShowLogoutDialog(false)}
+        onConfirm={handleSignOut}
+      />
     </div>
   )
 }

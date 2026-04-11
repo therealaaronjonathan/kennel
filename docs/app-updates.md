@@ -1,7 +1,7 @@
 # Shomer App — Current State
 
-## Version: 1.1.2
-## Last Updated: 2026-04-06
+## Version: 1.1.4
+## Last Updated: 2026-04-12
 
 ---
 
@@ -76,6 +76,8 @@
 
 | Version | Date       | Changes |
 |---------|------------|---------|
+| 1.1.4   | 2026-04-12 | Check-in registration: pet Color/Markings (text) and owner Alternate Phone (+91, optional, same validation as primary) fields added. Services UI (vet + receptionist): replaced flat search with accordion grouped by `serviceType`; global search box (filters across all types); inline editable unit price and quantity (qty × price = line total, defaults 1×); type accordions are single-open with smooth scroll-to-top on expand. Doctor consultation: "Mark Complete" now opens a confirmation popup showing services, quantities, and total before saving. Receptionist checkout: same accordion UI with full add/remove/price/qty edit capability. Seeder script: `bun scripts/seed-services.ts --file path.xlsx --clinicId <id>` imports services from Excel with `serviceType` support. Data model: `ClinicService.serviceType` added; `ServiceLineItem.quantity` added; `Pet.color` added; `PetOwner.altPhone` added; `otherComplaintText` deprecated on Visit (all complaints now first-class strings in `complaints[]`). |
+| 1.1.3   | 2026-04-12 | Check-in: complaints input replaced with typeahead tag-input (keyboard nav, filters predefined list on focus/type, custom free-text complaints via `+ Add` row, guards against empty/duplicate/exact-match). Removed `otherComplaintText` special case — custom complaints are now first-class strings in `complaints[]`. Registration: new fields for pet color (text) and owner alternate phone (+91, same validation as primary). Global: logout now shows confirmation dialog on all 4 views (receptionist, vet, admin, dashboard) with async error handling (dialog stays open on failure). |
 | 1.1.2   | 2026-04-06 | Check-in: owner phone search field (+91 hardcoded, 10-digit exact match, AND with name/breed); phone pre-fills registration form for new patients. Vet: medicine `type` field (tablet/syrup/injection) on catalog; prescription card redesigned with full-width timing toggles and side-by-side qty/duration; tablet qty options Full/Half/1/3/1/4; syrup ml dropdown; injection free input; vaccine "Next Year" toggle auto-sets next-due to +1 year. Confirmation: removed email sent message. |
 | 1.1.1   | 2026-03-31 | Bug fixes: check-in state persisted via sessionStorage (tab-switch safe), WhatsApp share replaced with web.whatsapp.com modal + phone validation, queue link mobile display fix + WA share on confirmation screen, doctor settings as overlay (no receptionist sidebar), Firestore public read rules for queue/summary pages (fixes mobile failures), medicine days input allows clearing |
 | 1.1.0   | 2026-03-22 | Multi-branch support, admin panel, token overhaul (branch-wide sequential + name prefix), enhanced toasts with sound, consultation summary page (public/white-label), backend API for user management, diagnosisCatalog/medicinesCatalog collection renames |

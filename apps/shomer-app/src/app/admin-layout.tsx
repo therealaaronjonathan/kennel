@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { signOut } from 'firebase/auth'
 import { LayoutDashboard, Building2, GitBranch, Stethoscope, Users, BookOpen, LogOut } from 'lucide-react'
 import { NavLink, Outlet, useNavigate, useMatch } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { auth } from '@/lib/firebase'
 import { useAuth } from '@/features/auth'
+import { LogoutConfirmDialog } from '@/components/blocks/logout-confirm-dialog'
 
 export function AdminLayout() {
   const navigate = useNavigate()
@@ -13,8 +15,11 @@ export function AdminLayout() {
   const clinicMatch = useMatch('/admin/clinics/:id/*')
   const clinicId = clinicMatch?.params?.id ?? null
 
-  function handleSignOut() {
-    signOut(auth).then(() => navigate('/login'))
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false)
+
+  async function handleSignOut() {
+    await signOut(auth)
+    navigate('/login')
   }
 
   return (
@@ -147,7 +152,7 @@ export function AdminLayout() {
           )}
           <button
             type="button"
-            onClick={handleSignOut}
+            onClick={() => setShowLogoutDialog(true)}
             className="flex items-center gap-2 text-[12px] font-semibold text-muted hover:text-foreground transition-colors"
           >
             <LogOut size={13} />
@@ -160,6 +165,12 @@ export function AdminLayout() {
       <div className="flex-1 min-w-0 overflow-hidden flex flex-col">
         <Outlet />
       </div>
+
+      <LogoutConfirmDialog
+        open={showLogoutDialog}
+        onCancel={() => setShowLogoutDialog(false)}
+        onConfirm={handleSignOut}
+      />
     </div>
   )
 }

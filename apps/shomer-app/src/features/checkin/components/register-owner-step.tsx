@@ -37,12 +37,14 @@ export function RegisterOwnerStep({
   const [form, setForm] = useState<NewOwnerFormData>({
     ownerName: '',
     phone: prefillPhone || '+91',
+    altPhone: '+91',
     email: '',
     petName: prefillPetName,
     species: prefillSpecies,
     speciesName: '',
     breed: prefillBreed,
     age: '',
+    color: '',
     microchipNumber: '',
   })
   const [errors, setErrors] = useState<FormErrors>({})
@@ -68,6 +70,19 @@ export function RegisterOwnerStep({
     }
   }
 
+  function handleAltPhoneChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 10)
+    setForm((prev) => ({ ...prev, altPhone: '+91' + digits }))
+    setErrors((prev) => ({ ...prev, altPhone: undefined }))
+  }
+
+  function handleAltPhoneBlur() {
+    const digits = form.altPhone.slice(3)
+    if (digits.length > 0 && digits.length !== 10) {
+      setErrors((prev) => ({ ...prev, altPhone: 'Must be 10 digits' }))
+    }
+  }
+
   function handleEmailBlur() {
     if (form.email && !EMAIL_RE.test(form.email)) {
       setErrors((prev) => ({ ...prev, email: 'Enter a valid email address' }))
@@ -89,6 +104,9 @@ export function RegisterOwnerStep({
       next.phone = 'Phone number must be 10 digits'
     }
     if (form.email && !EMAIL_RE.test(form.email)) next.email = 'Enter a valid email address'
+    if (form.altPhone !== '+91' && form.altPhone.slice(3).length !== 10) {
+      next.altPhone = 'Must be 10 digits'
+    }
     if (!form.petName.trim()) next.petName = 'Required'
     if (form.species === 'other' && !form.speciesName.trim()) next.speciesName = 'Required'
     if (form.microchipNumber.length > 15) next.microchipNumber = 'Maximum 15 characters'
@@ -174,23 +192,52 @@ export function RegisterOwnerStep({
             )}
           </div>
 
-          {/* Email */}
+          {/* Alt Phone */}
           <div className="space-y-1">
             <label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
-              Email
+              Alt. Phone
             </label>
-            <input
-              type="text"
-              placeholder="owner@email.com"
-              value={form.email}
-              onChange={(e) => set('email', e.target.value)}
-              onBlur={handleEmailBlur}
-              className={inputClass('email')}
-            />
-            {errors.email && (
-              <p className="text-[11px] text-danger">{errors.email}</p>
+            <div
+              className={cn(
+                'flex items-center rounded-[4px] border overflow-hidden transition-colors',
+                errors.altPhone ? 'border-danger' : 'border-border-base',
+              )}
+            >
+              <span className="flex-shrink-0 select-none border-r border-border-base bg-surface-2 px-3 py-[9px] text-[13px] font-semibold text-muted">
+                +91
+              </span>
+              <input
+                type="tel"
+                placeholder="98765 43210"
+                value={form.altPhone.slice(3)}
+                onChange={handleAltPhoneChange}
+                onBlur={handleAltPhoneBlur}
+                inputMode="numeric"
+                className="flex-1 bg-white px-3 py-[9px] text-[13px] font-medium text-foreground placeholder:text-muted focus:outline-none"
+              />
+            </div>
+            {errors.altPhone && (
+              <p className="text-[11px] text-danger">{errors.altPhone}</p>
             )}
           </div>
+        </div>
+
+        {/* Email */}
+        <div className="space-y-1">
+          <label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
+            Email
+          </label>
+          <input
+            type="text"
+            placeholder="owner@email.com"
+            value={form.email}
+            onChange={(e) => set('email', e.target.value)}
+            onBlur={handleEmailBlur}
+            className={inputClass('email')}
+          />
+          {errors.email && (
+            <p className="text-[11px] text-danger">{errors.email}</p>
+          )}
         </div>
       </div>
 
@@ -303,6 +350,20 @@ export function RegisterOwnerStep({
               className={inputClass('age')}
             />
           </div>
+        </div>
+
+        {/* Color */}
+        <div className="space-y-1">
+          <label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
+            Color / Markings
+          </label>
+          <input
+            type="text"
+            placeholder="e.g. Golden, Black & White…"
+            value={form.color}
+            onChange={(e) => set('color', e.target.value)}
+            className={inputClass('color')}
+          />
         </div>
 
         {/* Microchip */}

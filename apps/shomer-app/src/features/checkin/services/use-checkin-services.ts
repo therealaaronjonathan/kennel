@@ -5,6 +5,7 @@ import { db } from '@/lib/firebase'
 export interface CheckinService {
   id: string
   name: string
+  serviceType?: string
 }
 
 export function useCheckinServices(clinicId: string | null) {
@@ -22,7 +23,11 @@ export function useCheckinServices(clinicId: string | null) {
 
     const unsub = onSnapshot(q, (snap) => {
       const items = snap.docs
-        .map((d) => ({ id: d.id, name: (d.data().name as string) ?? '' }))
+        .map((d) => ({
+          id: d.id,
+          name: (d.data().name as string) ?? '',
+          serviceType: (d.data().serviceType as string | undefined) ?? undefined,
+        }))
         .filter((d) => d.name.length > 0)
         .sort((a, b) => a.name.localeCompare(b.name))
       setServices(items)

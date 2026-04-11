@@ -12,7 +12,8 @@ import { pauseVisit } from '../services/pause-visit'
 import { addClinicDiagnosis } from '@/features/settings/services/clinic-lists-service'
 import { DiagnosisSelect, type DiagnosisEntry } from './diagnosis-select'
 import { MedicineSelect, type PrescriptionEntry } from './medicine-select'
-import { ServicesSelect, type ServiceEntry } from './services-select'
+import { ServicesSelect, type ServiceEntry } from '@/components/blocks/services-select'
+import { formatInr } from '@/lib/utils'
 import type { VetQueueEntry } from '../services/use-vet-queue'
 
 interface ConsultationViewProps {
@@ -47,6 +48,7 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
   const [consultationNotes, setConsultationNotes] = useState('')
   const [selectedMedicines, setSelectedMedicines] = useState<PrescriptionEntry[]>([])
   const [selectedServices, setSelectedServices] = useState<ServiceEntry[]>([])
+  const [showConfirm, setShowConfirm] = useState(false)
   const [vaccineOpen, setVaccineOpen] = useState(false)
   const [vaccineName, setVaccineName] = useState('')
   const [vaccineBatch, setVaccineBatch] = useState('')
@@ -91,6 +93,17 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
   async function handleSaveToClinic(name: string) {
     await addClinicDiagnosis(clinicId, name)
   }
+
+  async function handleConfirmComplete() {
+    try {
+      await complete.mutateAsync()
+      setShowConfirm(false)
+    } catch {
+      // stay open — complete.isError shows error inside dialog
+    }
+  }
+
+  const confirmTotal = selectedServices.reduce((sum, s) => sum + s.quantity * s.price, 0)
 
   const pet = detail?.pet
   const owner = detail?.owner
@@ -436,18 +449,13 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
       {/* Footer — only shown when in-progress */}
       {entry.status === 'in-progress' && (
         <div className="border-t border-border-base px-6 py-4 flex-shrink-0 space-y-2">
-          {complete.isError && (
-            <p className="mb-1 text-[12px] text-danger">
-              {(complete.error as Error)?.message ?? 'Failed to save. Try again.'}
-            </p>
-          )}
           <button
             type="button"
             disabled={complete.isPending || pause.isPending}
-            onClick={() => complete.mutate()}
+            onClick={() => setShowConfirm(true)}
             className="w-full rounded-[4px] bg-primary px-4 py-[10px] text-[13px] font-semibold text-white hover:opacity-85 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {complete.isPending ? 'Saving…' : 'Mark Complete'}
+            Mark Complete
           </button>
           <button
             type="button"
@@ -458,6 +466,57 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
             <PauseCircle size={14} />
             {pause.isPending ? 'Pausing…' : 'Pause — Patient Not Present'}
           </button>
+        </div>
+      )}
+
+      {/* Confirmation dialog */}
+      {showConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/20">
+          <div className="w-[360px] rounded-[6px] bg-background border border-border-base shadow-lg p-5 space-y-4">
+            <p className="text-[14px] font-bold text-foreground">Confirm complete?</p>
+            {selectedServices.length > 0 ? (
+              <div className="rounded-[4px] border border-border-base overflow-hidden divide-y divide-border-base">
+                {selectedServices.map((s) => (
+                  <div key={s.serviceId} className="flex items-center justify-between px-3 py-2 bg-surface gap-2">
+                    <span className="flex-1 text-[13px] text-foreground">{s.name}</span>
+                    {s.quantity > 1 && (
+                      <span className="text-[11px] text-muted tabular-nums">{s.quantity}×</span>
+                    )}
+                    <span className="text-[13px] font-semibold text-foreground tabular-nums">{formatInr(s.quantity * s.price)}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between px-3 py-2 bg-surface-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">Total</span>
+                  <span className="text-[14px] font-bold text-primary tabular-nums">{formatInr(confirmTotal)}</span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-[12px] text-muted text-center">No services added.</p>
+            )}
+            {complete.isError && (
+              <p className="text-[12px] text-danger">
+                {(complete.error as Error)?.message ?? 'Failed to save. Try again.'}
+              </p>
+            )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={complete.isPending}
+                onClick={() => setShowConfirm(false)}
+                className="flex-1 rounded-[4px] border border-border-base px-4 py-[9px] text-[13px] font-semibold text-muted hover:text-foreground hover:border-foreground/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={complete.isPending}
+                onClick={handleConfirmComplete}
+                className="flex-1 rounded-[4px] bg-primary px-4 py-[9px] text-[13px] font-semibold text-white hover:opacity-85 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {complete.isPending ? 'Saving…' : 'Mark Complete'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

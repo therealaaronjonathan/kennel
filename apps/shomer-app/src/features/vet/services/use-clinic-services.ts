@@ -6,6 +6,7 @@ export interface ClinicService {
   id: string
   name: string
   price: number
+  serviceType?: string
 }
 
 export function useClinicServices(clinicId: string | null) {
@@ -21,18 +22,26 @@ export function useClinicServices(clinicId: string | null) {
       where('isActive', '==', true),
     )
 
-    const unsub = onSnapshot(q, (snap) => {
-      const items = snap.docs
-        .map((d) => ({
-          id: d.id,
-          name: (d.data().name as string) ?? '',
-          price: (d.data().price as number) ?? 0,
-        }))
-        .filter((d) => d.name.length > 0)
-        .sort((a, b) => a.name.localeCompare(b.name))
-      setServices(items)
-      setLoading(false)
-    })
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const items = snap.docs
+          .map((d) => ({
+            id: d.id,
+            name: (d.data().name as string) ?? '',
+            price: (d.data().price as number) ?? 0,
+            serviceType: (d.data().serviceType as string | undefined)?.trim() || undefined,
+          }))
+          .filter((d) => d.name.length > 0)
+          .sort((a, b) => a.name.localeCompare(b.name))
+        setServices(items)
+        setLoading(false)
+      },
+      (err) => {
+        console.error('useClinicServices error:', err)
+        setLoading(false)
+      },
+    )
 
     return unsub
   }, [clinicId])

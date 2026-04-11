@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { CheckCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { auth } from '@/lib/firebase'
+import { LogoutConfirmDialog } from '@/components/blocks/logout-confirm-dialog'
 import { useClinic } from '@/features/clinic'
 import { useCompletedVisits, type CompletedVisit } from '../services/use-completed-visits'
 import { VisitDetailPanel } from './visit-detail-panel'
@@ -40,6 +41,12 @@ export function DashboardPage() {
   const { visits, loading: visitsLoading, error: visitsError } = useCompletedVisits(clinicId, branchId)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false)
+
+  async function handleSignOut() {
+    await signOut(auth)
+    navigate('/login')
+  }
 
   const selectedVisit: CompletedVisit | null = visits.find((v) => v.id === selectedId) ?? null
 
@@ -94,7 +101,7 @@ export function DashboardPage() {
           </button>
           <button
             type="button"
-            onClick={() => signOut(auth).then(() => navigate('/login'))}
+            onClick={() => setShowLogoutDialog(true)}
             className="rounded-[4px] border border-border-base px-3 py-1.5 text-[12px] font-semibold text-muted hover:text-foreground hover:border-foreground/20 transition-colors"
           >
             Sign out
@@ -189,6 +196,12 @@ export function DashboardPage() {
 
       {/* Toast */}
       {toast && <Toast message={toast} onDone={() => setToast(null)} />}
+
+      <LogoutConfirmDialog
+        open={showLogoutDialog}
+        onCancel={() => setShowLogoutDialog(false)}
+        onConfirm={handleSignOut}
+      />
     </div>
   )
 }

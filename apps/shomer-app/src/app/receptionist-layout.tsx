@@ -8,6 +8,7 @@ import { useAuth } from '@/features/auth'
 import { useClinic } from '@/features/clinic'
 import { useCompletedVisits } from '@/features/dashboard/services/use-completed-visits'
 import { useAllVisits } from '@/features/reception/services/use-all-visits'
+import { LogoutConfirmDialog } from '@/components/blocks/logout-confirm-dialog'
 
 const NAV_ITEMS = [
   { to: '/reception/home', label: 'Home', Icon: LayoutDashboard },
@@ -159,8 +160,11 @@ export default function ReceptionistLayout() {
     }
   }, [visits, loading, clinicId])
 
-  function handleSignOut() {
-    signOut(auth).then(() => navigate('/login'))
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false)
+
+  async function handleSignOut() {
+    await signOut(auth)
+    navigate('/login')
   }
 
   // Show up to 3 toasts stacked from top-right
@@ -231,7 +235,7 @@ export default function ReceptionistLayout() {
           )}
           <button
             type="button"
-            onClick={handleSignOut}
+            onClick={() => setShowLogoutDialog(true)}
             className="flex items-center gap-2 text-[12px] font-semibold text-muted hover:text-foreground transition-colors"
           >
             <LogOut size={13} />
@@ -254,6 +258,12 @@ export default function ReceptionistLayout() {
           onDone={removeToast}
         />
       ))}
+
+      <LogoutConfirmDialog
+        open={showLogoutDialog}
+        onCancel={() => setShowLogoutDialog(false)}
+        onConfirm={handleSignOut}
+      />
     </div>
   )
 }

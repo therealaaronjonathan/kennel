@@ -123,7 +123,8 @@ interface PetOwner {
   clinicId: string
   branchIds: string[]
   name: string
-  phone: string
+  phone: string          // +91 prefix + 10 digits
+  altPhone?: string      // optional alternate contact, same format
   email?: string
   createdAt: Timestamp
   updatedAt: Timestamp
@@ -144,6 +145,7 @@ interface Pet {
   speciesName?: string    // when species === 'other'
   breed?: string
   age?: number
+  color?: string          // coat color/markings, free text
   microchipNumber?: string
   createdAt: Timestamp
   updatedAt: Timestamp
@@ -180,18 +182,21 @@ interface MedicinesCatalogItem {
 **Why `type` lives on the catalog item**: The quantity control shown when prescribing a medicine depends entirely on its form — tablets use a fixed-choice dropdown (Full / Half / 1/3), syrups use an ml dropdown, and injections use a free numeric input. Storing `type` on the catalog item means the vet view doesn't need to guess or ask; it renders the right control automatically. `injection` also covers vaccines so the prescription subcollection has a single unified shape. Any catalog document missing `type` defaults to `'tablet'` in the app as a safe fallback.
 
 ### ClinicService (collection: `services`)
-Clinic-level catalogue of services with fixed prices.
+Clinic-level catalogue of services with prices. Populated and managed via the Settings page, Admin panel, or the `scripts/seed-services.ts` CLI seeder (imports from Excel).
 
 ```ts
 interface ClinicService {
   id: string
   name: string
-  price: number
+  price: number           // unit price in INR
+  serviceType?: string    // free-text category (e.g. "Consultation", "Grooming"); drives accordion grouping in UI
   isActive: boolean
   createdAt: Timestamp
   updatedAt: Timestamp
 }
 ```
+
+**`serviceType`**: optional free-text string. Services without it (or with an empty string) are grouped under "General" in the UI accordion. Written by the seeder tool and editable via admin catalog. The UI groups services alphabetically by type with "General" pinned last.
 
 ### GroomingService (collection: `groomingServices`)
 Clinic-level grooming services catalogue. Same shape as regular services.
@@ -249,14 +254,14 @@ interface Visit {
   type: 'consultation' | 'vaccination' | 'emergency' | 'follow-up' | 'grooming'
   status: 'waiting' | 'in-progress' | 'completed' | 'billed' | 'cancelled'
   isEmergency: boolean
-  complaints: string[]
-  otherComplaintText?: string
+  complaints: string[]        // free-text strings; may include predefined labels or custom typed text
+  otherComplaintText?: string // DEPRECATED — legacy field from before v1.1.3; new visits omit this
   groomingServices: string[]
   queuePosition: number
   date: string            // YYYY-MM-DD
   consultationNotes?: string
   services?: ServiceLineItem[]
-  billAmount?: number
+  billAmount?: number     // sum of (quantity × price) for all service line items
   createdAt: Timestamp
   updatedAt: Timestamp
 }
@@ -264,7 +269,8 @@ interface Visit {
 interface ServiceLineItem {
   serviceId: string
   name: string
-  price: number
+  price: number           // unit price at time of visit (may differ from catalog price if edited)
+  quantity: number        // defaults to 1; line total = quantity × price
 }
 ```
 

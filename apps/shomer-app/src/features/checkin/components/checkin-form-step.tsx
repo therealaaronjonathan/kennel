@@ -42,7 +42,6 @@ export function CheckinFormStep({
   const [petId, setPetId] = useState(defaultValues?.petId ?? selectedPetId ?? (pets.length === 1 ? pets[0].id : ''))
   const [service, setService] = useState(defaultValues?.service ?? '')
   const [complaints, setComplaints] = useState<string[]>(defaultValues?.complaints ?? [])
-  const [otherComplaintText, setOtherComplaintText] = useState(defaultValues?.otherComplaintText ?? '')
   const [selectedGroomingServices, setSelectedGroomingServices] = useState<string[]>(defaultValues?.groomingServices ?? [])
   const [doctorId, setDoctorId] = useState(defaultValues?.doctorId ?? '')
   const [isEmergency, setIsEmergency] = useState(defaultValues?.isEmergency ?? false)
@@ -50,7 +49,6 @@ export function CheckinFormStep({
     pet?: string
     service?: string
     complaints?: string
-    otherComplaint?: string
     groomingServices?: string
     doctor?: string
   }>({})
@@ -63,10 +61,7 @@ export function CheckinFormStep({
     if (!isNewOwner && pets.length > 1 && !petId) next.pet = 'Select a pet'
     if (!service) next.service = 'Select a service'
     if (isConsultation) {
-      if (complaints.length === 0) next.complaints = 'Select at least one complaint'
-      if (complaints.includes('Other') && !otherComplaintText.trim()) {
-        next.otherComplaint = 'Please describe the complaint'
-      }
+      if (complaints.length === 0) next.complaints = 'Add at least one complaint'
     }
     if (isGrooming && selectedGroomingServices.length === 0) {
       next.groomingServices = 'Select at least one grooming service'
@@ -86,7 +81,6 @@ export function CheckinFormStep({
         petId: resolvedPetId,
         service,
         complaints: isConsultation ? complaints : [],
-        otherComplaintText: isConsultation && complaints.includes('Other') ? otherComplaintText.trim() : undefined,
         groomingServices: isGrooming ? selectedGroomingServices : [],
         doctorId,
         isEmergency,
@@ -101,7 +95,7 @@ export function CheckinFormStep({
       : [...selectedGroomingServices, name]
     setSelectedGroomingServices(newServices)
     setErrors((p) => ({ ...p, groomingServices: undefined }))
-    onFormChange?.({ petId, service, complaints, otherComplaintText, groomingServices: newServices, doctorId, isEmergency })
+    onFormChange?.({ petId, service, complaints, groomingServices: newServices, doctorId, isEmergency })
   }
 
   const showPetSelector = !isNewOwner && pets.length > 1
@@ -129,7 +123,7 @@ export function CheckinFormStep({
               const v = e.target.value
               setPetId(v)
               setErrors((p) => ({ ...p, pet: undefined }))
-              onFormChange?.({ petId: v, service, complaints, otherComplaintText, groomingServices: selectedGroomingServices, doctorId, isEmergency })
+              onFormChange?.({ petId: v, service, complaints, groomingServices: selectedGroomingServices, doctorId, isEmergency })
             }}
             className={cn(
               'w-full rounded-[4px] border bg-white px-3 py-[9px] text-[13px] font-medium text-foreground focus:border-primary focus:outline-none transition-colors',
@@ -160,10 +154,9 @@ export function CheckinFormStep({
             const v = e.target.value
             setService(v)
             setComplaints([])
-            setOtherComplaintText('')
             setSelectedGroomingServices([])
             setErrors((p) => ({ ...p, service: undefined, complaints: undefined, groomingServices: undefined }))
-            onFormChange?.({ petId, service: v, complaints: [], otherComplaintText: '', groomingServices: [], doctorId, isEmergency })
+            onFormChange?.({ petId, service: v, complaints: [], groomingServices: [], doctorId, isEmergency })
           }}
           disabled={servicesLoading}
           className={cn(
@@ -196,20 +189,11 @@ export function CheckinFormStep({
             onChange={(val) => {
               setComplaints(val)
               setErrors((p) => ({ ...p, complaints: undefined }))
-              onFormChange?.({ petId, service, complaints: val, otherComplaintText, groomingServices: selectedGroomingServices, doctorId, isEmergency })
-            }}
-            otherText={otherComplaintText}
-            onOtherTextChange={(val) => {
-              setOtherComplaintText(val)
-              setErrors((p) => ({ ...p, otherComplaint: undefined }))
-              onFormChange?.({ petId, service, complaints, otherComplaintText: val, groomingServices: selectedGroomingServices, doctorId, isEmergency })
+              onFormChange?.({ petId, service, complaints: val, groomingServices: selectedGroomingServices, doctorId, isEmergency })
             }}
           />
           {errors.complaints && (
             <p className="text-[11px] text-danger">{errors.complaints}</p>
-          )}
-          {errors.otherComplaint && (
-            <p className="text-[11px] text-danger">{errors.otherComplaint}</p>
           )}
         </div>
       )}
@@ -272,7 +256,7 @@ export function CheckinFormStep({
             const v = e.target.value
             setDoctorId(v)
             setErrors((p) => ({ ...p, doctor: undefined }))
-            onFormChange?.({ petId, service, complaints, otherComplaintText, groomingServices: selectedGroomingServices, doctorId: v, isEmergency })
+            onFormChange?.({ petId, service, complaints, groomingServices: selectedGroomingServices, doctorId: v, isEmergency })
           }}
           disabled={doctorsLoading}
           className={cn(
@@ -308,14 +292,14 @@ export function CheckinFormStep({
           onClick={() => {
             const v = !isEmergency
             setIsEmergency(v)
-            onFormChange?.({ petId, service, complaints, otherComplaintText, groomingServices: selectedGroomingServices, doctorId, isEmergency: v })
+            onFormChange?.({ petId, service, complaints, groomingServices: selectedGroomingServices, doctorId, isEmergency: v })
           }}
           onKeyDown={(e) => {
             if (e.key === ' ' || e.key === 'Enter') {
               e.preventDefault()
               const v = !isEmergency
               setIsEmergency(v)
-              onFormChange?.({ petId, service, complaints, otherComplaintText, groomingServices: selectedGroomingServices, doctorId, isEmergency: v })
+              onFormChange?.({ petId, service, complaints, groomingServices: selectedGroomingServices, doctorId, isEmergency: v })
             }
           }}
           className={cn(

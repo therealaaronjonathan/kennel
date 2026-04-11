@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
-import { MessageCircle, CheckCheck, Plus, X, Pill, CheckCircle } from 'lucide-react'
+import { MessageCircle, CheckCheck, Pill, CheckCircle } from 'lucide-react'
 import { useMutation } from '@tanstack/react-query'
-import { cn } from '@/lib/utils'
+import { cn, formatInr } from '@/lib/utils'
 import { WhatsAppShareModal } from '@/components/blocks/whatsapp-share-modal'
+import { ServicesSelect, type ServiceEntry } from '@/components/blocks/services-select'
 import { useClinic } from '@/features/clinic'
-import { useCompletedVisits, type CompletedVisit, type ServiceEntry } from '@/features/dashboard/services/use-completed-visits'
+import { useCompletedVisits, type CompletedVisit } from '@/features/dashboard/services/use-completed-visits'
+import { useClinicServices } from '@/features/vet/services/use-clinic-services'
 import { useCheckoutDetail } from '../services/use-checkout-detail'
-import { useActiveClinicServices } from '../services/use-active-clinic-services'
 import { completeBilling } from '../services/complete-billing'
 
 // ── Toast ────────────────────────────────────────────────────────────────────
@@ -23,12 +24,6 @@ function Toast({ message, onDone }: { message: string; onDone: () => void }) {
       <span className="text-[13px] font-semibold text-background whitespace-nowrap">{message}</span>
     </div>
   )
-}
-
-// ── formatInr ─────────────────────────────────────────────────────────────────
-
-function formatInr(amount: number): string {
-  return `₹${amount.toLocaleString('en-IN')}`
 }
 
 // ── Dosage label ─────────────────────────────────────────────────────────────
@@ -57,10 +52,9 @@ interface CheckoutPanelProps {
 
 function CheckoutPanel({ visit, clinicId, branchId, onBilled, onToast }: CheckoutPanelProps) {
   const { detail, loading: detailLoading } = useCheckoutDetail(clinicId, branchId, visit.id, visit.ownerId)
-  const { services: catalogServices } = useActiveClinicServices(clinicId)
+  const { services: catalogServices, loading: svcLoading } = useClinicServices(clinicId)
 
   const [editedServices, setEditedServices] = useState<ServiceEntry[]>(visit.services ?? [])
-  const [addingServiceId, setAddingServiceId] = useState('')
   const [showWAModal, setShowWAModal] = useState(false)
 
   // Reset services when a different visit is opened
@@ -68,21 +62,7 @@ function CheckoutPanel({ visit, clinicId, branchId, onBilled, onToast }: Checkou
     setEditedServices(visit.services ?? [])
   }, [visit.id, visit.services])
 
-  const billTotal = editedServices.reduce((s, item) => s + item.price, 0)
-
-  const addService = () => {
-    const svc = catalogServices.find((s) => s.id === addingServiceId)
-    if (!svc) return
-    const alreadyAdded = editedServices.some((s) => s.serviceId === svc.id)
-    if (!alreadyAdded) {
-      setEditedServices((prev) => [...prev, { serviceId: svc.id, name: svc.name, price: svc.price }])
-    }
-    setAddingServiceId('')
-  }
-
-  const removeService = (idx: number) => {
-    setEditedServices((prev) => prev.filter((_, i) => i !== idx))
-  }
+  const billTotal = editedServices.reduce((s, item) => s + item.quantity * item.price, 0)
 
   const billing = useMutation({
     mutationFn: () => completeBilling(clinicId, branchId, visit.id, editedServices),
@@ -186,68 +166,12 @@ function CheckoutPanel({ visit, clinicId, branchId, onBilled, onToast }: Checkou
             {/* Services — editable */}
             <div className="space-y-2">
               <p className={labelClass}>Services &amp; Bill</p>
-
-              {editedServices.length > 0 ? (
-                <div className="rounded-[4px] border border-border-base overflow-hidden divide-y divide-border-base">
-                  {editedServices.map((s, i) => (
-                    <div key={s.serviceId ?? i} className="flex items-center justify-between px-3 py-2.5 bg-surface">
-                      <span className="text-[13px] text-foreground">{s.name}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-[13px] font-semibold text-foreground tabular-nums">
-                          {formatInr(s.price)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => removeService(i)}
-                          className="text-muted hover:text-danger transition-colors"
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {/* Total */}
-                  <div className="flex items-center justify-between px-3 py-2.5 bg-surface-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
-                      Total
-                    </span>
-                    <span className="text-[15px] font-bold text-primary tabular-nums">
-                      {formatInr(billTotal)}
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-[12px] text-muted">No services added yet.</p>
-              )}
-
-              {/* Add service */}
-              {catalogServices.length > 0 && (
-                <div className="flex gap-2">
-                  <select
-                    value={addingServiceId}
-                    onChange={(e) => setAddingServiceId(e.target.value)}
-                    className="flex-1 rounded-[4px] border border-border-base bg-white px-3 py-[7px] text-[12px] font-medium text-foreground focus:border-primary focus:outline-none transition-colors"
-                  >
-                    <option value="">Add a service…</option>
-                    {catalogServices
-                      .filter((s) => !editedServices.some((e) => e.serviceId === s.id))
-                      .map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} — {formatInr(s.price)}
-                        </option>
-                      ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={addService}
-                    disabled={!addingServiceId}
-                    className="flex items-center gap-1 rounded-[4px] border border-border-base px-3 py-[7px] text-[12px] font-semibold text-muted hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <Plus size={12} />
-                    Add
-                  </button>
-                </div>
-              )}
+              <ServicesSelect
+                selected={editedServices}
+                onChange={setEditedServices}
+                items={catalogServices}
+                loading={svcLoading}
+              />
             </div>
           </>
         )}
@@ -351,7 +275,7 @@ export function CheckoutPage() {
             ) : (
               visits.map((visit) => {
                 const isSelected = selectedId === visit.id
-                const billAmt = (visit.services ?? []).reduce((s, item) => s + item.price, 0)
+                const billAmt = (visit.services ?? []).reduce((s, item) => s + (item.quantity ?? 1) * item.price, 0)
 
                 return (
                   <button

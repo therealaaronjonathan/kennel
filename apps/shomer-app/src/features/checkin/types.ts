@@ -6,6 +6,7 @@ export interface PetOwner {
   branchIds: string[]
   name: string
   phone: string
+  altPhone?: string
   email?: string
   createdAt: Timestamp
   updatedAt: Timestamp
@@ -22,6 +23,7 @@ export interface Pet {
   breed?: string
   age?: number
   microchipNumber?: string
+  color?: string
   createdAt: Timestamp
   updatedAt: Timestamp
 }
@@ -43,7 +45,6 @@ export interface CheckinFormData {
   petId: string
   service: string              // selected check-in service name, e.g. 'Consultation' | 'Grooming'
   complaints: string[]         // required when service === 'Consultation'
-  otherComplaintText?: string  // required when 'Other' is in complaints
   groomingServices: string[]   // required when service === 'Grooming'
   doctorId: string
   isEmergency: boolean
@@ -52,12 +53,14 @@ export interface CheckinFormData {
 export interface NewOwnerFormData {
   ownerName: string
   phone: string
+  altPhone: string
   email: string
   petName: string
   species: 'dog' | 'cat' | 'other'
   speciesName: string   // required when species === 'other'
   breed: string
   age: string
+  color: string
   microchipNumber: string
 }
 
@@ -102,7 +105,6 @@ export const COMPLAINTS = [
   'Pregnancy/delivery related',
   'Post-surgery care',
   'Certificate request',
-  'Other',
 ] as const
 
 export type Complaint = (typeof COMPLAINTS)[number]
