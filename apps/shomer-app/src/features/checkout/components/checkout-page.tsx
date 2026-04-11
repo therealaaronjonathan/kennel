@@ -54,12 +54,15 @@ function CheckoutPanel({ visit, clinicId, branchId, onBilled, onToast }: Checkou
   const { detail, loading: detailLoading } = useCheckoutDetail(clinicId, branchId, visit.id, visit.ownerId)
   const { services: catalogServices, loading: svcLoading } = useClinicServices(clinicId)
 
-  const [editedServices, setEditedServices] = useState<ServiceEntry[]>(visit.services ?? [])
+  const normalize = (svcs: typeof visit.services): ServiceEntry[] =>
+    (svcs ?? []).map((s) => ({ ...s, quantity: s.quantity ?? 1 }))
+
+  const [editedServices, setEditedServices] = useState<ServiceEntry[]>(() => normalize(visit.services))
   const [showWAModal, setShowWAModal] = useState(false)
 
   // Reset services when a different visit is opened
   useEffect(() => {
-    setEditedServices(visit.services ?? [])
+    setEditedServices(normalize(visit.services))
   }, [visit.id, visit.services])
 
   const billTotal = editedServices.reduce((s, item) => s + item.quantity * item.price, 0)

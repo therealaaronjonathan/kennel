@@ -6,6 +6,7 @@ export interface ServiceEntry {
   serviceId: string
   name: string
   price: number
+  quantity?: number
 }
 
 export interface CompletedVisit {

@@ -59,7 +59,11 @@
       "Bash(find /Users/aj/Shomer/kennel/apps/shomer-app/src -type f \\\\\\( -name \"*.tsx\" -o -name \"*.ts\" \\\\\\) -exec grep -l \"confirm\\\\|Confirm\" {} \\\\;)",
       "Skill(plan-ceo-review)",
       "Bash(bun:*)",
-      "Bash(~/.bun/bin/bun x:*)"
+      "Bash(~/.bun/bin/bun x:*)",
+      "Bash(~/.bun/bin/bun run:*)",
+      "Bash(node_modules/.bin/vite build:*)",
+      "Bash(/Users/aj/Shomer/kennel/node_modules/.bin/vite build:*)",
+      "Bash(/Users/aj/Shomer/kennel/node_modules/@esbuild/darwin-arm64/bin/esbuild --version)"
     ]
   }
 }
