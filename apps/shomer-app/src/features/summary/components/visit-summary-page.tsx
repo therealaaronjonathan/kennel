@@ -30,6 +30,7 @@ interface VisitData {
   petSpecies?: string
   ownerName: string
   ownerPhone?: string
+  ownerId?: string
   doctorId?: string
   doctorName?: string
   tokenDisplay?: string
@@ -201,6 +202,19 @@ export function VisitSummaryPage() {
           }
         }
 
+        // Fetch owner phone from petOwners if not embedded in visit doc
+        let ownerPhone = visitRaw.ownerPhone
+        if (!ownerPhone && visitRaw.ownerId) {
+          try {
+            const ownerSnap = await getDoc(doc(db, `clinics/${clinicId}/petOwners/${visitRaw.ownerId}`))
+            if (ownerSnap.exists()) {
+              ownerPhone = (ownerSnap.data().phone as string) ?? undefined
+            }
+          } catch {
+            // owner phone optional — ignore
+          }
+        }
+
         setData({
           clinic: {
             name: (clinicRaw.name as string) ?? 'Clinic',
@@ -212,7 +226,7 @@ export function VisitSummaryPage() {
             address: (branchRaw.address as string) ?? undefined,
             phone: (branchRaw.phone as string) ?? undefined,
           },
-          visit: visitRaw,
+          visit: { ...visitRaw, ownerPhone },
           doctor: doctorData,
           diagnoses: diagSnap.docs.map((d) => ({
             name: (d.data().name as string) ?? '',

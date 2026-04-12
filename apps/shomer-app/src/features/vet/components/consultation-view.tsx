@@ -43,6 +43,9 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
   const { diagnoses, loading: diagLoading } = useClinicDiagnoses(clinicId)
   const { medicines, loading: medLoading } = useClinicMedicines(clinicId)
   const { services: serviceItems, loading: svcLoading } = useClinicServices(clinicId)
+  const vaccinationServices = serviceItems.filter(
+    (s) => s.serviceType?.toLowerCase() === 'vaccination',
+  )
 
   const [selectedDiagnoses, setSelectedDiagnoses] = useState<DiagnosisEntry[]>([])
   const [consultationNotes, setConsultationNotes] = useState('')
@@ -90,13 +93,14 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
     onSuccess: onCompleted,
   })
 
-  async function handleSaveToClinic(name: string) {
-    await addClinicDiagnosis(clinicId, name)
-  }
-
   async function handleConfirmComplete() {
     try {
       await complete.mutateAsync()
+      // Save any new custom diagnoses to the clinic catalog after visit is complete
+      const customDiagnoses = selectedDiagnoses.filter((d) => d.isCustom)
+      await Promise.all(
+        customDiagnoses.map((d) => addClinicDiagnosis(clinicId, d.name).catch(() => {})),
+      )
       setShowConfirm(false)
     } catch {
       // stay open — complete.isError shows error inside dialog
@@ -142,7 +146,17 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
             </p>
             <p className="text-[12px] text-muted">
               {entry.ownerName}
-              {owner?.phone ? ` · ${owner.phone}` : ''}
+              {owner?.phone && (
+                <>
+                  {' · '}
+                  <a
+                    href={`tel:${owner.phone}`}
+                    className="text-primary underline-offset-2 hover:underline"
+                  >
+                    {owner.phone}
+                  </a>
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -330,7 +344,6 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
                   onChange={setSelectedDiagnoses}
                   items={diagnoses}
                   loading={diagLoading}
-                  onSaveToClinic={handleSaveToClinic}
                 />
               </div>
 
@@ -375,13 +388,16 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
                   <div className="px-4 pb-4 pt-3 bg-surface space-y-3">
                     <div className="space-y-1.5">
                       <label className={labelClass}>Vaccine Name</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Rabies, Parvo"
+                      <select
                         value={vaccineName}
                         onChange={(e) => setVaccineName(e.target.value)}
                         className={cn(inputClass, 'resize-none')}
-                      />
+                      >
+                        <option value="">Select a vaccine…</option>
+                        {vaccinationServices.map((v) => (
+                          <option key={v.id} value={v.name}>{v.name}</option>
+                        ))}
+                      </select>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">

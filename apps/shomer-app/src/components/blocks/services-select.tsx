@@ -33,10 +33,15 @@ function groupByType(items: CatalogService[]): [string, CatalogService[]][] {
     if (!map.has(key)) map.set(key, [])
     map.get(key)!.push(item)
   }
-  // Sort type names alphabetically, "General" pinned last
+  // Sort alphabetically; Grooming pinned second-to-last, General pinned last
+  function typeOrder(t: string) {
+    if (t === 'General') return 2
+    if (t.toLowerCase() === 'grooming') return 1
+    return 0
+  }
   const entries = [...map.entries()].sort(([a], [b]) => {
-    if (a === 'General') return 1
-    if (b === 'General') return -1
+    const diff = typeOrder(a) - typeOrder(b)
+    if (diff !== 0) return diff
     return a.localeCompare(b)
   })
   return entries

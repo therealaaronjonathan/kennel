@@ -60,7 +60,11 @@ function initFirebase() {
   if (jsonEnv) {
     serviceAccount = JSON.parse(jsonEnv)
   } else if (pathEnv) {
-    serviceAccount = JSON.parse(readFileSync(resolve(pathEnv), 'utf-8'))
+    // Resolve relative to the backend folder first, then fall back to cwd
+    const fromBackend = resolve(import.meta.dir, '../apps/backend', pathEnv)
+    const fromCwd = resolve(pathEnv)
+    const finalPath = pathEnv.startsWith('/') ? fromCwd : (require('fs').existsSync(fromBackend) ? fromBackend : fromCwd)
+    serviceAccount = JSON.parse(readFileSync(finalPath, 'utf-8'))
   } else {
     console.error('❌  Set FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_SERVICE_ACCOUNT_PATH')
     process.exit(1)
@@ -140,15 +144,16 @@ function parseExcel(filePath: string): ExcelRow[] {
 async function seedServices(db: FirebaseFirestore.Firestore, clinicId: string, rows: ExcelRow[]) {
   const collectionRef = db.collection(`clinics/${clinicId}/services`)
 
-  // Fetch existing services to match by name
+  // Fetch existing services to match by name + price
   console.log(`\n🔍  Fetching existing services for clinic "${clinicId}"…`)
   const snapshot = await collectionRef.get()
-  const existingByName = new Map<string, FirebaseFirestore.DocumentReference>()
+  const existingByNamePrice = new Map<string, FirebaseFirestore.DocumentReference>()
   for (const doc of snapshot.docs) {
     const name = (doc.data().name as string ?? '').toLowerCase().trim()
-    existingByName.set(name, doc.ref)
+    const price = Number(doc.data().price ?? 0)
+    existingByNamePrice.set(`${name}__${price}`, doc.ref)
   }
-  console.log(`    Found ${existingByName.size} existing service(s).\n`)
+  console.log(`    Found ${existingByNamePrice.size} existing service(s).\n`)
 
   let created = 0
   let updated = 0
@@ -163,8 +168,8 @@ async function seedServices(db: FirebaseFirestore.Firestore, clinicId: string, r
       continue
     }
 
-    const nameKey = row.serviceName.toLowerCase().trim()
-    const existingRef = existingByName.get(nameKey)
+    const nameKey = `${row.serviceName.toLowerCase().trim()}__${row.price}`
+    const existingRef = existingByNamePrice.get(nameKey)
 
     const payload = {
       name: row.serviceName,
@@ -186,7 +191,7 @@ async function seedServices(db: FirebaseFirestore.Firestore, clinicId: string, r
       console.log(`  ✅  Created  "${row.serviceName}" (type: ${row.serviceType || '—'}, price: ${row.price})`)
       created++
       // Track newly created doc so duplicate rows in the same file don't re-create
-      existingByName.set(nameKey, newRef)
+      existingByNamePrice.set(nameKey, newRef)
     }
   }
 

@@ -38,6 +38,7 @@ export function ComplaintsSelect({ selected, onChange }: ComplaintsInputProps) {
     if (selected.includes(v)) return
     onChange([...selected, v])
     setQuery('')
+    setOpen(false)
     setHighlighted(-1)
     inputRef.current?.focus()
   }

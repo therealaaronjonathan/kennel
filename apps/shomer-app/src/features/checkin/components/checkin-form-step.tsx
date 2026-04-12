@@ -4,7 +4,6 @@ import { cn } from '@/lib/utils'
 import { ComplaintsSelect } from './complaints-select'
 import { useDoctors } from '../services/use-doctors'
 import { useCheckinServices } from '../services/use-checkin-services'
-import { useGroomingServices } from '../services/use-grooming-services'
 import type { Pet, CheckinFormData } from '../types'
 
 interface CheckinFormStepProps {
@@ -36,28 +35,22 @@ export function CheckinFormStep({
 }: CheckinFormStepProps) {
   const { data: allDoctors = [], isLoading: doctorsLoading } = useDoctors(clinicId, branchId)
   const doctors = onDutyIds.length > 0 ? allDoctors.filter((d) => onDutyIds.includes(d.id)) : []
-  const { serviceTypes, servicesByType, loading: servicesLoading } = useCheckinServices(clinicId)
-  const { groomingServices, loading: groomingLoading } = useGroomingServices(clinicId)
+  const { serviceTypes: allServiceTypes, loading: servicesLoading } = useCheckinServices(clinicId)
+  const serviceTypes = allServiceTypes.filter((t) => t.toLowerCase() !== 'grooming')
 
   const [petId, setPetId] = useState(defaultValues?.petId ?? selectedPetId ?? (pets.length === 1 ? pets[0].id : ''))
   const [service, setService] = useState(defaultValues?.service ?? '')
   const [complaints, setComplaints] = useState<string[]>(defaultValues?.complaints ?? [])
-  const [selectedGroomingServices, setSelectedGroomingServices] = useState<string[]>(defaultValues?.groomingServices ?? [])
-  const [subService, setSubService] = useState(defaultValues?.groomingServices?.[0] ?? '')
   const [doctorId, setDoctorId] = useState(defaultValues?.doctorId ?? '')
   const [isEmergency, setIsEmergency] = useState(defaultValues?.isEmergency ?? false)
   const [errors, setErrors] = useState<{
     pet?: string
     service?: string
     complaints?: string
-    groomingServices?: string
     doctor?: string
   }>({})
 
   const isConsultation = service.toLowerCase() === 'consultation'
-  const isGrooming = service.toLowerCase() === 'grooming'
-  const groomingSubItems = servicesByType[service] ?? []
-  const hasGroomingCatalog = isGrooming && groomingSubItems.length > 0
 
   function validate(): boolean {
     const next: typeof errors = {}
@@ -65,12 +58,6 @@ export function CheckinFormStep({
     if (!service) next.service = 'Select a service'
     if (isConsultation) {
       if (complaints.length === 0) next.complaints = 'Add at least one complaint'
-    }
-    if (isGrooming && !hasGroomingCatalog && selectedGroomingServices.length === 0) {
-      next.groomingServices = 'Select at least one grooming service'
-    }
-    if (hasGroomingCatalog && !subService) {
-      next.groomingServices = 'Select a grooming service'
     }
     if (!doctorId) next.doctor = 'Select a doctor'
     setErrors(next)
@@ -87,25 +74,12 @@ export function CheckinFormStep({
         petId: resolvedPetId,
         service,
         complaints: isConsultation ? complaints : [],
-        groomingServices: hasGroomingCatalog
-          ? (subService ? [subService] : [])
-          : isGrooming
-            ? selectedGroomingServices
-            : [],
+        groomingServices: [],
         doctorId,
         isEmergency,
       },
       doctor?.name ?? '',
     )
-  }
-
-  function toggleGroomingService(name: string) {
-    const newServices = selectedGroomingServices.includes(name)
-      ? selectedGroomingServices.filter((s) => s !== name)
-      : [...selectedGroomingServices, name]
-    setSelectedGroomingServices(newServices)
-    setErrors((p) => ({ ...p, groomingServices: undefined }))
-    onFormChange?.({ petId, service, complaints, groomingServices: newServices, doctorId, isEmergency })
   }
 
   const showPetSelector = !isNewOwner && pets.length > 1
@@ -164,9 +138,7 @@ export function CheckinFormStep({
             const v = e.target.value
             setService(v)
             setComplaints([])
-            setSelectedGroomingServices([])
-            setSubService('')
-            setErrors((p) => ({ ...p, service: undefined, complaints: undefined, groomingServices: undefined }))
+            setErrors((p) => ({ ...p, service: undefined, complaints: undefined }))
             onFormChange?.({ petId, service: v, complaints: [], groomingServices: [], doctorId, isEmergency })
           }}
           disabled={servicesLoading}
@@ -205,82 +177,6 @@ export function CheckinFormStep({
           />
           {errors.complaints && (
             <p className="text-[11px] text-danger">{errors.complaints}</p>
-          )}
-        </div>
-      )}
-
-      {/* Grooming sub-service dropdown — from services catalog when Grooming type has entries */}
-      {hasGroomingCatalog && (
-        <div className="space-y-1">
-          <label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
-            Grooming Service <span className="text-danger">*</span>
-          </label>
-          <select
-            value={subService}
-            onChange={(e) => {
-              const v = e.target.value
-              setSubService(v)
-              setErrors((p) => ({ ...p, groomingServices: undefined }))
-              onFormChange?.({ petId, service, complaints, groomingServices: v ? [v] : [], doctorId, isEmergency })
-            }}
-            className={cn(
-              'w-full rounded-[4px] border bg-white px-3 py-[9px] text-[13px] font-medium text-foreground focus:border-primary focus:outline-none transition-colors',
-              errors.groomingServices ? 'border-danger' : 'border-border-base',
-            )}
-          >
-            <option value="">Select a grooming service…</option>
-            {groomingSubItems.map((svc) => (
-              <option key={svc.id} value={svc.name}>
-                {svc.name}
-              </option>
-            ))}
-          </select>
-          {errors.groomingServices && (
-            <p className="text-[11px] text-danger">{errors.groomingServices}</p>
-          )}
-        </div>
-      )}
-
-      {/* Grooming services checkboxes — fallback when no catalog entries under Grooming serviceType */}
-      {isGrooming && !hasGroomingCatalog && (
-        <div className="space-y-1">
-          <label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
-            Grooming Services <span className="text-danger">*</span>
-          </label>
-          {groomingLoading ? (
-            <p className="text-[12px] text-muted">Loading grooming services…</p>
-          ) : groomingServices.length === 0 ? (
-            <p className="text-[12px] text-muted">
-              No grooming services configured.
-            </p>
-          ) : (
-            <div className="rounded-[4px] border border-border-base bg-white">
-              {groomingServices.map((svc) => {
-                const isSelected = selectedGroomingServices.includes(svc.name)
-                return (
-                  <label
-                    key={svc.id}
-                    className={cn(
-                      'flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors hover:bg-surface',
-                      isSelected && 'bg-surface-2',
-                    )}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => toggleGroomingService(svc.name)}
-                      className="accent-primary h-3.5 w-3.5 flex-shrink-0"
-                    />
-                    <span className="text-[13px] font-medium text-foreground">
-                      {svc.name}
-                    </span>
-                  </label>
-                )
-              })}
-            </div>
-          )}
-          {errors.groomingServices && (
-            <p className="text-[11px] text-danger">{errors.groomingServices}</p>
           )}
         </div>
       )}

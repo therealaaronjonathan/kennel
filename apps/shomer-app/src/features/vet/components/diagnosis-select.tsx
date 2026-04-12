@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { X, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ClinicDiagnosis } from '../services/use-clinic-diagnoses'
@@ -15,7 +15,6 @@ interface DiagnosisSelectProps {
   onChange: (selected: DiagnosisEntry[]) => void
   items: ClinicDiagnosis[]
   loading: boolean
-  onSaveToClinic: (name: string) => Promise<void>
 }
 
 const inputClass =
@@ -26,11 +25,12 @@ export function DiagnosisSelect({
   onChange,
   items,
   loading,
-  onSaveToClinic,
 }: DiagnosisSelectProps) {
   const [filter, setFilter] = useState('')
-  const [savePrompt, setSavePrompt] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [highlighted, setHighlighted] = useState(-1)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
 
   const selectedNames = new Set(selected.map((s) => s.name.toLowerCase()))
 
@@ -40,23 +40,30 @@ export function DiagnosisSelect({
       d.name.toLowerCase().includes(filter.toLowerCase()),
   )
 
-  const exactMatch = items.some((d) => d.name.toLowerCase() === filter.trim().toLowerCase())
+  const trimmed = filter.trim()
+  const exactMatch = items.some((d) => d.name.toLowerCase() === trimmed.toLowerCase())
   const showAddOption =
-    filter.trim().length > 0 &&
+    trimmed.length > 0 &&
     !exactMatch &&
-    !selectedNames.has(filter.trim().toLowerCase())
+    !selectedNames.has(trimmed.toLowerCase())
+
+  const totalRows = filtered.length + (showAddOption ? 1 : 0)
 
   function selectItem(item: ClinicDiagnosis) {
     onChange([...selected, { diagnosisId: item.id, name: item.name, notes: '', isCustom: false }])
     setFilter('')
+    setOpen(false)
+    setHighlighted(-1)
+    inputRef.current?.focus()
   }
 
   function addCustom() {
-    const name = filter.trim()
-    if (!name) return
-    onChange([...selected, { diagnosisId: null, name, notes: '', isCustom: true }])
-    setSavePrompt(name)
+    if (!trimmed) return
+    onChange([...selected, { diagnosisId: null, name: trimmed, notes: '', isCustom: true }])
     setFilter('')
+    setOpen(false)
+    setHighlighted(-1)
+    inputRef.current?.focus()
   }
 
   function updateNotes(index: number, notes: string) {
@@ -69,45 +76,47 @@ export function DiagnosisSelect({
     onChange(selected.filter((_, i) => i !== index))
   }
 
-  async function handleSaveToClinic() {
-    if (!savePrompt) return
-    setSaving(true)
-    try {
-      await onSaveToClinic(savePrompt)
-    } finally {
-      setSaving(false)
-      setSavePrompt(null)
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      setOpen(true)
+      return
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setHighlighted((h) => Math.min(h + 1, totalRows - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setHighlighted((h) => Math.max(h - 1, 0))
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (highlighted >= 0 && highlighted < filtered.length) {
+        selectItem(filtered[highlighted])
+      } else if (highlighted === filtered.length && showAddOption) {
+        addCustom()
+      } else if (trimmed) {
+        if (exactMatch) {
+          const match = items.find((d) => d.name.toLowerCase() === trimmed.toLowerCase())
+          if (match && !selectedNames.has(match.name.toLowerCase())) selectItem(match)
+        } else {
+          addCustom()
+        }
+      }
+    } else if (e.key === 'Escape') {
+      setOpen(false)
+      setHighlighted(-1)
     }
   }
 
+  // Scroll highlighted item into view
+  useEffect(() => {
+    if (highlighted >= 0 && listRef.current) {
+      const item = listRef.current.children[highlighted] as HTMLElement
+      item?.scrollIntoView({ block: 'nearest' })
+    }
+  }, [highlighted])
+
   return (
     <div className="space-y-2">
-      {/* Save-to-clinic prompt */}
-      {savePrompt && (
-        <div className="rounded-[4px] border border-primary/30 bg-primary/5 px-3 py-2.5 flex items-center justify-between gap-3">
-          <p className="text-[12px] text-foreground leading-snug">
-            Save <span className="font-semibold">"{savePrompt}"</span> to clinic's diagnosis list?
-          </p>
-          <div className="flex gap-2 flex-shrink-0">
-            <button
-              type="button"
-              disabled={saving}
-              onClick={handleSaveToClinic}
-              className="rounded-[3px] bg-primary px-2.5 py-1 text-[11px] font-semibold text-white hover:opacity-85 transition-opacity disabled:opacity-50"
-            >
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setSavePrompt(null)}
-              className="rounded-[3px] border border-border-base px-2.5 py-1 text-[11px] font-semibold text-muted hover:text-foreground transition-colors"
-            >
-              Skip
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Selected diagnoses with per-diagnosis notes */}
       {selected.map((entry, i) => (
         <div key={i} className="rounded-[4px] border border-border-base bg-surface overflow-hidden">
@@ -136,43 +145,65 @@ export function DiagnosisSelect({
       ))}
 
       {/* Search input */}
-      <input
-        type="text"
-        placeholder={loading ? 'Loading diagnoses…' : 'Search or type to add diagnosis…'}
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-        disabled={loading}
-        className={inputClass}
-      />
+      <div className="relative">
+        <input
+          ref={inputRef}
+          type="text"
+          placeholder={loading ? 'Loading diagnoses…' : 'Search or type to add diagnosis…'}
+          value={filter}
+          onChange={(e) => {
+            setFilter(e.target.value)
+            setOpen(true)
+            setHighlighted(-1)
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => { setOpen(false); setHighlighted(-1) }, 150)}
+          onKeyDown={handleKeyDown}
+          disabled={loading}
+          className={inputClass}
+        />
 
-      {/* Dropdown */}
-      {filter.trim() && (
-        <div className="max-h-44 overflow-y-auto rounded-[4px] border border-border-base bg-surface">
-          {filtered.length === 0 && !showAddOption && (
-            <p className="px-3 py-3 text-[13px] text-muted text-center">No matches</p>
-          )}
-          {filtered.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => selectItem(item)}
-              className="w-full text-left px-3 py-2 text-[13px] text-foreground hover:bg-surface-2 transition-colors"
-            >
-              {item.name}
-            </button>
-          ))}
-          {showAddOption && (
-            <button
-              type="button"
-              onClick={addCustom}
-              className="w-full text-left px-3 py-2 text-[13px] text-primary font-medium hover:bg-surface-2 transition-colors flex items-center gap-1.5"
-            >
-              <Plus size={12} />
-              Add "{filter.trim()}"
-            </button>
-          )}
-        </div>
-      )}
+        {open && totalRows > 0 && (
+          <div
+            ref={listRef}
+            className="absolute z-20 left-0 right-0 top-full mt-0.5 max-h-44 overflow-y-auto rounded-[4px] border border-border-base bg-surface shadow-sm"
+          >
+            {filtered.length === 0 && !showAddOption && (
+              <p className="px-3 py-3 text-[13px] text-muted text-center">No matches</p>
+            )}
+            {filtered.map((item, i) => (
+              <button
+                key={item.id}
+                type="button"
+                onMouseDown={() => selectItem(item)}
+                className={cn(
+                  'w-full text-left px-3 py-2 text-[13px] transition-colors',
+                  i === highlighted
+                    ? 'bg-primary text-white'
+                    : 'text-foreground hover:bg-surface-2',
+                )}
+              >
+                {item.name}
+              </button>
+            ))}
+            {showAddOption && (
+              <button
+                type="button"
+                onMouseDown={addCustom}
+                className={cn(
+                  'w-full text-left px-3 py-2 text-[13px] font-medium transition-colors flex items-center gap-1.5',
+                  highlighted === filtered.length
+                    ? 'bg-primary text-white'
+                    : 'text-primary hover:bg-surface-2',
+                )}
+              >
+                <Plus size={12} className="flex-shrink-0" />
+                Add "{trimmed}"
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
