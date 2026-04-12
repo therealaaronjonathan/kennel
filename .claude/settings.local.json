@@ -63,7 +63,22 @@
       "Bash(~/.bun/bin/bun run:*)",
       "Bash(node_modules/.bin/vite build:*)",
       "Bash(/Users/aj/Shomer/kennel/node_modules/.bin/vite build:*)",
-      "Bash(/Users/aj/Shomer/kennel/node_modules/@esbuild/darwin-arm64/bin/esbuild --version)"
+      "Bash(/Users/aj/Shomer/kennel/node_modules/@esbuild/darwin-arm64/bin/esbuild --version)",
+      "Bash(railway --version)",
+      "Bash(railway whoami:*)",
+      "Bash(railway list:*)",
+      "Bash(railway status:*)",
+      "Bash(railway variables:*)",
+      "Bash(railway ps:*)",
+      "Bash(railway variable:*)",
+      "Bash(railway logs:*)",
+      "Bash(curl -s https://shomer-backend-production-cee7.up.railway.app/api/health)",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s -X POST https://shomer-backend-production-cee7.up.railway.app/api/admin/users -H 'Content-Type: application/json' -d '{\"name\":\"test\",\"email\":\"test@test.com\",\"role\":\"receptionist\",\"clinicId\":\"c1\",\"branchIds\":[]}')",
+      "Bash(curl:*)",
+      "Bash(pkill -f \"bun run src/index.ts\")",
+      "Bash(pkill -f \"bun.*index\")",
+      "Bash(cat /Users/aj/Shomer/kennel/apps/shomer-app/.env*)"
     ]
   }
 }

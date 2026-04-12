@@ -27,6 +27,12 @@ if (!admin.apps.length) {
 export const adminAuth = admin.auth()
 
 const databaseId = Bun.env.FIREBASE_DATABASE_ID
-export const adminDb = databaseId && databaseId !== '(default)'
+const adminDb = databaseId && databaseId !== '(default)'
   ? getFirestore(admin.app(), databaseId)
   : getFirestore()
+
+// Force REST transport — gRPC has connectivity issues in some container environments
+// Also ignore undefined fields so optional TypeBox fields don't cause Firestore errors
+adminDb.settings({ preferRest: true, ignoreUndefinedProperties: true })
+
+export { adminDb }
