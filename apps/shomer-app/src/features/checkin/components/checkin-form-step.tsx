@@ -107,7 +107,7 @@ export function CheckinFormStep({
               const v = e.target.value
               setPetId(v)
               setErrors((p) => ({ ...p, pet: undefined }))
-              onFormChange?.({ petId: v, service, complaints, groomingServices: selectedGroomingServices, doctorId, isEmergency })
+              onFormChange?.({ petId: v, service, complaints, groomingServices: [], doctorId, isEmergency })
             }}
             className={cn(
               'w-full rounded-[4px] border bg-white px-3 py-[9px] text-[13px] font-medium text-foreground focus:border-primary focus:outline-none transition-colors',
@@ -172,7 +172,7 @@ export function CheckinFormStep({
             onChange={(val) => {
               setComplaints(val)
               setErrors((p) => ({ ...p, complaints: undefined }))
-              onFormChange?.({ petId, service, complaints: val, groomingServices: selectedGroomingServices, doctorId, isEmergency })
+              onFormChange?.({ petId, service, complaints: val, groomingServices: [], doctorId, isEmergency })
             }}
           />
           {errors.complaints && (
@@ -192,7 +192,7 @@ export function CheckinFormStep({
             const v = e.target.value
             setDoctorId(v)
             setErrors((p) => ({ ...p, doctor: undefined }))
-            onFormChange?.({ petId, service, complaints, groomingServices: selectedGroomingServices, doctorId: v, isEmergency })
+            onFormChange?.({ petId, service, complaints, groomingServices: [], doctorId: v, isEmergency })
           }}
           disabled={doctorsLoading}
           className={cn(
@@ -228,14 +228,14 @@ export function CheckinFormStep({
           onClick={() => {
             const v = !isEmergency
             setIsEmergency(v)
-            onFormChange?.({ petId, service, complaints, groomingServices: selectedGroomingServices, doctorId, isEmergency: v })
+            onFormChange?.({ petId, service, complaints, groomingServices: [], doctorId, isEmergency: v })
           }}
           onKeyDown={(e) => {
             if (e.key === ' ' || e.key === 'Enter') {
               e.preventDefault()
               const v = !isEmergency
               setIsEmergency(v)
-              onFormChange?.({ petId, service, complaints, groomingServices: selectedGroomingServices, doctorId, isEmergency: v })
+              onFormChange?.({ petId, service, complaints, groomingServices: [], doctorId, isEmergency: v })
             }
           }}
           className={cn(
