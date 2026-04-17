@@ -44,6 +44,30 @@ export async function createDoctorDoc(
   })
 }
 
+export async function createClinicStaffDoc(
+  uid: string,
+  data: {
+    clinicId: string
+    branchIds: string[]
+    role: string
+    name: string
+    email: string
+    phone?: string
+  },
+): Promise<void> {
+  await adminDb.doc(`clinics/${data.clinicId}/staff/${uid}`).set({
+    clinicId: data.clinicId,
+    branchIds: data.branchIds,
+    role: data.role,
+    name: data.name,
+    email: data.email,
+    phone: data.phone ?? null,
+    isActive: true,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  })
+}
+
 export async function updateStaffDoc(
   uid: string,
   data: {

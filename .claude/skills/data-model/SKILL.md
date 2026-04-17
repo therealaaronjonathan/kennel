@@ -11,6 +11,7 @@ staff/{staffId}                             # ROOT level — auth bootstrap only
 
 clinics/{clinicId}
 ├── doctors/{doctorId}                      # clinic-level — branchIds for assignment
+├── staff/{staffId}                         # clinic-level — non-doctor staff (receptionist/admin); mirrors root staff doc for listing
 ├── petOwners/{ownerId}                     # clinic-level — branchIds for branches visited
 ├── pets/{petId}                            # clinic-level — not branch-specific
 ├── diagnosisCatalog/{diagnosisId}          # clinic-level — master diagnosis list
@@ -96,6 +97,23 @@ interface StaffBootstrap {
 ```
 
 **Legacy staff docs** without a `role` field are handled by fallback logic: if `doctorId` is present → treat as `'doctor'`; otherwise → treat as `'receptionist'`.
+
+### ClinicStaff (collection: `staff`, under clinic)
+Clinic-level listing of non-doctor staff (receptionist/admin). Written by the backend at the same time as the root `staff/{uid}` doc. Used by the admin staff page to list staff without a full-collection scan.
+
+```ts
+interface ClinicStaffMember {
+  clinicId: string
+  branchIds: string[]
+  role: 'receptionist' | 'admin'
+  name: string
+  email: string
+  phone: string | null
+  isActive: boolean
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+```
 
 ### Doctor
 Clinic-level. `branchIds` determines which branches the doctor is assigned to.

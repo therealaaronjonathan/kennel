@@ -1,5 +1,5 @@
 import { adminAuth } from '../../lib/firebase-admin'
-import { createStaffDoc, createDoctorDoc, updateStaffDoc } from './repository'
+import { createStaffDoc, createDoctorDoc, createClinicStaffDoc, updateStaffDoc } from './repository'
 import type { CreateUserBodyType, UpdateUserBodyType } from './models'
 
 export async function createUser(body: CreateUserBodyType) {
@@ -20,6 +20,7 @@ export async function createUser(body: CreateUserBodyType) {
   })
 
   // 3. If doctor, create clinics/{clinicId}/doctors/{uid}
+  //    Otherwise, create clinics/{clinicId}/staff/{uid} for listing on admin staff page
   if (body.role === 'doctor') {
     await createDoctorDoc(uid, {
       clinicId: body.clinicId,
@@ -27,6 +28,15 @@ export async function createUser(body: CreateUserBodyType) {
       name: body.name,
       phone: body.phone,
       specialization: body.specialization ?? 'General',
+    })
+  } else {
+    await createClinicStaffDoc(uid, {
+      clinicId: body.clinicId,
+      branchIds: body.branchIds,
+      role: body.role,
+      name: body.name,
+      email: body.email,
+      phone: body.phone,
     })
   }
 

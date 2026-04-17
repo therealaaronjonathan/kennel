@@ -1,7 +1,7 @@
 # Shomer App — Current State
 
-## Version: 1.1.7
-## Last Updated: 2026-04-12
+## Version: 1.1.8
+## Last Updated: 2026-04-18
 
 ---
 
@@ -11,8 +11,8 @@
 - Check-in flow (search/register owner + pet, select doctor, assign token)
   - Search by Pet Name (required), Breed (optional), and Owner Phone (optional — +91 prefix hardcoded, exact 10-digit match)
   - Phone entered in search pre-fills the phone field when registering a new patient
-- Queue view (all visits today, real-time updates)
-- Check-out/billing (mark billed, WhatsApp summary link)
+- Queue view (all visits today, real-time updates); right panel shows Diagnosis → Consultation Notes → Prescription → Vaccines → Services; click empty space to close panel
+- Check-out/billing (mark billed, WhatsApp summary link with clinic name and production URL)
 - Home dashboard (stats, doctor cards, recent completions)
 - Settings (duty roster, catalogs: diagnoses, medicines, services)
 - Branch name shown in sidebar (static label or dropdown switcher for multi-branch)
@@ -43,7 +43,7 @@
 - Clinic management: create/edit clinics with white-label branding (colors, logo, tagline)
 - Branch management: add/edit branches per clinic
 - Doctor management: invite doctors via backend API (Firebase Auth + Firestore + invite link)
-- Staff management: invite receptionists/admins the same way
+- Staff management: invite receptionists via backend API; staff page reads from `clinics/{clinicId}/staff` subcollection and displays the list; role is always Receptionist
 - Catalog management (4 tabs): Diagnoses, Medicines, Services, Grooming
 
 ### Consultation Summary Page
@@ -76,6 +76,7 @@
 
 | Version | Date       | Changes |
 |---------|------------|---------|
+| 1.1.8   | 2026-04-18 | Production URL fix: `VITE_APP_DOMAIN` renamed to `VITE_APP_BASE_URL` (full URL); `.env.production` now points to `https://shomer.app` so consultation summary links in WhatsApp messages use the correct production domain. WA message: "Thank you for choosing us" replaced with dynamic clinic name fetched from Firestore (`useClinicName` hook) — applies to both Queue/Dashboard and Checkout tabs. Staff listing fix: backend now writes non-doctor staff to `clinics/{clinicId}/staff/{uid}` subcollection on creation (in addition to root `staff/{uid}`); admin staff page reads from this subcollection and displays the list. Admin staff page simplified: role dropdown removed — staff created via this page are always Receptionist. Queue + Checkout right panel: consultation notes now shown as a separate section; vaccines split out from Prescription into their own section (Syringe icon); section order is Diagnosis → Consultation Notes → Prescription → Vaccines → Services. Clicking empty space in the left list on Queue or Checkout tabs now closes the right panel. `consultationNotes` added to `AllVisit` type and snapshot mapping so notes are available on the Queue tab. |
 | 1.1.7   | 2026-04-12 | App: added `VITE_API_URL` to `.env.production` pointing to Railway backend — production builds were falling back to `localhost:3000`, silently breaking all admin invite actions. Rebuilt and redeployed to Firebase Hosting. |
 | 1.1.6   | 2026-04-12 | Backend: fixed Firestore connectivity on Railway — switched to REST transport (`preferRest: true`) as gRPC fails silently in Railway's container environment. Added `ignoreUndefinedProperties: true` to prevent crashes on optional fields (e.g. `phone`). Added try/catch around Firestore call in auth middleware so failures return a clean 500 instead of an unhandled crash. Backend `POST /api/admin/users` end-to-end verified in production. |
 | 1.1.5   | 2026-04-12 | Backend: fixed critical security bug in auth middleware — `onBeforeHandle` was not blocking unauthorized requests due to incorrect Elysia hook scope (`derive` replaced with `onBeforeHandle { as: 'scoped' }`). Fixed Railway deployment — `nixpacks.toml` updated to explicitly declare Bun via `nixPkgs`. Backend now live and verified at `shomer-backend-production-cee7.up.railway.app`. |
