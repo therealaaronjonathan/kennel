@@ -108,7 +108,9 @@ export function HeroSection() {
               Get Early Access
             </a>
             <a
-              href="#request-access"
+              href="https://shomer.app"
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex items-center border-4 border-ink bg-[#FEFAFF] px-8 py-4 font-sans text-base font-bold text-ink"
             >
               Sign In
