@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { MessageCircle, CheckCheck, Pill, CheckCircle } from 'lucide-react'
+import { MessageCircle, CheckCheck, Pill, CheckCircle, Syringe } from 'lucide-react'
 import { useMutation } from '@tanstack/react-query'
 import { cn, formatInr } from '@/lib/utils'
 import { WhatsAppShareModal } from '@/components/blocks/whatsapp-share-modal'
 import { ServicesSelect, type ServiceEntry } from '@/components/blocks/services-select'
 import { useClinic } from '@/features/clinic'
 import { useCompletedVisits, type CompletedVisit } from '@/features/dashboard/services/use-completed-visits'
+import { useClinicName } from '@/features/clinic/hooks/use-clinic-name'
 import { useClinicServices } from '@/features/vet/services/use-clinic-services'
 import { useCheckoutDetail } from '../services/use-checkout-detail'
 import { completeBilling } from '../services/complete-billing'
@@ -46,11 +47,12 @@ interface CheckoutPanelProps {
   visit: CompletedVisit
   clinicId: string
   branchId: string
+  clinicName: string | null
   onBilled: () => void
   onToast: (msg: string) => void
 }
 
-function CheckoutPanel({ visit, clinicId, branchId, onBilled, onToast }: CheckoutPanelProps) {
+function CheckoutPanel({ visit, clinicId, branchId, clinicName, onBilled, onToast }: CheckoutPanelProps) {
   const { detail, loading: detailLoading } = useCheckoutDetail(clinicId, branchId, visit.id, visit.ownerId)
   const { services: catalogServices, loading: svcLoading } = useClinicServices(clinicId)
 
@@ -75,9 +77,9 @@ function CheckoutPanel({ visit, clinicId, branchId, onBilled, onToast }: Checkou
     },
   })
 
-  const domain = import.meta.env.VITE_APP_DOMAIN ?? 'shomer-app-test'
-  const summaryLink = `https://${domain}.web.app/visit/${visit.id}/summary?clinicId=${clinicId}&branchId=${branchId}`
-  const waMessage = `Hi ${visit.ownerName}, ${visit.petName}'s consultation is complete. View the summary here: ${summaryLink}\n\nPlease visit the reception for billing. Thank you for choosing us! 🐾`
+  const baseUrl = import.meta.env.VITE_APP_BASE_URL ?? 'https://shomer-app-test.web.app'
+  const summaryLink = `${baseUrl}/visit/${visit.id}/summary?clinicId=${clinicId}&branchId=${branchId}`
+  const waMessage = `Hi ${visit.ownerName}, ${visit.petName}'s consultation is complete. View the summary here: ${summaryLink}\n\nPlease visit the reception for billing. Thank you for choosing ${clinicName ?? 'us'}! 🐾`
 
   const hasDiagnosis = detail && detail.diagnoses.length > 0
   const hasMeds = detail && detail.medicines.length > 0
@@ -143,8 +145,18 @@ function CheckoutPanel({ visit, clinicId, branchId, onBilled, onToast }: Checkou
               </div>
             )}
 
-            {/* Prescription */}
-            {(hasMeds || hasVaccines) && (
+            {/* Consultation notes */}
+            {visit.consultationNotes ? (
+              <div className="space-y-1.5">
+                <p className={labelClass}>Consultation Notes</p>
+                <p className="text-[13px] text-foreground leading-relaxed whitespace-pre-wrap">
+                  {visit.consultationNotes}
+                </p>
+              </div>
+            ) : null}
+
+            {/* Prescription — medicines only */}
+            {hasMeds && (
               <div className="rounded-[4px] border border-border-base bg-surface p-4 space-y-3">
                 <p className={cn(labelClass, 'flex items-center gap-1.5')}>
                   <Pill size={10} />
@@ -156,6 +168,16 @@ function CheckoutPanel({ visit, clinicId, branchId, onBilled, onToast }: Checkou
                     <p className="text-[11px] text-muted">{formatDosage(m)}</p>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Vaccines — separate section */}
+            {hasVaccines && (
+              <div className="rounded-[4px] border border-border-base bg-surface p-4 space-y-3">
+                <p className={cn(labelClass, 'flex items-center gap-1.5')}>
+                  <Syringe size={10} />
+                  Vaccines
+                </p>
                 {detail.vaccines.map((v, i) => (
                   <div key={i} className="rounded-[4px] bg-surface-2 px-3 py-2 space-y-0.5">
                     <p className="text-[12px] font-semibold text-foreground">{v.name}</p>
@@ -232,6 +254,7 @@ function CheckoutPanel({ visit, clinicId, branchId, onBilled, onToast }: Checkou
 export function CheckoutPage() {
   const { clinicId, branchId } = useClinic()
   const { visits, loading, error } = useCompletedVisits(clinicId, branchId)
+  const clinicName = useClinicName(clinicId)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
 
@@ -262,7 +285,7 @@ export function CheckoutPage() {
           className="flex flex-col overflow-hidden border-r border-border-base"
           style={{ width: hasPanel ? '40%' : '100%', transition: 'width 0.2s ease' }}
         >
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto" onClick={() => setSelectedId(null)}>
             {loading ? (
               <p className="px-5 py-8 text-[12px] text-muted">Loading…</p>
             ) : error ? (
@@ -284,7 +307,7 @@ export function CheckoutPage() {
                   <button
                     key={visit.id}
                     type="button"
-                    onClick={() => setSelectedId(isSelected ? null : visit.id)}
+                    onClick={(e) => { e.stopPropagation(); setSelectedId(isSelected ? null : visit.id) }}
                     className={cn(
                       'w-full text-left px-5 py-4 border-b border-border-base transition-colors',
                       isSelected
@@ -331,6 +354,7 @@ export function CheckoutPage() {
               visit={selectedVisit}
               clinicId={clinicId}
               branchId={branchId}
+              clinicName={clinicName}
               onBilled={handleBilled}
               onToast={(msg) => setToast(msg)}
             />

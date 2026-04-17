@@ -6,13 +6,11 @@ import { Plus, X, Copy, Check } from 'lucide-react'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000'
 
-type StaffRole = 'receptionist' | 'admin'
-
 interface StaffMember {
   id: string
   name?: string
   email?: string
-  role?: StaffRole
+  role?: string
   branchIds?: string[]
   isActive?: boolean
 }
@@ -41,27 +39,23 @@ export function AdminStaffPage() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
-  const [role, setRole] = useState<StaffRole>('receptionist')
   const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([])
 
   async function loadData() {
     if (!clinicId) return
     setLoading(true)
     try {
-      // Load staff docs that are not doctors (no doctorId)
-      // We read from the root staff collection filtered by clinicId
-      // Since Firestore doesn't support inequality + array-contains in same query easily,
-      // we load branches separately and show a simple staff list from the clinic's own subcollection
-      // (staff who are receptionist/admin will be displayed)
-      const [branchesSnap] = await Promise.all([
+      const [branchesSnap, staffSnap] = await Promise.all([
         getDocs(collection(db, `clinics/${clinicId}/branches`)),
+        getDocs(collection(db, `clinics/${clinicId}/staff`)),
       ])
       setBranches(branchesSnap.docs.map((d) => ({ id: d.id, name: (d.data() as Branch).name })))
-
-      // Note: Staff are stored at root staff/{uid} — we can't easily list them per clinic
-      // without a secondary index. For now, we show a placeholder and rely on future
-      // enhancement (e.g., storing staff list in clinic subcollection).
-      setStaffList([])
+      setStaffList(
+        staffSnap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<StaffMember, 'id'>),
+        })),
+      )
     } finally {
       setLoading(false)
     }
@@ -75,7 +69,6 @@ export function AdminStaffPage() {
     setName('')
     setEmail('')
     setPhone('')
-    setRole('receptionist')
     setSelectedBranchIds([])
     setError(null)
   }
@@ -105,7 +98,7 @@ export function AdminStaffPage() {
           name: name.trim(),
           email: email.trim(),
           phone: phone.trim(),
-          role,
+          role: 'receptionist',
         }),
       })
 
@@ -130,11 +123,6 @@ export function AdminStaffPage() {
     await navigator.clipboard.writeText(inviteLink)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-  }
-
-  const roleLabel: Record<StaffRole, string> = {
-    receptionist: 'Receptionist',
-    admin: 'Admin',
   }
 
   return (
@@ -230,18 +218,6 @@ export function AdminStaffPage() {
                     />
                   </div>
 
-                  <div className="space-y-1.5 col-span-2">
-                    <label className={labelClass}>Role *</label>
-                    <select
-                      value={role}
-                      onChange={(e) => setRole(e.target.value as StaffRole)}
-                      className={inputClass}
-                      required
-                    >
-                      <option value="receptionist">Receptionist</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  </div>
                 </div>
 
                 {branches.length > 0 && (
@@ -313,7 +289,7 @@ export function AdminStaffPage() {
                       <p className="text-[12px] text-muted">{member.email}</p>
                     )}
                     {member.role && (
-                      <p className="text-[11px] text-muted">{roleLabel[member.role] ?? member.role}</p>
+                      <p className="text-[11px] text-muted">Receptionist</p>
                     )}
                   </div>
                   <span

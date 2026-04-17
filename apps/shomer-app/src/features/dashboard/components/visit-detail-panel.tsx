@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { MessageCircle, ExternalLink, Pill } from 'lucide-react'
+import { MessageCircle, ExternalLink, Pill, Syringe } from 'lucide-react'
+import { useClinicName } from '@/features/clinic/hooks/use-clinic-name'
 import { cn } from '@/lib/utils'
 import { WhatsAppShareModal } from '@/components/blocks/whatsapp-share-modal'
 import { useVisitBill } from '../services/use-visit-bill'
@@ -39,6 +40,7 @@ function formatDosage(m: {
 export function VisitDetailPanel({ visit, clinicId, branchId, onToast }: VisitDetailPanelProps) {
   const { detail, loading } = useVisitBill(clinicId, branchId, visit.id, visit.ownerId)
   const [showWAModal, setShowWAModal] = useState(false)
+  const clinicName = useClinicName(clinicId)
 
   // Services, bill, and consultation notes come directly from the visit doc —
   // no extra fetch needed, avoids putting arrays in useEffect deps.
@@ -46,9 +48,9 @@ export function VisitDetailPanel({ visit, clinicId, branchId, onToast }: VisitDe
   const billAmount = visit.billAmount ?? 0
   const consultationNotes = visit.consultationNotes ?? ''
 
-  const domain = import.meta.env.VITE_APP_DOMAIN ?? 'shomer-app-test'
-  const summaryLink = `https://${domain}.web.app/visit/${visit.id}/summary?clinicId=${clinicId}&branchId=${branchId}`
-  const waMessage = `Hi ${visit.ownerName}, ${visit.petName}'s consultation is complete.\n\nView the summary here:\n${summaryLink}\n\nThank you for choosing us! 🐾`
+  const baseUrl = import.meta.env.VITE_APP_BASE_URL ?? 'https://shomer-app-test.web.app'
+  const summaryLink = `${baseUrl}/visit/${visit.id}/summary?clinicId=${clinicId}&branchId=${branchId}`
+  const waMessage = `Hi ${visit.ownerName}, ${visit.petName}'s consultation is complete.\n\nView the summary here:\n${summaryLink}\n\nThank you for choosing ${clinicName ?? 'us'}! 🐾`
 
   function handleShareConsultation() {
     if (!detail?.ownerPhone) {
@@ -59,14 +61,13 @@ export function VisitDetailPanel({ visit, clinicId, branchId, onToast }: VisitDe
   }
 
   function handleViewConsultation() {
-    const domain = import.meta.env.VITE_APP_DOMAIN ?? 'shomer-app-test'
-    const summaryLink = `https://${domain}.web.app/visit/${visit.id}/summary?clinicId=${clinicId}&branchId=${branchId}`
     window.open(summaryLink, '_blank')
   }
 
   const isConsultationDone = visit.status === 'completed' || visit.status === 'billed'
   const hasDiagnosis = detail && detail.diagnoses.length > 0
-  const hasRxContent = detail && (detail.medicines.length > 0 || detail.vaccines.length > 0)
+  const hasMedicines = detail && detail.medicines.length > 0
+  const hasVaccines = detail && detail.vaccines.length > 0
   const hasServices = services.length > 0
 
   return (
@@ -139,8 +140,8 @@ export function VisitDetailPanel({ visit, clinicId, branchId, onToast }: VisitDe
               </div>
             ) : null}
 
-            {/* Prescription */}
-            {hasRxContent && (
+            {/* Prescription — medicines only */}
+            {hasMedicines && (
               <div className="rounded-[4px] border border-border-base bg-surface p-4 space-y-3">
                 <p className={cn(labelClass, 'flex items-center gap-1.5')}>
                   <Pill size={10} />
@@ -152,6 +153,16 @@ export function VisitDetailPanel({ visit, clinicId, branchId, onToast }: VisitDe
                     <p className="text-[11px] text-muted">{formatDosage(m)}</p>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Vaccines — separate section */}
+            {hasVaccines && (
+              <div className="rounded-[4px] border border-border-base bg-surface p-4 space-y-3">
+                <p className={cn(labelClass, 'flex items-center gap-1.5')}>
+                  <Syringe size={10} />
+                  Vaccines
+                </p>
                 {detail.vaccines.map((v, i) => (
                   <div key={i} className="rounded-[4px] bg-surface-2 px-3 py-2.5 space-y-0.5">
                     <p className="text-[12px] font-semibold text-foreground">{v.name}</p>
@@ -194,8 +205,8 @@ export function VisitDetailPanel({ visit, clinicId, branchId, onToast }: VisitDe
               </div>
             )}
 
-            {!hasDiagnosis && !hasRxContent && !hasServices && !consultationNotes && (
-              <p className="text-[12px] text-muted">No consultation notes recorded.</p>
+            {!hasDiagnosis && !hasMedicines && !hasVaccines && !hasServices && !consultationNotes && (
+              <p className="text-[12px] text-muted">No consultation details recorded.</p>
             )}
           </>
         )}

@@ -51,6 +51,7 @@ function toCompletedVisit(v: AllVisit): CompletedVisit {
     doctorId: v.doctorId,
     complaints: v.complaints,
     otherComplaintText: v.otherComplaintText,
+    consultationNotes: v.consultationNotes,
     status: v.status,
     completedAt: null,
     date: '',
@@ -98,7 +99,7 @@ export function ReceptionQueuePage() {
           )}
 
           {/* Rows */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto" onClick={() => setSelectedId(null)}>
             {loading ? (
               <p className="px-5 py-8 text-[12px] text-muted">Loading…</p>
             ) : error ? (
@@ -120,7 +121,7 @@ export function ReceptionQueuePage() {
                   <button
                     key={visit.id}
                     type="button"
-                    onClick={() => setSelectedId(isSelected ? null : visit.id)}
+                    onClick={(e) => { e.stopPropagation(); setSelectedId(isSelected ? null : visit.id) }}
                     className={cn(
                       'w-full grid grid-cols-[72px_1fr_1fr_1fr_100px_60px] gap-3 px-5 py-3 text-left border-b border-border-base transition-colors',
                       isSelected
