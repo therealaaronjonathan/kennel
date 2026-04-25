@@ -1,8 +1,15 @@
 import { useState } from 'react'
-import { MessageCircle, ExternalLink, Pill, Syringe } from 'lucide-react'
+import { MessageCircle, ExternalLink, Pill, Syringe, Pencil } from 'lucide-react'
+import { useMutation } from '@tanstack/react-query'
 import { useClinicName } from '@/features/clinic/hooks/use-clinic-name'
 import { cn } from '@/lib/utils'
 import { WhatsAppShareModal } from '@/components/blocks/whatsapp-share-modal'
+import { PaymentMethodDialog } from '@/components/blocks/payment-method-dialog'
+import {
+  PAYMENT_METHOD_LABELS,
+  updatePaymentMethod,
+  type PaymentMethod,
+} from '@/features/checkout/services/complete-billing'
 import { useVisitBill } from '../services/use-visit-bill'
 import type { CompletedVisit } from '../services/use-completed-visits'
 
@@ -11,6 +18,8 @@ interface VisitDetailPanelProps {
   clinicId: string
   branchId: string
   onToast: (message: string) => void
+  /** When true, billed visits show a Change payment method action. */
+  canEditPaymentMethod?: boolean
 }
 
 const labelClass = 'text-[10px] font-semibold uppercase tracking-[0.08em] text-muted'
@@ -37,10 +46,26 @@ function formatDosage(m: {
   return `${timingStr} · ${m.days} day${m.days !== 1 ? 's' : ''}`
 }
 
-export function VisitDetailPanel({ visit, clinicId, branchId, onToast }: VisitDetailPanelProps) {
+export function VisitDetailPanel({
+  visit,
+  clinicId,
+  branchId,
+  onToast,
+  canEditPaymentMethod = false,
+}: VisitDetailPanelProps) {
   const { detail, loading } = useVisitBill(clinicId, branchId, visit.id, visit.ownerId)
   const [showWAModal, setShowWAModal] = useState(false)
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false)
   const clinicName = useClinicName(clinicId)
+
+  const updateMethod = useMutation({
+    mutationFn: (method: PaymentMethod) =>
+      updatePaymentMethod(clinicId, branchId, visit.id, method),
+    onSuccess: (_data, method) => {
+      setShowPaymentDialog(false)
+      onToast(`Payment method updated — ${PAYMENT_METHOD_LABELS[method]}`)
+    },
+  })
 
   // Services, bill, and consultation notes come directly from the visit doc —
   // no extra fetch needed, avoids putting arrays in useEffect deps.
@@ -205,6 +230,30 @@ export function VisitDetailPanel({ visit, clinicId, branchId, onToast }: VisitDe
               </div>
             )}
 
+            {/* Payment method — shown for billed visits */}
+            {visit.status === 'billed' && (
+              <div className="space-y-1.5">
+                <p className={labelClass}>Payment Method</p>
+                <div className="flex items-center justify-between rounded-[4px] border border-border-base bg-surface px-3 py-2.5">
+                  <span className="text-[13px] font-semibold text-foreground">
+                    {visit.paymentMethod
+                      ? PAYMENT_METHOD_LABELS[visit.paymentMethod]
+                      : 'Not recorded'}
+                  </span>
+                  {canEditPaymentMethod && (
+                    <button
+                      type="button"
+                      onClick={() => setShowPaymentDialog(true)}
+                      className="flex items-center gap-1.5 text-[12px] font-semibold text-primary hover:opacity-85 transition-opacity"
+                    >
+                      <Pencil size={11} />
+                      Change
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {!hasDiagnosis && !hasMedicines && !hasVaccines && !hasServices && !consultationNotes && (
               <p className="text-[12px] text-muted">No consultation details recorded.</p>
             )}
@@ -251,6 +300,23 @@ export function VisitDetailPanel({ visit, clinicId, branchId, onToast }: VisitDe
           phone={detail.ownerPhone}
           ownerName={visit.ownerName}
           message={waMessage}
+        />
+      )}
+
+      {canEditPaymentMethod && (
+        <PaymentMethodDialog
+          open={showPaymentDialog}
+          currentMethod={visit.paymentMethod}
+          loading={updateMethod.isPending}
+          error={
+            updateMethod.isError
+              ? (updateMethod.error as Error)?.message ?? 'Failed to update. Try again.'
+              : null
+          }
+          onCancel={() => {
+            if (!updateMethod.isPending) setShowPaymentDialog(false)
+          }}
+          onConfirm={(method) => updateMethod.mutate(method)}
         />
       )}
     </div>

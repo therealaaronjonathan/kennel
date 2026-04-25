@@ -164,7 +164,7 @@ export default function ReceptionistLayout() {
 
   async function handleSignOut() {
     await signOut(auth)
-    navigate('/login')
+    navigate('/login', { replace: true })
   }
 
   // Show up to 3 toasts stacked from top-right

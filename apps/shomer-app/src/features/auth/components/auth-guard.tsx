@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../hooks/use-auth'
+import { useClinic, type StaffRole } from '@/features/clinic'
 
 function LoadingScreen() {
   return (
@@ -23,14 +25,48 @@ function LoadingScreen() {
   )
 }
 
-interface AuthGuardProps {
-  children: React.ReactNode
+function getRoleHome(role: StaffRole): string {
+  if (role === 'admin' || role === 'owner') return '/admin'
+  if (role === 'doctor') return '/vet'
+  return '/reception/home'
 }
 
-export function AuthGuard({ children }: AuthGuardProps) {
-  const { user, loading } = useAuth()
+interface AuthGuardProps {
+  children: React.ReactNode
+  allowedRoles?: StaffRole[]
+}
 
-  if (loading) return <LoadingScreen />
+export function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
+  const { user, loading: authLoading } = useAuth()
+  const { role, loading: clinicLoading } = useClinic()
+
+  const authorized =
+    !!user && (!allowedRoles || (!!role && allowedRoles.includes(role)))
+
+  // While inside an authenticated route, swallow browser back/forward —
+  // re-push current URL on every popstate so the user can't escape via
+  // the back button. In-app navigation uses the app's own UI.
+  useEffect(() => {
+    if (!authorized) return
+    window.history.pushState(null, '', window.location.href)
+    function onPop() {
+      window.history.pushState(null, '', window.location.href)
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [authorized])
+
+  if (authLoading) return <LoadingScreen />
   if (!user) return <Navigate to="/login" replace />
+
+  // Role-restricted route — wait for clinic data, then enforce
+  if (allowedRoles) {
+    if (clinicLoading) return <LoadingScreen />
+    if (!role) return <Navigate to="/login" replace />
+    if (!allowedRoles.includes(role)) {
+      return <Navigate to={getRoleHome(role)} replace />
+    }
+  }
+
   return <>{children}</>
 }

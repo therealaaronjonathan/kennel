@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import type { PaymentMethod } from '@/features/checkout/services/complete-billing'
 
 export interface PetDetail {
   name: string
   species: string
+  speciesName?: string
   breed?: string
   age?: number
+  color?: string
   microchipNumber?: string
 }
 
@@ -21,8 +24,12 @@ export interface LastVisitDiagnosis {
   notes?: string
 }
 
+export type MedicineType = 'tablet' | 'syrup' | 'other'
+
 export interface LastVisitMedicine {
   name: string
+  type?: MedicineType
+  quantity?: string
   morning: boolean
   afternoon: boolean
   evening: boolean
@@ -36,20 +43,50 @@ export interface LastVisitVaccine {
   nextDue?: string
 }
 
+export interface LastVisitService {
+  name: string
+  price: number
+  quantity?: number
+}
+
 export interface LastVisitSummary {
   visitId: string
   date: string
+  doctorName?: string
+  service?: string
+  isEmergency?: boolean
+  complaints: string[]
+  otherComplaintText?: string
   consultationNotes?: string
   diagnoses: LastVisitDiagnosis[]
   medicines: LastVisitMedicine[]
   vaccines: LastVisitVaccine[]
+  services: LastVisitService[]
+  billAmount?: number
+  paymentMethod?: PaymentMethod
+  status?: string
+}
+
+export interface EarlierVisitSummary {
+  visitId: string
+  date: string
+  doctorName?: string
+  service?: string
+  isEmergency?: boolean
+  complaints: string[]
+  billAmount?: number
+  paymentMethod?: PaymentMethod
+  status?: string
 }
 
 export interface VisitDetail {
   pet: PetDetail | null
   owner: OwnerDetail | null
   lastVisit: LastVisitSummary | null
+  earlierVisits: EarlierVisitSummary[]
 }
+
+const PAST_STATUSES = new Set(['completed', 'billed'])
 
 export function useVisitDetail(
   clinicId: string | null,
@@ -79,72 +116,111 @@ export function useVisitDetail(
       const pet = petSnap.exists() ? (petSnap.data() as PetDetail) : null
       const owner = ownerSnap.exists() ? (ownerSnap.data() as OwnerDetail) : null
 
-      // Find the most recent completed visit for this pet (excluding current visit)
+      // Fetch ALL past visits for this pet at this branch — drop the
+      // status='completed' filter so billed visits aren't silently hidden.
       const visitsSnap = await getDocs(
         query(
           collection(db, `clinics/${clinicId}/branches/${branchId}/visits`),
           where('petId', '==', petId),
-          where('status', '==', 'completed'),
         ),
       )
 
+      const sortedPast = visitsSnap.docs
+        .filter(
+          (d) =>
+            d.id !== currentVisitId &&
+            PAST_STATUSES.has((d.data().status as string) ?? ''),
+        )
+        .sort((a, b) => (b.data().date as string).localeCompare(a.data().date as string))
+
       let lastVisit: LastVisitSummary | null = null
+      const earlierVisits: EarlierVisitSummary[] = []
 
-      if (!visitsSnap.empty) {
-        const sorted = visitsSnap.docs
-          .filter((d) => d.id !== currentVisitId)
-          .sort((a, b) => b.data().date.localeCompare(a.data().date))
+      if (sortedPast.length > 0) {
+        const lastDoc = sortedPast[0]
+        const lastVisitId = lastDoc.id
+        const visitData = lastDoc.data()
 
-        if (sorted.length > 0) {
-          const lastDoc = sorted[0]
-          const lastVisitId = lastDoc.id
-          const visitData = lastDoc.data()
+        // Fetch diagnoses, prescriptions, and vaccines subcollections in parallel
+        const [diagSnap, presSnap, vaccineSnap] = await Promise.all([
+          getDocs(collection(db, `clinics/${clinicId}/branches/${branchId}/visits/${lastVisitId}/diagnoses`)),
+          getDocs(collection(db, `clinics/${clinicId}/branches/${branchId}/visits/${lastVisitId}/prescriptions`)),
+          getDocs(collection(db, `clinics/${clinicId}/branches/${branchId}/visits/${lastVisitId}/vaccines`)),
+        ])
 
-          // Fetch diagnoses, prescriptions, and vaccines subcollections in parallel
-          const [diagSnap, presSnap, vaccineSnap] = await Promise.all([
-            getDocs(collection(db, `clinics/${clinicId}/branches/${branchId}/visits/${lastVisitId}/diagnoses`)),
-            getDocs(collection(db, `clinics/${clinicId}/branches/${branchId}/visits/${lastVisitId}/prescriptions`)),
-            getDocs(collection(db, `clinics/${clinicId}/branches/${branchId}/visits/${lastVisitId}/vaccines`)),
-          ])
+        const diagnoses: LastVisitDiagnosis[] = diagSnap.docs
+          .map((d) => ({
+            name: (d.data().name as string) ?? '',
+            notes: (d.data().notes as string) || undefined,
+          }))
+          .filter((d) => d.name.length > 0)
 
-          const diagnoses: LastVisitDiagnosis[] = diagSnap.docs
-            .map((d) => ({
-              name: (d.data().name as string) ?? '',
-              notes: (d.data().notes as string) || undefined,
+        const medicines: LastVisitMedicine[] = presSnap.docs
+          .map((d) => ({
+            name: (d.data().name as string) ?? '',
+            type: (d.data().type as MedicineType | undefined) ?? undefined,
+            quantity: (d.data().quantity as string | undefined) ?? undefined,
+            morning: d.data().morning ?? false,
+            afternoon: d.data().afternoon ?? false,
+            evening: d.data().evening ?? false,
+            night: d.data().night ?? false,
+            days: d.data().days ?? 1,
+          }))
+          .filter((m) => m.name.length > 0)
+
+        const vaccines: LastVisitVaccine[] = vaccineSnap.docs
+          .map((d) => ({
+            name: (d.data().name as string) ?? '',
+            batch: (d.data().batch as string) || undefined,
+            nextDue: (d.data().nextDue as string) || undefined,
+          }))
+          .filter((v) => v.name.length > 0)
+
+        const services: LastVisitService[] = Array.isArray(visitData.services)
+          ? (visitData.services as LastVisitService[]).map((s) => ({
+              name: s.name,
+              price: s.price,
+              quantity: s.quantity,
             }))
-            .filter((d) => d.name.length > 0)
+          : []
 
-          const medicines: LastVisitMedicine[] = presSnap.docs
-            .map((d) => ({
-              name: (d.data().name as string) ?? '',
-              morning: d.data().morning ?? false,
-              afternoon: d.data().afternoon ?? false,
-              evening: d.data().evening ?? false,
-              night: d.data().night ?? false,
-              days: d.data().days ?? 1,
-            }))
-            .filter((m) => m.name.length > 0)
+        lastVisit = {
+          visitId: lastVisitId,
+          date: visitData.date,
+          doctorName: (visitData.doctorName as string) || undefined,
+          service: (visitData.service as string) || undefined,
+          isEmergency: !!visitData.isEmergency,
+          complaints: (visitData.complaints as string[]) ?? [],
+          otherComplaintText: (visitData.otherComplaintText as string) || undefined,
+          consultationNotes: (visitData.consultationNotes as string) || undefined,
+          diagnoses,
+          medicines,
+          vaccines,
+          services,
+          billAmount: typeof visitData.billAmount === 'number' ? visitData.billAmount : undefined,
+          paymentMethod: (visitData.paymentMethod as PaymentMethod | undefined) ?? undefined,
+          status: (visitData.status as string) || undefined,
+        }
 
-          const vaccines: LastVisitVaccine[] = vaccineSnap.docs
-            .map((d) => ({
-              name: (d.data().name as string) ?? '',
-              batch: (d.data().batch as string) || undefined,
-              nextDue: (d.data().nextDue as string) || undefined,
-            }))
-            .filter((v) => v.name.length > 0)
-
-          lastVisit = {
-            visitId: lastVisitId,
-            date: visitData.date,
-            consultationNotes: (visitData.consultationNotes as string) || undefined,
-            diagnoses,
-            medicines,
-            vaccines,
-          }
+        // Build summary list of all earlier (older than `lastVisit`) visits.
+        for (let i = 1; i < sortedPast.length; i++) {
+          const d = sortedPast[i]
+          const data = d.data()
+          earlierVisits.push({
+            visitId: d.id,
+            date: data.date as string,
+            doctorName: (data.doctorName as string) || undefined,
+            service: (data.service as string) || undefined,
+            isEmergency: !!data.isEmergency,
+            complaints: (data.complaints as string[]) ?? [],
+            billAmount: typeof data.billAmount === 'number' ? data.billAmount : undefined,
+            paymentMethod: (data.paymentMethod as PaymentMethod | undefined) ?? undefined,
+            status: (data.status as string) || undefined,
+          })
         }
       }
 
-      setDetail({ pet, owner, lastVisit })
+      setDetail({ pet, owner, lastVisit, earlierVisits })
       setLoading(false)
     }
 

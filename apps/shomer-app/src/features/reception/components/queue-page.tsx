@@ -1,10 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useClinic } from '@/features/clinic'
 import { useAllVisits, type AllVisit } from '../services/use-all-visits'
 import { VisitDetailPanel } from '@/features/dashboard/components/visit-detail-panel'
 import type { CompletedVisit } from '@/features/dashboard/services/use-completed-visits'
+import {
+  PAYMENT_METHOD_LABELS,
+  type PaymentMethod,
+} from '@/features/checkout/services/complete-billing'
 
 const STATUS_CONFIG: Record<string, { dot: string; label: string; text: string }> = {
   waiting:       { dot: 'bg-muted opacity-50',  label: 'Waiting',     text: 'text-muted' },
@@ -53,32 +57,63 @@ function toCompletedVisit(v: AllVisit): CompletedVisit {
     otherComplaintText: v.otherComplaintText,
     consultationNotes: v.consultationNotes,
     status: v.status,
+    services: v.services,
+    billAmount: v.billAmount,
+    paymentMethod: v.paymentMethod,
     completedAt: null,
     date: '',
   }
 }
+
+type PaymentFilter = 'all' | PaymentMethod
+
+const COLS = 'grid-cols-[72px_1fr_1fr_1fr_100px_84px_60px]'
 
 export function ReceptionQueuePage() {
   const { clinicId, branchId } = useClinic()
   const { visits, loading, error } = useAllVisits(clinicId, branchId)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>('all')
 
-  const selectedVisit = visits.find((v) => v.id === selectedId) ?? null
+  const filteredVisits = useMemo(() => {
+    if (paymentFilter === 'all') return visits
+    return visits.filter((v) => v.paymentMethod === paymentFilter)
+  }, [visits, paymentFilter])
+
+  const selectedVisit = filteredVisits.find((v) => v.id === selectedId) ?? null
   const hasPanel = !!selectedVisit
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Top bar */}
-      <header className="h-[52px] border-b border-border-base bg-surface flex items-center justify-between px-6 flex-shrink-0">
+      <header className="h-[52px] border-b border-border-base bg-surface flex items-center justify-between px-6 flex-shrink-0 gap-4">
         <h1 className="font-display text-[18px] font-bold text-foreground leading-none">
           Queue
         </h1>
-        {!loading && (
-          <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-[11px] font-bold text-muted">
-            {visits.length} today
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+              Payment
+            </span>
+            <select
+              value={paymentFilter}
+              onChange={(e) => setPaymentFilter(e.target.value as PaymentFilter)}
+              className="h-8 rounded-[4px] border border-border-base bg-background px-2 text-[12px] font-semibold text-foreground focus:outline-none focus:border-primary"
+            >
+              <option value="all">All</option>
+              <option value="cash">Cash</option>
+              <option value="card">Card</option>
+              <option value="upi">UPI</option>
+            </select>
+          </label>
+          {!loading && (
+            <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-[11px] font-bold text-muted">
+              {filteredVisits.length}
+              {paymentFilter === 'all' ? ' today' : ' filtered'}
+            </span>
+          )}
+        </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
@@ -88,9 +123,9 @@ export function ReceptionQueuePage() {
           style={{ width: hasPanel ? '55%' : '100%', transition: 'width 0.2s ease' }}
         >
           {/* Table header */}
-          {!loading && visits.length > 0 && (
-            <div className="grid grid-cols-[72px_1fr_1fr_1fr_100px_60px] gap-3 px-5 py-2 border-b border-border-base flex-shrink-0">
-              {['Token', 'Pet', 'Owner', 'Doctor', 'Status', 'Time'].map((h) => (
+          {!loading && filteredVisits.length > 0 && (
+            <div className={cn('grid gap-3 px-5 py-2 border-b border-border-base flex-shrink-0', COLS)}>
+              {['Token', 'Pet', 'Owner', 'Doctor', 'Status', 'Payment', 'Time'].map((h) => (
                 <span key={h} className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
                   {h}
                 </span>
@@ -104,13 +139,17 @@ export function ReceptionQueuePage() {
               <p className="px-5 py-8 text-[12px] text-muted">Loading…</p>
             ) : error ? (
               <p className="px-5 py-8 text-[12px] text-danger">{error}</p>
-            ) : visits.length === 0 ? (
+            ) : filteredVisits.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 gap-2">
                 <span className="text-[28px]">🐾</span>
-                <p className="text-[13px] font-semibold text-muted">No visits today yet</p>
+                <p className="text-[13px] font-semibold text-muted">
+                  {paymentFilter === 'all'
+                    ? 'No visits today yet'
+                    : `No visits paid by ${PAYMENT_METHOD_LABELS[paymentFilter]}`}
+                </p>
               </div>
             ) : (
-              visits.map((visit) => {
+              filteredVisits.map((visit) => {
                 const isSelected = selectedId === visit.id
                 const isDimmed = visit.status === 'billed' || visit.status === 'cancelled'
                 const time = visit.createdAt
@@ -123,7 +162,8 @@ export function ReceptionQueuePage() {
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setSelectedId(isSelected ? null : visit.id) }}
                     className={cn(
-                      'w-full grid grid-cols-[72px_1fr_1fr_1fr_100px_60px] gap-3 px-5 py-3 text-left border-b border-border-base transition-colors',
+                      'w-full grid gap-3 px-5 py-3 text-left border-b border-border-base transition-colors',
+                      COLS,
                       isSelected
                         ? 'bg-surface-2 border-l-2 border-l-primary'
                         : 'hover:bg-surface',
@@ -144,6 +184,9 @@ export function ReceptionQueuePage() {
                     <span className="text-[12px] text-muted truncate">{visit.ownerName}</span>
                     <span className="text-[12px] text-muted truncate">{visit.doctorName}</span>
                     <StatusBadge status={visit.status} />
+                    <span className="text-[11px] font-semibold text-muted truncate">
+                      {visit.paymentMethod ? PAYMENT_METHOD_LABELS[visit.paymentMethod] : '—'}
+                    </span>
                     <span className="text-[11px] text-muted tabular-nums">{time}</span>
                   </button>
                 )
@@ -160,6 +203,7 @@ export function ReceptionQueuePage() {
               visit={toCompletedVisit(selectedVisit)}
               clinicId={clinicId}
               branchId={branchId}
+              canEditPaymentMethod
               onToast={(msg) => setToast(msg)}
             />
           </div>

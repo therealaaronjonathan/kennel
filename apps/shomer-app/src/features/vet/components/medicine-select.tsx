@@ -16,6 +16,27 @@ export interface PrescriptionEntry {
   isCustom: boolean
 }
 
+export interface MedicineEntryErrors {
+  noTiming?: boolean
+  badQty?: boolean
+  badDays?: boolean
+}
+
+export function entryErrors(entry: PrescriptionEntry): MedicineEntryErrors {
+  const noTiming = !entry.morning && !entry.afternoon && !entry.evening && !entry.night
+  const qtyNum = parseFloat(entry.quantity)
+  const badQty = !entry.quantity || Number.isNaN(qtyNum) || qtyNum <= 0
+  const badDays = !entry.days || entry.days < 1
+  return { noTiming, badQty, badDays }
+}
+
+export function entryHasError(entry: PrescriptionEntry): boolean {
+  const e = entryErrors(entry)
+  return !!(e.noTiming || e.badQty || e.badDays)
+}
+
+export const MEDICINE_ENTRY_DOM_ID = (i: number) => `medicine-entry-${i}`
+
 const TABLET_OPTIONS = [
   { value: '1', label: 'Full' },
   { value: '1/2', label: 'Half' },
@@ -36,6 +57,8 @@ interface MedicineSelectProps {
   onChange: (selected: PrescriptionEntry[]) => void
   items: ClinicMedicine[]
   loading: boolean
+  /** When true, invalid entries render with error styling and helper text. */
+  showErrors?: boolean
 }
 
 const TIMINGS = [
@@ -45,7 +68,7 @@ const TIMINGS = [
   { key: 'night' as const, label: 'Night' },
 ]
 
-export function MedicineSelect({ selected, onChange, items, loading }: MedicineSelectProps) {
+export function MedicineSelect({ selected, onChange, items, loading, showErrors = false }: MedicineSelectProps) {
   const [filter, setFilter] = useState('')
 
   const selectedNames = new Set(selected.map((s) => s.name.toLowerCase()))
@@ -88,8 +111,19 @@ export function MedicineSelect({ selected, onChange, items, loading }: MedicineS
   return (
     <div className="space-y-2">
       {/* Selected medicines */}
-      {selected.map((entry, i) => (
-        <div key={i} className="rounded-[4px] border border-border-base bg-surface overflow-hidden">
+      {selected.map((entry, i) => {
+        const errs = showErrors ? entryErrors(entry) : {}
+        const cardHasError = !!(errs.noTiming || errs.badQty || errs.badDays)
+
+        return (
+        <div
+          key={i}
+          id={MEDICINE_ENTRY_DOM_ID(i)}
+          className={cn(
+            'rounded-[4px] border bg-surface overflow-hidden transition-colors',
+            cardHasError ? 'border-danger' : 'border-border-base',
+          )}
+        >
 
           {/* Header: name + type badge + remove */}
           <div className="flex items-center justify-between px-3 py-2 border-b border-border-base">
@@ -109,7 +143,12 @@ export function MedicineSelect({ selected, onChange, items, loading }: MedicineS
           </div>
 
           {/* Timing — full-width toggle buttons */}
-          <div className="grid grid-cols-4 border-b border-border-base">
+          <div
+            className={cn(
+              'grid grid-cols-4 border-b',
+              errs.noTiming ? 'border-danger/40 bg-danger/5' : 'border-border-base',
+            )}
+          >
             {TIMINGS.map(({ key, label }, idx) => (
               <button
                 key={key}
@@ -127,6 +166,11 @@ export function MedicineSelect({ selected, onChange, items, loading }: MedicineS
               </button>
             ))}
           </div>
+          {errs.noTiming && (
+            <p className="px-3 py-1.5 text-[11px] font-semibold text-danger bg-danger/5 border-b border-border-base">
+              Pick at least one timing.
+            </p>
+          )}
 
           {/* Quantity + Duration — side by side */}
           <div className="grid grid-cols-2 divide-x divide-border-base">
@@ -137,7 +181,10 @@ export function MedicineSelect({ selected, onChange, items, loading }: MedicineS
                 <select
                   value={entry.quantity}
                   onChange={(e) => updateEntry(i, { quantity: e.target.value })}
-                  className="flex-1 min-w-0 rounded-[3px] border border-border-base bg-surface-2 px-2 py-1 text-[12px] text-foreground focus:border-primary focus:outline-none"
+                  className={cn(
+                    'flex-1 min-w-0 rounded-[3px] border bg-surface-2 px-2 py-1 text-[12px] text-foreground focus:outline-none',
+                    errs.badQty ? 'border-danger focus:border-danger' : 'border-border-base focus:border-primary',
+                  )}
                 >
                   {TABLET_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -147,7 +194,10 @@ export function MedicineSelect({ selected, onChange, items, loading }: MedicineS
                 <select
                   value={entry.quantity}
                   onChange={(e) => updateEntry(i, { quantity: e.target.value })}
-                  className="flex-1 min-w-0 rounded-[3px] border border-border-base bg-surface-2 px-2 py-1 text-[12px] text-foreground focus:border-primary focus:outline-none"
+                  className={cn(
+                    'flex-1 min-w-0 rounded-[3px] border bg-surface-2 px-2 py-1 text-[12px] text-foreground focus:outline-none',
+                    errs.badQty ? 'border-danger focus:border-danger' : 'border-border-base focus:border-primary',
+                  )}
                 >
                   {SYRUP_ML_OPTIONS.map((ml) => (
                     <option key={ml} value={String(ml)}>{ml} ml</option>
@@ -161,7 +211,10 @@ export function MedicineSelect({ selected, onChange, items, loading }: MedicineS
                     step={0.1}
                     value={entry.quantity}
                     onChange={(e) => updateEntry(i, { quantity: e.target.value })}
-                    className="w-14 rounded-[3px] border border-border-base bg-surface-2 px-2 py-1 text-[12px] text-foreground text-center focus:border-primary focus:outline-none"
+                    className={cn(
+                      'w-14 rounded-[3px] border bg-surface-2 px-2 py-1 text-[12px] text-foreground text-center focus:outline-none',
+                      errs.badQty ? 'border-danger focus:border-danger' : 'border-border-base focus:border-primary',
+                    )}
                   />
                   <span className="text-[11px] text-muted">ml</span>
                 </div>
@@ -182,14 +235,28 @@ export function MedicineSelect({ selected, onChange, items, loading }: MedicineS
                 onBlur={() => {
                   if (!entry.days || entry.days < 1) updateEntry(i, { days: 1 })
                 }}
-                className="w-14 rounded-[3px] border border-border-base bg-surface-2 px-2 py-1 text-[12px] text-foreground text-center focus:border-primary focus:outline-none"
+                className={cn(
+                  'w-14 rounded-[3px] border bg-surface-2 px-2 py-1 text-[12px] text-foreground text-center focus:outline-none',
+                  errs.badDays ? 'border-danger focus:border-danger' : 'border-border-base focus:border-primary',
+                )}
               />
               <span className="text-[11px] font-medium text-muted">days</span>
             </div>
           </div>
 
+          {(errs.badQty || errs.badDays) && (
+            <p className="px-3 py-1.5 text-[11px] font-semibold text-danger bg-danger/5 border-t border-border-base">
+              {errs.badQty && errs.badDays
+                ? 'Enter a valid quantity and number of days.'
+                : errs.badQty
+                  ? 'Enter a valid quantity.'
+                  : 'Enter a valid number of days.'}
+            </p>
+          )}
+
         </div>
-      ))}
+        )
+      })}
 
       {/* Search input */}
       <input

@@ -1,6 +1,18 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { AlertTriangle, ChevronDown, ChevronUp, PhoneCall, PauseCircle } from 'lucide-react'
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  PhoneCall,
+  PauseCircle,
+  History,
+  Pill,
+  Syringe,
+  Stethoscope,
+  Receipt,
+  Wallet,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useVisitDetail } from '../services/use-visit-detail'
 import { useClinicDiagnoses } from '../services/use-clinic-diagnoses'
@@ -11,9 +23,16 @@ import { markVisitInProgress } from '../services/mark-in-progress'
 import { pauseVisit } from '../services/pause-visit'
 import { addClinicDiagnosis } from '@/features/settings/services/clinic-lists-service'
 import { DiagnosisSelect, type DiagnosisEntry } from './diagnosis-select'
-import { MedicineSelect, type PrescriptionEntry } from './medicine-select'
+import {
+  MedicineSelect,
+  entryHasError,
+  MEDICINE_ENTRY_DOM_ID,
+  type PrescriptionEntry,
+} from './medicine-select'
 import { ServicesSelect, type ServiceEntry } from '@/components/blocks/services-select'
 import { formatInr } from '@/lib/utils'
+import { PAYMENT_METHOD_LABELS } from '@/features/checkout/services/complete-billing'
+import { EarlierVisitsModal } from './earlier-visits-modal'
 import type { VetQueueEntry } from '../services/use-vet-queue'
 
 interface ConsultationViewProps {
@@ -30,6 +49,77 @@ const SPECIES_LABEL: Record<string, string> = {
   bird: 'Bird',
   rabbit: 'Rabbit',
   other: 'Other',
+}
+
+function formatDateLong(yyyymmdd: string): string {
+  if (!yyyymmdd) return ''
+  const [y, m, d] = yyyymmdd.split('-').map(Number)
+  if (!y || !m || !d) return yyyymmdd
+  return new Date(y, m - 1, d).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
+function formatRelative(yyyymmdd: string): string {
+  if (!yyyymmdd) return ''
+  const [y, m, d] = yyyymmdd.split('-').map(Number)
+  if (!y || !m || !d) return ''
+  const past = new Date(y, m - 1, d)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  past.setHours(0, 0, 0, 0)
+  const diffDays = Math.round((today.getTime() - past.getTime()) / 86_400_000)
+  if (diffDays <= 0) return 'today'
+  if (diffDays === 1) return 'yesterday'
+  if (diffDays < 7) return `${diffDays} days ago`
+  if (diffDays < 30) {
+    const w = Math.round(diffDays / 7)
+    return `${w} week${w === 1 ? '' : 's'} ago`
+  }
+  if (diffDays < 365) {
+    const mo = Math.round(diffDays / 30)
+    return `${mo} month${mo === 1 ? '' : 's'} ago`
+  }
+  const yrs = Math.round(diffDays / 365)
+  return `${yrs} year${yrs === 1 ? '' : 's'} ago`
+}
+
+function isOverdue(yyyymmdd: string | undefined): boolean {
+  if (!yyyymmdd) return false
+  const [y, m, d] = yyyymmdd.split('-').map(Number)
+  if (!y || !m || !d) return false
+  const target = new Date(y, m - 1, d)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  target.setHours(0, 0, 0, 0)
+  return target.getTime() < today.getTime()
+}
+
+function formatTimingDays(m: {
+  morning: boolean; afternoon: boolean; evening: boolean; night: boolean; days: number
+}): string {
+  const times = [
+    m.morning && 'Morning',
+    m.afternoon && 'Afternoon',
+    m.evening && 'Evening',
+    m.night && 'Night',
+  ].filter(Boolean) as string[]
+  const timing = times.length ? times.join(' · ') : 'As prescribed'
+  return `${timing} · ${m.days} day${m.days !== 1 ? 's' : ''}`
+}
+
+function formatDose(type?: string, quantity?: string): string | null {
+  if (!quantity) return null
+  if (type === 'tablet') {
+    if (quantity === '1') return 'Full tablet'
+    if (quantity === '1/2') return 'Half tablet'
+    return `${quantity} tablet`
+  }
+  if (type === 'syrup') return `${quantity} ml`
+  if (type === 'other') return `${quantity} ml`
+  return quantity
 }
 
 export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onCompleted }: ConsultationViewProps) {
@@ -57,6 +147,39 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
   const [vaccineBatch, setVaccineBatch] = useState('')
   const [vaccineNextDue, setVaccineNextDue] = useState('')
   const [vaccineNextYear, setVaccineNextYear] = useState(false)
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false)
+  const [showEarlierVisits, setShowEarlierVisits] = useState(false)
+  const [lastVisitOpen, setLastVisitOpen] = useState(false)
+
+  // ── Validation ────────────────────────────────────────────────────────────
+  const vaccineInUse = !!(vaccineName || vaccineBatch || vaccineNextDue)
+  const vaccineNameMissing = vaccineInUse && !vaccineName
+  const vaccineNextDueMissing = vaccineInUse && !vaccineNextDue
+
+  function findFirstErrorElementId(): string | null {
+    const idx = selectedMedicines.findIndex(entryHasError)
+    if (idx >= 0) return MEDICINE_ENTRY_DOM_ID(idx)
+    if (vaccineNameMissing) return 'vaccine-name-field'
+    if (vaccineNextDueMissing) return 'vaccine-next-due-field'
+    return null
+  }
+
+  function handleMarkCompleteClick() {
+    setAttemptedSubmit(true)
+    const firstErrorId = findFirstErrorElementId()
+    if (firstErrorId) {
+      // Open vaccine accordion if the error is in there
+      if (firstErrorId.startsWith('vaccine-')) setVaccineOpen(true)
+      // Defer scroll so the accordion has time to expand if needed
+      setTimeout(() => {
+        document
+          .getElementById(firstErrorId)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 30)
+      return
+    }
+    setShowConfirm(true)
+  }
 
   function toggleNextYear(on: boolean) {
     setVaccineNextYear(on)
@@ -141,9 +264,15 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
                   · {SPECIES_LABEL[pet.species] ?? pet.species}
                   {pet.breed ? `, ${pet.breed}` : ''}
                   {pet.age ? `, ${pet.age}y` : ''}
+                  {pet.color ? `, ${pet.color}` : ''}
                 </span>
               )}
             </p>
+            {pet?.microchipNumber && (
+              <p className="text-[11px] text-muted mt-0.5">
+                Chip: <span className="font-semibold text-foreground/80">{pet.microchipNumber}</span>
+              </p>
+            )}
             <p className="text-[12px] text-muted">
               {entry.ownerName}
               {owner?.phone && (
@@ -251,73 +380,260 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
           <>
             {/* Last visit summary */}
             {lastVisit ? (
-              <div className="rounded-[4px] border border-border-base bg-surface-2 p-4 space-y-3">
-                <p className={cn(labelClass)}>Last Visit · {lastVisit.date}</p>
+              <div className="rounded-[4px] border border-border-base bg-surface-2 overflow-hidden">
+                {/* Header strip — always visible, toggles body */}
+                <button
+                  type="button"
+                  onClick={() => setLastVisitOpen((v) => !v)}
+                  aria-expanded={lastVisitOpen}
+                  className={cn(
+                    'w-full text-left px-4 py-3 bg-surface hover:bg-surface-2/50 transition-colors',
+                    lastVisitOpen && 'border-b border-border-base',
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="min-w-0">
+                      <p className={cn(labelClass, 'mb-1')}>Last Visit</p>
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <span className="text-[14px] font-bold text-foreground">
+                          {formatDateLong(lastVisit.date)}
+                        </span>
+                        <span className="text-[11px] text-muted">
+                          {formatRelative(lastVisit.date)}
+                        </span>
+                      </div>
+                      {lastVisit.doctorName && (
+                        <p className="mt-0.5 text-[12px] text-muted">
+                          Seen by <span className="font-semibold text-foreground/80">{lastVisit.doctorName}</span>
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      {lastVisit.isEmergency && (
+                        <span className="flex items-center gap-1 rounded-[3px] bg-danger/10 border border-danger/25 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-danger">
+                          <AlertTriangle size={9} />
+                          ER
+                        </span>
+                      )}
+                      {lastVisit.service && (
+                        <span className="rounded-[3px] bg-primary/10 border border-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-primary">
+                          {lastVisit.service}
+                        </span>
+                      )}
+                      {lastVisitOpen ? (
+                        <ChevronUp size={14} className="text-muted ml-1" />
+                      ) : (
+                        <ChevronDown size={14} className="text-muted ml-1" />
+                      )}
+                    </div>
+                  </div>
+                  {!lastVisitOpen && (
+                    <p className="mt-1.5 text-[11px] text-muted">
+                      Tap to view diagnosis, medicines, vaccines, services and payment.
+                    </p>
+                  )}
+                </button>
 
-                {/* Diagnoses */}
-                {lastVisit.diagnoses.length > 0 && (
-                  <div className="space-y-1.5">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted">Diagnosis</p>
-                    {lastVisit.diagnoses.map((d, i) => (
-                      <div key={i}>
-                        <p className="text-[13px] font-semibold text-foreground">{d.name}</p>
-                        {d.notes && (
-                          <p className="text-[12px] text-muted leading-relaxed">{d.notes}</p>
+                {lastVisitOpen && (
+                <div className="p-4 space-y-4">
+                  {/* Complaints */}
+                  {(lastVisit.complaints.length > 0 || lastVisit.otherComplaintText) && (
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted">
+                        Complaints
+                      </p>
+                      {lastVisit.complaints.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {lastVisit.complaints.map((c) => (
+                            <span
+                              key={c}
+                              className="rounded-[3px] bg-surface border border-border-base px-2 py-0.5 text-[11px] font-medium text-muted"
+                            >
+                              {c}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {lastVisit.otherComplaintText && (
+                        <p className="text-[12px] text-foreground italic leading-relaxed">
+                          "{lastVisit.otherComplaintText}"
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Diagnoses */}
+                  {lastVisit.diagnoses.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted">
+                        <Stethoscope size={10} />
+                        Diagnosis
+                      </p>
+                      <div className="space-y-1.5">
+                        {lastVisit.diagnoses.map((d, i) => (
+                          <div key={i} className="rounded-[4px] bg-surface px-3 py-2">
+                            <p className="text-[13px] font-semibold text-foreground">{d.name}</p>
+                            {d.notes && (
+                              <p className="mt-0.5 text-[12px] text-muted leading-relaxed">{d.notes}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Doctor's notes */}
+                  {lastVisit.consultationNotes && (
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted">
+                        Doctor's Notes
+                      </p>
+                      <p className="text-[12px] text-foreground leading-relaxed whitespace-pre-wrap">
+                        {lastVisit.consultationNotes}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Medicines */}
+                  {lastVisit.medicines.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted">
+                        <Pill size={10} />
+                        Medicines
+                      </p>
+                      <div className="space-y-1.5">
+                        {lastVisit.medicines.map((m, i) => {
+                          const dose = formatDose(m.type, m.quantity)
+                          return (
+                            <div key={i} className="rounded-[4px] bg-surface px-3 py-2">
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <p className="text-[13px] font-semibold text-foreground">{m.name}</p>
+                                {m.type && (
+                                  <span className="rounded-[3px] bg-surface-2 border border-border-base px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.05em] text-muted">
+                                    {m.type}
+                                  </span>
+                                )}
+                              </div>
+                              {dose && (
+                                <p className="mt-0.5 text-[11px] font-semibold text-foreground/80">{dose}</p>
+                              )}
+                              <p className="mt-0.5 text-[11px] text-muted">{formatTimingDays(m)}</p>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Vaccines */}
+                  {lastVisit.vaccines.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted">
+                        <Syringe size={10} />
+                        Vaccines
+                      </p>
+                      <div className="space-y-1.5">
+                        {lastVisit.vaccines.map((v, i) => {
+                          const overdue = isOverdue(v.nextDue)
+                          return (
+                            <div key={i} className="rounded-[4px] bg-surface px-3 py-2 space-y-0.5">
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <p className="text-[13px] font-semibold text-foreground">{v.name}</p>
+                                {overdue && (
+                                  <span className="rounded-[3px] bg-danger/10 border border-danger/25 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-danger">
+                                    Overdue
+                                  </span>
+                                )}
+                              </div>
+                              {v.batch && <p className="text-[11px] text-muted">Batch: {v.batch}</p>}
+                              {v.nextDue && (
+                                <p className={cn('text-[11px]', overdue ? 'font-semibold text-danger' : 'text-muted')}>
+                                  Next due: {formatDateLong(v.nextDue)}
+                                </p>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Services */}
+                  {lastVisit.services.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted">
+                        <Receipt size={10} />
+                        Services Availed
+                      </p>
+                      <div className="rounded-[4px] border border-border-base overflow-hidden divide-y divide-border-base">
+                        {lastVisit.services.map((s, i) => (
+                          <div key={i} className="flex items-center justify-between px-3 py-2 bg-surface gap-2">
+                            <span className="flex-1 text-[12px] text-foreground truncate">{s.name}</span>
+                            {(s.quantity ?? 1) > 1 && (
+                              <span className="text-[11px] text-muted tabular-nums">{s.quantity}×</span>
+                            )}
+                            <span className="text-[12px] font-semibold text-foreground tabular-nums">
+                              {formatInr((s.quantity ?? 1) * s.price)}
+                            </span>
+                          </div>
+                        ))}
+                        {typeof lastVisit.billAmount === 'number' && (
+                          <div className="flex items-center justify-between px-3 py-2 bg-surface-2">
+                            <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted">
+                              Total
+                            </span>
+                            <span className="text-[13px] font-bold text-primary tabular-nums">
+                              {formatInr(lastVisit.billAmount)}
+                            </span>
+                          </div>
                         )}
                       </div>
-                    ))}
-                  </div>
-                )}
+                    </div>
+                  )}
 
-                {/* Consultation notes */}
-                {lastVisit.consultationNotes && (
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted">Doctor's Notes</p>
-                    <p className="text-[12px] text-foreground leading-relaxed whitespace-pre-wrap">
-                      {lastVisit.consultationNotes}
-                    </p>
-                  </div>
-                )}
-
-                {/* Medicines */}
-                {lastVisit.medicines.length > 0 && (
-                  <div className="space-y-1.5">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted">Medicines</p>
-                    {lastVisit.medicines.map((m, i) => {
-                      const times = [
-                        m.morning && 'Morning',
-                        m.afternoon && 'Afternoon',
-                        m.evening && 'Evening',
-                        m.night && 'Night',
-                      ].filter(Boolean).join(' · ')
-                      return (
-                        <div key={i}>
-                          <p className="text-[13px] font-semibold text-foreground">{m.name}</p>
-                          <p className="text-[11px] text-muted">
-                            {times || 'As prescribed'} · {m.days} day{m.days !== 1 ? 's' : ''}
-                          </p>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-
-                {/* Vaccines */}
-                {lastVisit.vaccines.length > 0 && (
-                  <div className="space-y-1.5">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted">Vaccines</p>
-                    {lastVisit.vaccines.map((v, i) => (
-                      <div key={i} className="rounded-[4px] bg-surface px-3 py-2 space-y-0.5">
-                        <p className="text-[12px] font-semibold text-foreground">{v.name}</p>
-                        {v.batch && <p className="text-[11px] text-muted">Batch: {v.batch}</p>}
-                        {v.nextDue && <p className="text-[11px] text-muted">Next due: {v.nextDue}</p>}
+                  {/* Payment */}
+                  {lastVisit.paymentMethod && (
+                    <div className="space-y-1.5">
+                      <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted">
+                        <Wallet size={10} />
+                        Payment
+                      </p>
+                      <div className="rounded-[4px] bg-surface px-3 py-2 flex items-center justify-between">
+                        <span className="text-[12px] font-semibold text-foreground">
+                          {PAYMENT_METHOD_LABELS[lastVisit.paymentMethod]}
+                        </span>
+                        {lastVisit.status === 'billed' && (
+                          <span className="rounded-[3px] bg-success/10 border border-success/25 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-success">
+                            Billed
+                          </span>
+                        )}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  )}
+
+                  {/* Empty state */}
+                  {lastVisit.diagnoses.length === 0 &&
+                    !lastVisit.consultationNotes &&
+                    lastVisit.medicines.length === 0 &&
+                    lastVisit.vaccines.length === 0 &&
+                    lastVisit.services.length === 0 &&
+                    lastVisit.complaints.length === 0 && (
+                      <p className="text-[12px] text-muted">No notes recorded for last visit.</p>
+                    )}
+                </div>
                 )}
 
-                {lastVisit.diagnoses.length === 0 && !lastVisit.consultationNotes && lastVisit.medicines.length === 0 && lastVisit.vaccines.length === 0 && (
-                  <p className="text-[12px] text-muted">No notes recorded for last visit.</p>
+                {/* Earlier visits link — only visible when expanded */}
+                {lastVisitOpen && detail && detail.earlierVisits.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowEarlierVisits(true)}
+                    className="w-full flex items-center justify-center gap-2 border-t border-border-base bg-surface px-4 py-2.5 text-[12px] font-semibold text-primary hover:bg-surface-2 transition-colors"
+                  >
+                    <History size={12} />
+                    View {detail.earlierVisits.length} earlier visit
+                    {detail.earlierVisits.length === 1 ? '' : 's'}
+                  </button>
                 )}
               </div>
             ) : (
@@ -328,6 +644,7 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
                     {SPECIES_LABEL[pet.species] ?? pet.species}
                     {pet.breed ? ` · ${pet.breed}` : ''}
                     {pet.age ? ` · ${pet.age} years old` : ''}
+                    {pet.color ? ` · ${pet.color}` : ''}
                     {pet.microchipNumber ? ` · Chip: ${pet.microchipNumber}` : ''}
                   </p>
                 )}
@@ -367,6 +684,7 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
                   onChange={setSelectedMedicines}
                   items={medicines}
                   loading={medLoading}
+                  showErrors={attemptedSubmit}
                 />
               </div>
 
@@ -386,31 +704,40 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
                 </button>
                 {vaccineOpen && (
                   <div className="px-4 pb-4 pt-3 bg-surface space-y-3">
-                    <div className="space-y-1.5">
+                    <div id="vaccine-name-field" className="space-y-1.5 scroll-mt-4">
                       <label className={labelClass}>Vaccine Name</label>
                       <select
                         value={vaccineName}
                         onChange={(e) => setVaccineName(e.target.value)}
-                        className={cn(inputClass, 'resize-none')}
+                        className={cn(
+                          inputClass,
+                          'resize-none',
+                          attemptedSubmit && vaccineNameMissing && 'border-danger focus:border-danger',
+                        )}
                       >
                         <option value="">Select a vaccine…</option>
                         {vaccinationServices.map((v) => (
                           <option key={v.id} value={v.name}>{v.name}</option>
                         ))}
                       </select>
+                      {attemptedSubmit && vaccineNameMissing && (
+                        <p className="text-[11px] font-semibold text-danger">
+                          Pick a vaccine or clear the other vaccine fields.
+                        </p>
+                      )}
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <label className={labelClass}>Batch No.</label>
                         <input
                           type="text"
-                          placeholder="Batch number"
+                          placeholder="Batch number (optional)"
                           value={vaccineBatch}
                           onChange={(e) => setVaccineBatch(e.target.value)}
                           className={cn(inputClass, 'resize-none')}
                         />
                       </div>
-                      <div className="space-y-1.5">
+                      <div id="vaccine-next-due-field" className="space-y-1.5 scroll-mt-4">
                         <div className="flex items-center justify-between">
                           <label className={labelClass}>Next Due</label>
                           <button
@@ -438,8 +765,18 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
                             setVaccineNextYear(false)
                           }}
                           disabled={vaccineNextYear}
-                          className={cn(inputClass, 'resize-none', vaccineNextYear && 'opacity-60 cursor-not-allowed')}
+                          className={cn(
+                            inputClass,
+                            'resize-none',
+                            vaccineNextYear && 'opacity-60 cursor-not-allowed',
+                            attemptedSubmit && vaccineNextDueMissing && 'border-danger focus:border-danger',
+                          )}
                         />
+                        {attemptedSubmit && vaccineNextDueMissing && (
+                          <p className="text-[11px] font-semibold text-danger">
+                            Set the next due date or clear the other vaccine fields.
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -468,7 +805,7 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
           <button
             type="button"
             disabled={complete.isPending || pause.isPending}
-            onClick={() => setShowConfirm(true)}
+            onClick={handleMarkCompleteClick}
             className="w-full rounded-[4px] bg-primary px-4 py-[10px] text-[13px] font-semibold text-white hover:opacity-85 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Mark Complete
@@ -483,6 +820,17 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
             {pause.isPending ? 'Pausing…' : 'Pause — Patient Not Present'}
           </button>
         </div>
+      )}
+
+      {/* Earlier visits modal */}
+      {detail && (
+        <EarlierVisitsModal
+          open={showEarlierVisits}
+          visits={detail.earlierVisits}
+          clinicId={clinicId}
+          branchId={branchId}
+          onClose={() => setShowEarlierVisits(false)}
+        />
       )}
 
       {/* Confirmation dialog */}

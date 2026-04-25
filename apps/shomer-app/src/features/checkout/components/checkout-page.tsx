@@ -4,12 +4,13 @@ import { useMutation } from '@tanstack/react-query'
 import { cn, formatInr } from '@/lib/utils'
 import { WhatsAppShareModal } from '@/components/blocks/whatsapp-share-modal'
 import { ServicesSelect, type ServiceEntry } from '@/components/blocks/services-select'
+import { PaymentMethodDialog } from '@/components/blocks/payment-method-dialog'
 import { useClinic } from '@/features/clinic'
 import { useCompletedVisits, type CompletedVisit } from '@/features/dashboard/services/use-completed-visits'
 import { useClinicName } from '@/features/clinic/hooks/use-clinic-name'
 import { useClinicServices } from '@/features/vet/services/use-clinic-services'
 import { useCheckoutDetail } from '../services/use-checkout-detail'
-import { completeBilling } from '../services/complete-billing'
+import { completeBilling, type PaymentMethod } from '../services/complete-billing'
 
 // ── Toast ────────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,7 @@ function CheckoutPanel({ visit, clinicId, branchId, clinicName, onBilled, onToas
 
   const [editedServices, setEditedServices] = useState<ServiceEntry[]>(() => normalize(visit.services))
   const [showWAModal, setShowWAModal] = useState(false)
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false)
 
   // Reset services when a different visit is opened
   useEffect(() => {
@@ -70,8 +72,10 @@ function CheckoutPanel({ visit, clinicId, branchId, clinicName, onBilled, onToas
   const billTotal = editedServices.reduce((s, item) => s + item.quantity * item.price, 0)
 
   const billing = useMutation({
-    mutationFn: () => completeBilling(clinicId, branchId, visit.id, editedServices),
+    mutationFn: (method: PaymentMethod) =>
+      completeBilling(clinicId, branchId, visit.id, editedServices, method),
     onSuccess: () => {
+      setShowPaymentDialog(false)
       onToast(`${visit.petName} billed — ${formatInr(billTotal)}`)
       onBilled()
     },
@@ -204,11 +208,6 @@ function CheckoutPanel({ visit, clinicId, branchId, clinicName, onBilled, onToas
 
       {/* Footer actions */}
       <div className="border-t border-border-base px-6 py-4 flex-shrink-0">
-        {billing.isError && (
-          <p className="mb-3 text-[12px] text-danger">
-            {(billing.error as Error)?.message ?? 'Failed to save. Try again.'}
-          </p>
-        )}
         <div className="flex gap-3">
           <button
             type="button"
@@ -226,8 +225,8 @@ function CheckoutPanel({ visit, clinicId, branchId, clinicName, onBilled, onToas
           </button>
           <button
             type="button"
-            disabled={billing.isPending}
-            onClick={() => billing.mutate()}
+            disabled={billing.isPending || editedServices.length === 0}
+            onClick={() => setShowPaymentDialog(true)}
             className="flex-1 flex items-center justify-center gap-2 rounded-[4px] bg-primary px-4 py-[9px] text-[13px] font-semibold text-white hover:opacity-85 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <CheckCheck size={13} />
@@ -235,6 +234,21 @@ function CheckoutPanel({ visit, clinicId, branchId, clinicName, onBilled, onToas
           </button>
         </div>
       </div>
+
+      <PaymentMethodDialog
+        open={showPaymentDialog}
+        total={billTotal}
+        loading={billing.isPending}
+        error={
+          billing.isError
+            ? (billing.error as Error)?.message ?? 'Failed to save. Try again.'
+            : null
+        }
+        onCancel={() => {
+          if (!billing.isPending) setShowPaymentDialog(false)
+        }}
+        onConfirm={(method) => billing.mutate(method)}
+      />
 
       {detail?.ownerPhone && (
         <WhatsAppShareModal

@@ -70,7 +70,7 @@ export function VetPage() {
 
   async function handleSignOut() {
     await signOut(auth)
-    navigate('/login')
+    navigate('/login', { replace: true })
   }
   const selectedEntry = entries.find((e) => e.id === selectedId) ?? null
 

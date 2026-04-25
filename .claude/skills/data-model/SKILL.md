@@ -280,6 +280,8 @@ interface Visit {
   consultationNotes?: string
   services?: ServiceLineItem[]
   billAmount?: number     // sum of (quantity × price) for all service line items
+  paymentMethod?: 'cash' | 'card' | 'upi'  // captured at billing; required to mark a visit billed
+  billedAt?: Timestamp    // set when status transitions to 'billed'; preserved when paymentMethod is later edited
   createdAt: Timestamp
   updatedAt: Timestamp
 }
@@ -293,6 +295,8 @@ interface ServiceLineItem {
 ```
 
 **Status flow**: `waiting` → `in-progress` → `completed` → `billed`
+
+**Billing**: a visit can only transition from `completed` → `billed` once a `paymentMethod` is captured. Receptionists may edit `paymentMethod` after billing from the queue; `billedAt` is preserved on edits.
 
 ### Diagnosis (Visit subcollection)
 

@@ -96,7 +96,7 @@ const router = createBrowserRouter([
       {
         path: 'reception',
         element: (
-          <AuthGuard>
+          <AuthGuard allowedRoles={['receptionist', 'admin', 'owner']}>
             <ReceptionistLayout />
           </AuthGuard>
         ),
@@ -114,7 +114,7 @@ const router = createBrowserRouter([
       {
         path: 'vet',
         element: (
-          <AuthGuard>
+          <AuthGuard allowedRoles={['doctor']}>
             {suspense(<VetPage />)}
           </AuthGuard>
         ),
@@ -124,7 +124,7 @@ const router = createBrowserRouter([
       {
         path: 'admin',
         element: (
-          <AuthGuard>
+          <AuthGuard allowedRoles={['admin', 'owner']}>
             {suspense(<AdminLayout />)}
           </AuthGuard>
         ),

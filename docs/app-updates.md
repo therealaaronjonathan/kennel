@@ -1,7 +1,7 @@
 # Shomer App — Current State
 
-## Version: 1.1.8
-## Last Updated: 2026-04-18
+## Version: 1.1.9
+## Last Updated: 2026-04-26
 
 ---
 
@@ -12,7 +12,9 @@
   - Search by Pet Name (required), Breed (optional), and Owner Phone (optional — +91 prefix hardcoded, exact 10-digit match)
   - Phone entered in search pre-fills the phone field when registering a new patient
 - Queue view (all visits today, real-time updates); right panel shows Diagnosis → Consultation Notes → Prescription → Vaccines → Services; click empty space to close panel
-- Check-out/billing (mark billed, WhatsApp summary link with clinic name and production URL)
+- Queue page also has a Payment column and a header filter (All / Cash / Card / UPI) — receptionist can tally end-of-day collections per method
+- Billed visits expose a "Change payment method" action in the right panel (preserves `billedAt`)
+- Check-out/billing: tapping **Mark Billed** opens a confirm dialog showing the bill total and a Cash / Card / UPI picker (no default — must tap one); confirming writes `paymentMethod`, `billAmount`, `billedAt`, and `status: 'billed'` in a single update. WhatsApp summary link with clinic name and production URL.
 - Home dashboard (stats, doctor cards, recent completions)
 - Settings (duty roster, catalogs: diagnoses, medicines, services)
 - Branch name shown in sidebar (static label or dropdown switcher for multi-branch)
@@ -27,14 +29,18 @@
   - Syrup quantity: ml dropdown (2.5 → 30 ml)
   - Injection quantity: free numeric input (ml/units)
   - Vaccine "Next Year" toggle — auto-sets next due date to same day next year
-- Mark in-progress / pause / complete
-- Last visit summary
+- Mark in-progress / pause / complete — Mark Complete now validates the form before opening the confirmation: each prescribed medicine must have at least one timing, a valid quantity, and `days ≥ 1`; vaccine accordion is treated as "in use" if any field is filled, in which case Name and Next Due become required (Batch stays optional). Invalid fields render with red borders + helper text, and the button smooth-scrolls to the first offending field.
+- Last visit panel — collapsed by default, with an always-visible header showing date, relative time ("2 weeks ago"), doctor name, and ER / visit-type pills. Tapping expands a structured body: Complaints, Diagnosis, Doctor's Notes, Medicines (with type pill + dose + timing/days), Vaccines (with red **Overdue** pill when next-due is past), Services + Total, Payment method. A "View N earlier visits" modal lists every prior visit; tapping a row opens that visit's summary page in a new tab.
+- Pet header now also surfaces color and microchip number when recorded.
 - Branch name shown in top bar (switcher for multi-branch)
 
 ### Auth & Routing
 - Email + password login
 - Google OAuth
 - Role-based routing: doctor → `/vet`, receptionist → `/reception/home`, admin/owner → `/admin`
+- **Role-based route guards**: `/admin` is locked to admin/owner, `/vet` to doctor, `/reception/*` to receptionist/admin/owner. Mismatched roles are redirected to their own role's home (no leaked access via stale URLs).
+- **Back-button trap on authenticated routes**: a popstate listener re-pushes the current URL so the browser back button can't escape the app once signed in.
+- Logout flows use `navigate('/login', { replace: true })` so the previous authenticated route is cleared from history (no role-bleed when a different user logs in next).
 - Multi-branch selector screen (`/select-branch`) for staff assigned to multiple branches
 - Legacy staff docs without `role` field handled gracefully
 
@@ -76,6 +82,7 @@
 
 | Version | Date       | Changes |
 |---------|------------|---------|
+| 1.1.9   | 2026-04-26 | **Auth hardening**: `AuthGuard` accepts `allowedRoles`; `/admin` locked to admin/owner, `/vet` to doctor, `/reception/*` to receptionist/admin/owner — mismatched roles bounce to their own home. Back-button trap added on authenticated routes (popstate listener re-pushes current URL so the browser back button can't escape the app). All four logout sites switched to `navigate('/login', { replace: true })` to clear stale authenticated routes from history (fixes the "log out as admin → log in as doctor → press back → land on `/admin`" leak). **Payment method capture**: new `PaymentMethod` type (`'cash' \| 'card' \| 'upi'`) with `completeBilling(...)` and `updatePaymentMethod(...)` services. Reusable `PaymentMethodDialog` (confirm-and-pay mode shows bill total + 3-button picker; change-only mode just picks a method, no default selection — must tap one). Receptionist Checkout: **Mark Billed** opens the dialog; on confirm, `paymentMethod`, `services`, `billAmount`, `billedAt`, and `status: 'billed'` are written in a single Firestore update. Reception Queue: new Payment column + header filter (All / Cash / Card / UPI). Billed visits opened from the queue surface a **Change payment method** action that updates `paymentMethod` while preserving `billedAt`. Visit doc gains `paymentMethod` and `billedAt` fields (data-model SKILL updated). Bug fix: `completeBilling` now factors `quantity` into `billAmount` (previously summed `s.price` only — diverged from the on-screen total). **Vet consultation validation**: each prescribed medicine must have at least one timing, valid quantity, and `days ≥ 1`; vaccine accordion is "in use" once any field is filled, requiring Name + Next Due (Batch optional). Invalid fields render red border + helper text on Mark Complete; the button smooth-scrolls to the first offending field (auto-expands the vaccine accordion if the error is inside). **Last Visit panel overhaul**: critical bug fixed in `useVisitDetail` where `where('status', '==', 'completed')` was hiding all *billed* past visits — the query now includes both `'completed'` and `'billed'`. Panel is collapsible: header strip (date + relative time + ER pill + visit-type pill + doctor name) is always visible; body expands to a structured layout — Complaints (chips + free-text), Diagnosis cards, Doctor's Notes, Medicines (type pill + formatted dose + timing/days), Vaccines (red **Overdue** pill when next-due is past, long-form date), Services + Bill Total, Payment (with **Billed** badge). New "View N earlier visits" modal lists all prior visits (date, doctor, top complaint, ER/type pills, bill, payment); each row opens that visit's `/visit/:id/summary` page in a new tab. Pet header also surfaces color + microchip number when set. |
 | 1.1.8   | 2026-04-18 | Production URL fix: `VITE_APP_DOMAIN` renamed to `VITE_APP_BASE_URL` (full URL); `.env.production` now points to `https://shomer.app` so consultation summary links in WhatsApp messages use the correct production domain. WA message: "Thank you for choosing us" replaced with dynamic clinic name fetched from Firestore (`useClinicName` hook) — applies to both Queue/Dashboard and Checkout tabs. Staff listing fix: backend now writes non-doctor staff to `clinics/{clinicId}/staff/{uid}` subcollection on creation (in addition to root `staff/{uid}`); admin staff page reads from this subcollection and displays the list. Admin staff page simplified: role dropdown removed — staff created via this page are always Receptionist. Queue + Checkout right panel: consultation notes now shown as a separate section; vaccines split out from Prescription into their own section (Syringe icon); section order is Diagnosis → Consultation Notes → Prescription → Vaccines → Services. Clicking empty space in the left list on Queue or Checkout tabs now closes the right panel. `consultationNotes` added to `AllVisit` type and snapshot mapping so notes are available on the Queue tab. |
 | 1.1.7   | 2026-04-12 | App: added `VITE_API_URL` to `.env.production` pointing to Railway backend — production builds were falling back to `localhost:3000`, silently breaking all admin invite actions. Rebuilt and redeployed to Firebase Hosting. |
 | 1.1.6   | 2026-04-12 | Backend: fixed Firestore connectivity on Railway — switched to REST transport (`preferRest: true`) as gRPC fails silently in Railway's container environment. Added `ignoreUndefinedProperties: true` to prevent crashes on optional fields (e.g. `phone`). Added try/catch around Firestore call in auth middleware so failures return a clean 500 instead of an unhandled crash. Backend `POST /api/admin/users` end-to-end verified in production. |

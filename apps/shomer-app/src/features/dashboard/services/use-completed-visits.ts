@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { collection, onSnapshot, query, where, type Timestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import type { PaymentMethod } from '@/features/checkout/services/complete-billing'
 
 export interface ServiceEntry {
   serviceId: string
@@ -23,6 +24,7 @@ export interface CompletedVisit {
   isEmergency?: boolean
   services?: ServiceEntry[]
   billAmount?: number
+  paymentMethod?: PaymentMethod
   consultationNotes?: string
   status?: string
   completedAt: Timestamp | null
@@ -72,6 +74,7 @@ export function useCompletedVisits(clinicId: string | null, branchId: string | n
             isEmergency: data.isEmergency ?? false,
             services: data.services ?? undefined,
             billAmount: data.billAmount ?? undefined,
+            paymentMethod: (data.paymentMethod as PaymentMethod | undefined) ?? undefined,
             consultationNotes: data.consultationNotes ?? undefined,
             completedAt: data.updatedAt ?? null,
             date: data.date ?? today,

@@ -45,7 +45,7 @@ export function DashboardPage() {
 
   async function handleSignOut() {
     await signOut(auth)
-    navigate('/login')
+    navigate('/login', { replace: true })
   }
 
   const selectedVisit: CompletedVisit | null = visits.find((v) => v.id === selectedId) ?? null
