@@ -118,9 +118,11 @@ export function EarlierVisitsModal({
                         {formatInr(v.billAmount)}
                       </span>
                     )}
-                    {v.paymentMethod && (
+                    {v.payments && v.payments.length > 0 && (
                       <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted">
-                        {PAYMENT_METHOD_LABELS[v.paymentMethod]}
+                        {v.payments.length > 1
+                          ? 'Split'
+                          : PAYMENT_METHOD_LABELS[v.payments[0].method]}
                       </span>
                     )}
                     <ExternalLink size={11} className={cn('text-muted', 'mt-0.5')} />

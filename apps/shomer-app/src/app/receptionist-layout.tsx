@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { signOut } from 'firebase/auth'
-import { LayoutDashboard, UserPlus, LayoutList, ReceiptText, Settings, LogOut, Stethoscope, CheckCircle, X } from 'lucide-react'
+import { LayoutDashboard, UserPlus, LayoutList, ReceiptText, History, Settings, LogOut, Stethoscope, CheckCircle, X } from 'lucide-react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { auth } from '@/lib/firebase'
@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { to: '/reception/checkin', label: 'Check-in', Icon: UserPlus },
   { to: '/reception/queue', label: 'Queue', Icon: LayoutList },
   { to: '/reception/checkout', label: 'Check-out', Icon: ReceiptText, badge: true },
+  { to: '/reception/history', label: 'History', Icon: History },
   { to: '/reception/settings', label: 'Settings', Icon: Settings },
 ]
 

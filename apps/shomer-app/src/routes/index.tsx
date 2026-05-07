@@ -22,6 +22,9 @@ const ReceptionQueuePage = lazy(() =>
 const CheckoutPage = lazy(() =>
   import('@/features/checkout/components/checkout-page').then(m => ({ default: m.CheckoutPage }))
 )
+const VisitHistoryPage = lazy(() =>
+  import('@/features/visit-history/components/visit-history-page').then(m => ({ default: m.VisitHistoryPage }))
+)
 const SettingsPage = lazy(() =>
   import('@/features/settings/components/settings-page').then(m => ({ default: m.SettingsPage }))
 )
@@ -106,6 +109,7 @@ const router = createBrowserRouter([
           { path: 'checkin',  element: suspense(<CheckinPage />) },
           { path: 'queue',    element: suspense(<ReceptionQueuePage />) },
           { path: 'checkout', element: suspense(<CheckoutPage />) },
+          { path: 'history',  element: suspense(<VisitHistoryPage />) },
           { path: 'settings', element: suspense(<SettingsPage />) },
         ],
       },

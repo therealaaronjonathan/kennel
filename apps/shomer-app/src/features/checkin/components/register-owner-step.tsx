@@ -43,7 +43,7 @@ export function RegisterOwnerStep({
     species: prefillSpecies,
     speciesName: '',
     breed: prefillBreed,
-    age: '',
+    dateOfBirth: '',
     color: '',
     microchipNumber: '',
   })
@@ -339,15 +339,14 @@ export function RegisterOwnerStep({
 
           <div className="space-y-1">
             <label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
-              Age (years)
+              Date of Birth
             </label>
             <input
-              type="number"
-              min="0"
-              placeholder="e.g. 3"
-              value={form.age}
-              onChange={(e) => set('age', e.target.value)}
-              className={inputClass('age')}
+              type="date"
+              max={new Date().toISOString().split('T')[0]}
+              value={form.dateOfBirth}
+              onChange={(e) => set('dateOfBirth', e.target.value)}
+              className={inputClass('dateOfBirth')}
             />
           </div>
         </div>

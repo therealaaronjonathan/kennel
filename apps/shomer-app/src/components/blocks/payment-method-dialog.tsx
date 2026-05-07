@@ -24,6 +24,8 @@ interface PaymentMethodDialogProps {
   error?: string | null
   onCancel: () => void
   onConfirm: (method: PaymentMethod) => void
+  /** When provided, renders a "Split or partial payment" link that calls this. */
+  onSwitchToSplit?: () => void
 }
 
 export function PaymentMethodDialog({
@@ -34,6 +36,7 @@ export function PaymentMethodDialog({
   error = null,
   onCancel,
   onConfirm,
+  onSwitchToSplit,
 }: PaymentMethodDialogProps) {
   const [selected, setSelected] = useState<PaymentMethod | null>(null)
   const isBilling = total !== undefined
@@ -124,6 +127,17 @@ export function PaymentMethodDialog({
               <AlertTriangle size={12} className="text-danger flex-shrink-0 mt-0.5" />
               <p className="text-[11px] text-danger">{error}</p>
             </div>
+          )}
+
+          {onSwitchToSplit && (
+            <button
+              type="button"
+              onClick={onSwitchToSplit}
+              disabled={loading}
+              className="w-full text-center text-[11px] font-semibold text-primary hover:opacity-85 transition-opacity disabled:opacity-50"
+            >
+              Split or partial payment →
+            </button>
           )}
         </div>
 

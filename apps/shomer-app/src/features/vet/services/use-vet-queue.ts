@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import type { ConsultationDraft } from './consultation-draft'
 
 export interface VetQueueEntry {
   id: string
@@ -18,6 +19,7 @@ export interface VetQueueEntry {
   otherComplaintText?: string
   groomingServices?: string[]
   date: string
+  consultationDraft?: ConsultationDraft
 }
 
 function getTodayString(): string {

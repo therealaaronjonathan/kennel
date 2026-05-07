@@ -10,6 +10,13 @@ import {
   type PaymentMethod,
 } from '@/features/checkout/services/complete-billing'
 
+const PAYMENT_FILTER_LABELS: Record<PaymentMethod | 'split', string> = {
+  cash: 'Cash',
+  card: 'Card',
+  upi: 'UPI',
+  split: 'Split',
+}
+
 const STATUS_CONFIG: Record<string, { dot: string; label: string; text: string }> = {
   waiting:       { dot: 'bg-muted opacity-50',  label: 'Waiting',     text: 'text-muted' },
   'in-progress': { dot: 'bg-warning',           label: 'In Progress', text: 'text-warning' },
@@ -25,6 +32,34 @@ function StatusBadge({ status }: { status: string }) {
       <span className={cn('h-1.5 w-1.5 rounded-full flex-shrink-0', cfg.dot)} />
       <span className={cn('text-[11px] font-semibold', cfg.text)}>{cfg.label}</span>
     </div>
+  )
+}
+
+function PaymentCell({ visit }: { visit: AllVisit }) {
+  const payments = visit.payments ?? []
+  const paid = visit.amountPaid ?? 0
+  const total = visit.billAmount ?? 0
+  const isPartial = visit.status !== 'billed' && paid > 0 && paid < total
+
+  if (isPartial) {
+    return (
+      <span className="text-[11px] font-semibold text-warning truncate">Partial</span>
+    )
+  }
+  if (payments.length === 0) {
+    return <span className="text-[11px] font-semibold text-muted truncate">—</span>
+  }
+  if (payments.length === 1) {
+    return (
+      <span className="text-[11px] font-semibold text-muted truncate">
+        {PAYMENT_METHOD_LABELS[payments[0].method]}
+      </span>
+    )
+  }
+  return (
+    <span className="rounded-[3px] bg-primary/10 border border-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-primary self-center w-fit">
+      Split
+    </span>
   )
 }
 
@@ -59,15 +94,16 @@ function toCompletedVisit(v: AllVisit): CompletedVisit {
     status: v.status,
     services: v.services,
     billAmount: v.billAmount,
-    paymentMethod: v.paymentMethod,
+    payments: v.payments,
+    amountPaid: v.amountPaid,
     completedAt: null,
     date: '',
   }
 }
 
-type PaymentFilter = 'all' | PaymentMethod
+type PaymentFilter = 'all' | PaymentMethod | 'split'
 
-const COLS = 'grid-cols-[72px_1fr_1fr_1fr_100px_84px_60px]'
+const COLS = 'grid-cols-[72px_1fr_1fr_1fr_100px_96px_60px]'
 
 export function ReceptionQueuePage() {
   const { clinicId, branchId } = useClinic()
@@ -78,7 +114,12 @@ export function ReceptionQueuePage() {
 
   const filteredVisits = useMemo(() => {
     if (paymentFilter === 'all') return visits
-    return visits.filter((v) => v.paymentMethod === paymentFilter)
+    if (paymentFilter === 'split') {
+      return visits.filter((v) => (v.payments?.length ?? 0) > 1)
+    }
+    return visits.filter((v) =>
+      (v.payments ?? []).some((p) => p.method === paymentFilter && p.amount > 0),
+    )
   }, [visits, paymentFilter])
 
   const selectedVisit = filteredVisits.find((v) => v.id === selectedId) ?? null
@@ -105,6 +146,7 @@ export function ReceptionQueuePage() {
               <option value="cash">Cash</option>
               <option value="card">Card</option>
               <option value="upi">UPI</option>
+              <option value="split">Split</option>
             </select>
           </label>
           {!loading && (
@@ -145,7 +187,9 @@ export function ReceptionQueuePage() {
                 <p className="text-[13px] font-semibold text-muted">
                   {paymentFilter === 'all'
                     ? 'No visits today yet'
-                    : `No visits paid by ${PAYMENT_METHOD_LABELS[paymentFilter]}`}
+                    : paymentFilter === 'split'
+                      ? 'No split-payment visits today'
+                      : `No visits paid by ${PAYMENT_FILTER_LABELS[paymentFilter]}`}
                 </p>
               </div>
             ) : (
@@ -184,9 +228,7 @@ export function ReceptionQueuePage() {
                     <span className="text-[12px] text-muted truncate">{visit.ownerName}</span>
                     <span className="text-[12px] text-muted truncate">{visit.doctorName}</span>
                     <StatusBadge status={visit.status} />
-                    <span className="text-[11px] font-semibold text-muted truncate">
-                      {visit.paymentMethod ? PAYMENT_METHOD_LABELS[visit.paymentMethod] : '—'}
-                    </span>
+                    <PaymentCell visit={visit} />
                     <span className="text-[11px] text-muted tabular-nums">{time}</span>
                   </button>
                 )

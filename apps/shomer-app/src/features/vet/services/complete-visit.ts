@@ -1,4 +1,4 @@
-import { addDoc, collection, doc, serverTimestamp, writeBatch } from 'firebase/firestore'
+import { addDoc, collection, deleteField, doc, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 
 export interface DiagnosisEntry {
@@ -52,6 +52,7 @@ export async function completeVisit(
     services: form.services,
     billAmount,
     consultationNotes: form.consultationNotes,
+    consultationDraft: deleteField(),
     updatedAt: serverTimestamp(),
   })
   await batch.commit()

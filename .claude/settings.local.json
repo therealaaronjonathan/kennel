@@ -78,7 +78,9 @@
       "Bash(curl:*)",
       "Bash(pkill -f \"bun run src/index.ts\")",
       "Bash(pkill -f \"bun.*index\")",
-      "Bash(cat /Users/aj/Shomer/kennel/apps/shomer-app/.env*)"
+      "Bash(cat /Users/aj/Shomer/kennel/apps/shomer-app/.env*)",
+      "Bash(rm /Users/aj/Shomer/kennel/import-report.json /tmp/seed-test/seed-pet-owners.js)",
+      "Bash(rmdir /tmp/seed-test)"
     ]
   }
 }

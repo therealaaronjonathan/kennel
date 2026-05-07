@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react'
 import { collection, onSnapshot, query, where, type Timestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import type { PaymentMethod, ServiceEntry } from '@/features/checkout/services/complete-billing'
+import {
+  sumPayments,
+  type PaymentEntry,
+  type ServiceEntry,
+} from '@/features/checkout/services/complete-billing'
 
 export interface AllVisit {
   id: string
@@ -19,7 +23,8 @@ export interface AllVisit {
   consultationNotes?: string
   services?: ServiceEntry[]
   billAmount?: number
-  paymentMethod?: PaymentMethod
+  payments?: PaymentEntry[]
+  amountPaid?: number
   createdAt: Timestamp | null
 }
 
@@ -50,6 +55,9 @@ export function useAllVisits(clinicId: string | null, branchId: string | null) {
       (snap) => {
         const all = snap.docs.map((d) => {
           const data = d.data()
+          const payments = Array.isArray(data.payments)
+            ? (data.payments as PaymentEntry[])
+            : undefined
           return {
             id: d.id,
             tokenDisplay: data.tokenDisplay ?? '',
@@ -66,7 +74,11 @@ export function useAllVisits(clinicId: string | null, branchId: string | null) {
             consultationNotes: data.consultationNotes ?? undefined,
             services: data.services ?? undefined,
             billAmount: data.billAmount ?? undefined,
-            paymentMethod: (data.paymentMethod as PaymentMethod | undefined) ?? undefined,
+            payments,
+            amountPaid:
+              typeof data.amountPaid === 'number'
+                ? data.amountPaid
+                : sumPayments(payments),
             createdAt: data.createdAt ?? null,
           } as AllVisit
         })

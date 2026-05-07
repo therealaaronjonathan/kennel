@@ -2,13 +2,13 @@ import { useState } from 'react'
 import { MessageCircle, ExternalLink, Pill, Syringe, Pencil } from 'lucide-react'
 import { useMutation } from '@tanstack/react-query'
 import { useClinicName } from '@/features/clinic/hooks/use-clinic-name'
-import { cn } from '@/lib/utils'
+import { cn, formatInr } from '@/lib/utils'
 import { WhatsAppShareModal } from '@/components/blocks/whatsapp-share-modal'
-import { PaymentMethodDialog } from '@/components/blocks/payment-method-dialog'
+import { SplitPaymentDialog } from '@/components/blocks/split-payment-dialog'
 import {
   PAYMENT_METHOD_LABELS,
-  updatePaymentMethod,
-  type PaymentMethod,
+  updatePayments,
+  type PaymentEntry,
 } from '@/features/checkout/services/complete-billing'
 import { useVisitBill } from '../services/use-visit-bill'
 import type { CompletedVisit } from '../services/use-completed-visits'
@@ -23,10 +23,6 @@ interface VisitDetailPanelProps {
 }
 
 const labelClass = 'text-[10px] font-semibold uppercase tracking-[0.08em] text-muted'
-
-function formatInr(amount: number): string {
-  return `₹${amount.toLocaleString('en-IN')}`
-}
 
 function formatDosage(m: {
   morning: boolean
@@ -59,11 +55,11 @@ export function VisitDetailPanel({
   const clinicName = useClinicName(clinicId)
 
   const updateMethod = useMutation({
-    mutationFn: (method: PaymentMethod) =>
-      updatePaymentMethod(clinicId, branchId, visit.id, method),
-    onSuccess: (_data, method) => {
+    mutationFn: (payments: PaymentEntry[]) =>
+      updatePayments(clinicId, branchId, visit.id, payments, visit.billAmount ?? 0),
+    onSuccess: () => {
       setShowPaymentDialog(false)
-      onToast(`Payment method updated — ${PAYMENT_METHOD_LABELS[method]}`)
+      onToast('Payment updated')
     },
   })
 
@@ -230,29 +226,72 @@ export function VisitDetailPanel({
               </div>
             )}
 
-            {/* Payment method — shown for billed visits */}
-            {visit.status === 'billed' && (
-              <div className="space-y-1.5">
-                <p className={labelClass}>Payment Method</p>
-                <div className="flex items-center justify-between rounded-[4px] border border-border-base bg-surface px-3 py-2.5">
-                  <span className="text-[13px] font-semibold text-foreground">
-                    {visit.paymentMethod
-                      ? PAYMENT_METHOD_LABELS[visit.paymentMethod]
-                      : 'Not recorded'}
-                  </span>
-                  {canEditPaymentMethod && (
-                    <button
-                      type="button"
-                      onClick={() => setShowPaymentDialog(true)}
-                      className="flex items-center gap-1.5 text-[12px] font-semibold text-primary hover:opacity-85 transition-opacity"
-                    >
-                      <Pencil size={11} />
-                      Change
-                    </button>
-                  )}
+            {/* Payments — shown when billed or when any payment recorded */}
+            {(() => {
+              const payments = visit.payments ?? []
+              const paid = visit.amountPaid ?? 0
+              const total = visit.billAmount ?? 0
+              const isBilled = visit.status === 'billed'
+              const isPartial = !isBilled && paid > 0 && paid < total
+              if (!isBilled && !isPartial) return null
+
+              return (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <p className={labelClass}>
+                      {isBilled
+                        ? payments.length > 1
+                          ? 'Payment Split'
+                          : 'Payment Method'
+                        : 'Partial Payment'}
+                    </p>
+                    {isBilled && canEditPaymentMethod && (
+                      <button
+                        type="button"
+                        onClick={() => setShowPaymentDialog(true)}
+                        className="flex items-center gap-1.5 text-[12px] font-semibold text-primary hover:opacity-85 transition-opacity"
+                      >
+                        <Pencil size={11} />
+                        Change
+                      </button>
+                    )}
+                  </div>
+                  <div className="rounded-[4px] border border-border-base bg-surface overflow-hidden">
+                    {payments.length === 0 ? (
+                      <div className="px-3 py-2.5 text-[13px] font-semibold text-muted">
+                        Not recorded
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-border-base">
+                        {payments.map((p, i) => (
+                          <div
+                            key={i}
+                            className="flex items-center justify-between px-3 py-2"
+                          >
+                            <span className="text-[13px] font-semibold text-foreground">
+                              {PAYMENT_METHOD_LABELS[p.method]}
+                            </span>
+                            <span className="text-[13px] font-semibold text-foreground tabular-nums">
+                              {formatInr(p.amount)}
+                            </span>
+                          </div>
+                        ))}
+                        {isPartial && (
+                          <div className="flex items-center justify-between px-3 py-2 bg-warning/5">
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-warning">
+                              Remaining
+                            </span>
+                            <span className="text-[13px] font-bold text-warning tabular-nums">
+                              {formatInr(total - paid)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              )
+            })()}
 
             {!hasDiagnosis && !hasMedicines && !hasVaccines && !hasServices && !consultationNotes && (
               <p className="text-[12px] text-muted">No consultation details recorded.</p>
@@ -304,9 +343,11 @@ export function VisitDetailPanel({
       )}
 
       {canEditPaymentMethod && (
-        <PaymentMethodDialog
+        <SplitPaymentDialog
           open={showPaymentDialog}
-          currentMethod={visit.paymentMethod}
+          mode="edit"
+          total={visit.billAmount ?? 0}
+          initialPayments={visit.payments}
           loading={updateMethod.isPending}
           error={
             updateMethod.isError
@@ -316,7 +357,7 @@ export function VisitDetailPanel({
           onCancel={() => {
             if (!updateMethod.isPending) setShowPaymentDialog(false)
           }}
-          onConfirm={(method) => updateMethod.mutate(method)}
+          onConfirm={(payments) => updateMethod.mutate(payments)}
         />
       )}
     </div>

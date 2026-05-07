@@ -1,0 +1,406 @@
+{
+  "env": "test",
+  "clinicId": "4e39sBFhsXgLP4urYWI3",
+  "dryRun": false,
+  "totals": {
+    "excelRows": 1373,
+    "skipped": 6,
+    "plannedOwners": 1142,
+    "plannedPets": 1367,
+    "ownersCreated": 1141,
+    "ownersExisting": 1,
+    "petsCreated": 1350,
+    "petsExisting": 17
+  },
+  "skippedRows": [
+    {
+      "rowIndex": 587,
+      "petName": "KRISHNA",
+      "ownerName": "GUGAAN",
+      "contactNo": "99523330303",
+      "reason": "phone has 11 digits (expected 10)"
+    },
+    {
+      "rowIndex": 899,
+      "petName": "PAX",
+      "ownerName": "PREETHA",
+      "contactNo": "87544712716",
+      "reason": "phone has 11 digits (expected 10)"
+    },
+    {
+      "rowIndex": 980,
+      "petName": "RESCUE CAT",
+      "ownerName": "DEEPAK",
+      "contactNo": "76394834321",
+      "reason": "phone has 11 digits (expected 10)"
+    },
+    {
+      "rowIndex": 1039,
+      "petName": "ROONEY",
+      "ownerName": "K",
+      "contactNo": "893923599",
+      "reason": "phone has 9 digits (expected 10)"
+    },
+    {
+      "rowIndex": 1104,
+      "petName": "SHAMBU",
+      "ownerName": "VV SUNDARAM",
+      "contactNo": "984661528",
+      "reason": "phone has 9 digits (expected 10)"
+    },
+    {
+      "rowIndex": 1371,
+      "petName": "ZOLO",
+      "ownerName": "PRABU",
+      "contactNo": "84282933382",
+      "reason": "phone has 11 digits (expected 10)"
+    }
+  ],
+  "nameConflicts": [
+    {
+      "phone": "+919003118877",
+      "picked": "SAURAV",
+      "alternates": [
+        "JAYAPRAKASH"
+      ]
+    },
+    {
+      "phone": "+919952057197",
+      "picked": "PRIYA",
+      "alternates": [
+        "PRIYA VINAY"
+      ]
+    },
+    {
+      "phone": "+919944433695",
+      "picked": "ALLEN",
+      "alternates": [
+        "ALLEN RICH"
+      ]
+    },
+    {
+      "phone": "+919677233110",
+      "picked": "ALLAN",
+      "alternates": [
+        "ALBEN"
+      ]
+    },
+    {
+      "phone": "+918056078909",
+      "picked": "DEIVANAI",
+      "alternates": [
+        "DR.ARUN PARI",
+        "ADYAR HOSPITAL"
+      ]
+    },
+    {
+      "phone": "+919884644477",
+      "picked": "NAVEEN",
+      "alternates": [
+        "NEVEN"
+      ]
+    },
+    {
+      "phone": "+919789096142",
+      "picked": "SWETHA",
+      "alternates": [
+        "SHWETHA"
+      ]
+    },
+    {
+      "phone": "+917401085849",
+      "picked": "VINEETH",
+      "alternates": [
+        "VINITH"
+      ]
+    },
+    {
+      "phone": "+919677021585",
+      "picked": "ANUSHKA",
+      "alternates": [
+        "BASHOO OWNER"
+      ]
+    },
+    {
+      "phone": "+918939476459",
+      "picked": "SELVI",
+      "alternates": [
+        "NIRUPAMA"
+      ]
+    },
+    {
+      "phone": "+919840520841",
+      "picked": "VAISHNAVI",
+      "alternates": [
+        "MRIDULA"
+      ]
+    },
+    {
+      "phone": "+919884708123",
+      "picked": "RAJA LAKSHMI",
+      "alternates": [
+        "M.RAJYA LAKIHMI"
+      ]
+    },
+    {
+      "phone": "+919790924295",
+      "picked": "K ALBIN MANOHAR",
+      "alternates": [
+        "ALWIN MANOHAR"
+      ]
+    },
+    {
+      "phone": "+919884741111",
+      "picked": "BRINDHA",
+      "alternates": [
+        "SWARNA BRINDA"
+      ]
+    },
+    {
+      "phone": "+917397424246",
+      "picked": "RASHMI",
+      "alternates": [
+        "RASHMI BALAKRISHNAN"
+      ]
+    },
+    {
+      "phone": "+917338803052",
+      "picked": "MAHALAKSHMI",
+      "alternates": [
+        "DHANALAKSHMI"
+      ]
+    },
+    {
+      "phone": "+919094237501",
+      "picked": "SANJAY",
+      "alternates": [
+        "ABDUL"
+      ]
+    },
+    {
+      "phone": "+919849313316",
+      "picked": "DR. G.KUMAR",
+      "alternates": [
+        "DR.G.KUMAR"
+      ]
+    },
+    {
+      "phone": "+919940131720",
+      "picked": "CHRIS",
+      "alternates": [
+        "MARIA"
+      ]
+    },
+    {
+      "phone": "+919600045760",
+      "picked": "MRS.PILLAI",
+      "alternates": [
+        "MANASA PILLAI"
+      ]
+    },
+    {
+      "phone": "+917305172585",
+      "picked": "KRISHAN",
+      "alternates": [
+        "SANTHOSH"
+      ]
+    },
+    {
+      "phone": "+919150101555",
+      "picked": "TARA",
+      "alternates": [
+        "ARUNVATHI",
+        "ARUNDATHI"
+      ]
+    },
+    {
+      "phone": "+917358443660",
+      "picked": "G.S.SOUMMIYA",
+      "alternates": [
+        "SOUMIYA"
+      ]
+    },
+    {
+      "phone": "+919884511596",
+      "picked": "KATYAYANI",
+      "alternates": [
+        "KATHYAAYANI"
+      ]
+    },
+    {
+      "phone": "+919884846891",
+      "picked": "ALOR KUMAR SINGH",
+      "alternates": [
+        "RAJESHWARI DHOR SINGH"
+      ]
+    },
+    {
+      "phone": "+919884000729",
+      "picked": "SWAGATH",
+      "alternates": [
+        "SWAAGAT"
+      ]
+    },
+    {
+      "phone": "+919791019202",
+      "picked": "KOUSHIK",
+      "alternates": [
+        "MEGHANA"
+      ]
+    },
+    {
+      "phone": "+919600033133",
+      "picked": "AR.PREM",
+      "alternates": [
+        "PREM"
+      ]
+    },
+    {
+      "phone": "+919789875041",
+      "picked": "KARTHIK",
+      "alternates": [
+        "KARTHICK"
+      ]
+    },
+    {
+      "phone": "+919791067914",
+      "picked": "PONSRIJA",
+      "alternates": [
+        "SRIJA"
+      ]
+    },
+    {
+      "phone": "+919003011415",
+      "picked": "AMIRUDA",
+      "alternates": [
+        "AMUTHAPRIYA"
+      ]
+    },
+    {
+      "phone": "+916383029633",
+      "picked": "DURGA DEVI",
+      "alternates": [
+        "DHURGA DEVI"
+      ]
+    },
+    {
+      "phone": "+918825610681",
+      "picked": "ISHWARIYA",
+      "alternates": [
+        "AISHWARYA"
+      ]
+    },
+    {
+      "phone": "+918886365050",
+      "picked": "LIKITHA RAMESH",
+      "alternates": [
+        "RAMESH SRINIVASAN"
+      ]
+    },
+    {
+      "phone": "+919841672042",
+      "picked": "ADITYA",
+      "alternates": [
+        "VANDHANA"
+      ]
+    },
+    {
+      "phone": "+919940035960",
+      "picked": "ANIRUDH",
+      "alternates": [
+        "ANIRUDH KRISHNA"
+      ]
+    },
+    {
+      "phone": "+919841091091",
+      "picked": "SITRAMAN",
+      "alternates": [
+        "SITAR RAM"
+      ]
+    },
+    {
+      "phone": "+917550052311",
+      "picked": "SAIF",
+      "alternates": [
+        "JASPER"
+      ]
+    },
+    {
+      "phone": "+919840068118",
+      "picked": "NITHYA (AKASHYA OENER)",
+      "alternates": [
+        "NITHYA(AKSHYA HOMES)"
+      ]
+    },
+    {
+      "phone": "+919840054570",
+      "picked": "MUTHU PERUMAL",
+      "alternates": [
+        "MUTHU"
+      ]
+    },
+    {
+      "phone": "+918056225760",
+      "picked": "MR. ADITI",
+      "alternates": [
+        "MS. ADITI"
+      ]
+    },
+    {
+      "phone": "+917299942756",
+      "picked": "VIKASH",
+      "alternates": [
+        "VIKASH PANDEY"
+      ]
+    },
+    {
+      "phone": "+917358165554",
+      "picked": "UDHAYANIDHI STALIN",
+      "alternates": [
+        "UDHAYANIDHI"
+      ]
+    },
+    {
+      "phone": "+917708888270",
+      "picked": "CAPT. DEEPA IYER",
+      "alternates": [
+        "DEEPA"
+      ]
+    },
+    {
+      "phone": "+919790894391",
+      "picked": "SARAVANAN",
+      "alternates": [
+        "SARAVANAN."
+      ]
+    },
+    {
+      "phone": "+919841023032",
+      "picked": "MUTHUKUMARAN",
+      "alternates": [
+        "MUTHU KUMAR"
+      ]
+    },
+    {
+      "phone": "+917506785446",
+      "picked": "BHARTTI",
+      "alternates": [
+        "BHARTI"
+      ]
+    },
+    {
+      "phone": "+918754449131",
+      "picked": "SOUNDHARYA",
+      "alternates": [
+        "SOWNDARIYA"
+      ]
+    },
+    {
+      "phone": "+919841033640",
+      "picked": "JAGADEESH",
+      "alternates": [
+        "JEGATHISHAN"
+      ]
+    }
+  ]
+}

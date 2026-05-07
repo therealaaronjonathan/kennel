@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import {
   AlertTriangle,
@@ -14,6 +14,7 @@ import {
   Wallet,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getAgeFromDob } from '@/lib/age'
 import { useVisitDetail } from '../services/use-visit-detail'
 import { useClinicDiagnoses } from '../services/use-clinic-diagnoses'
 import { useClinicMedicines } from '../services/use-clinic-medicines'
@@ -21,6 +22,10 @@ import { useClinicServices } from '../services/use-clinic-services'
 import { completeVisit, type ConsultationFormData } from '../services/complete-visit'
 import { markVisitInProgress } from '../services/mark-in-progress'
 import { pauseVisit } from '../services/pause-visit'
+import {
+  saveConsultationDraft,
+  type ConsultationDraftInput,
+} from '../services/consultation-draft'
 import { addClinicDiagnosis } from '@/features/settings/services/clinic-lists-service'
 import { DiagnosisSelect, type DiagnosisEntry } from './diagnosis-select'
 import {
@@ -137,15 +142,26 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
     (s) => s.serviceType?.toLowerCase() === 'vaccination',
   )
 
-  const [selectedDiagnoses, setSelectedDiagnoses] = useState<DiagnosisEntry[]>([])
-  const [consultationNotes, setConsultationNotes] = useState('')
-  const [selectedMedicines, setSelectedMedicines] = useState<PrescriptionEntry[]>([])
-  const [selectedServices, setSelectedServices] = useState<ServiceEntry[]>([])
+  // Rehydrate from saved draft on mount (component is keyed by entry.id, so
+  // switching patients remounts and re-reads the draft for that visit).
+  const draft = entry.consultationDraft
+  const [selectedDiagnoses, setSelectedDiagnoses] = useState<DiagnosisEntry[]>(
+    () => draft?.diagnoses ?? [],
+  )
+  const [consultationNotes, setConsultationNotes] = useState(
+    () => draft?.consultationNotes ?? '',
+  )
+  const [selectedMedicines, setSelectedMedicines] = useState<PrescriptionEntry[]>(
+    () => draft?.medicines ?? [],
+  )
+  const [selectedServices, setSelectedServices] = useState<ServiceEntry[]>(
+    () => draft?.services ?? [],
+  )
   const [showConfirm, setShowConfirm] = useState(false)
-  const [vaccineOpen, setVaccineOpen] = useState(false)
-  const [vaccineName, setVaccineName] = useState('')
-  const [vaccineBatch, setVaccineBatch] = useState('')
-  const [vaccineNextDue, setVaccineNextDue] = useState('')
+  const [vaccineOpen, setVaccineOpen] = useState(() => !!draft?.vaccineName)
+  const [vaccineName, setVaccineName] = useState(() => draft?.vaccineName ?? '')
+  const [vaccineBatch, setVaccineBatch] = useState(() => draft?.vaccineBatch ?? '')
+  const [vaccineNextDue, setVaccineNextDue] = useState(() => draft?.vaccineNextDue ?? '')
   const [vaccineNextYear, setVaccineNextYear] = useState(false)
   const [attemptedSubmit, setAttemptedSubmit] = useState(false)
   const [showEarlierVisits, setShowEarlierVisits] = useState(false)
@@ -196,9 +212,60 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
     mutationFn: () => markVisitInProgress(clinicId, branchId, entry.id),
   })
 
+  function buildDraft(): ConsultationDraftInput {
+    return {
+      diagnoses: selectedDiagnoses,
+      consultationNotes,
+      medicines: selectedMedicines,
+      services: selectedServices,
+      vaccineName,
+      vaccineBatch,
+      vaccineNextDue,
+    }
+  }
+
   const pause = useMutation({
-    mutationFn: () => pauseVisit(clinicId, branchId, entry.id),
+    mutationFn: () => pauseVisit(clinicId, branchId, entry.id, buildDraft()),
   })
+
+  // ── Background autosave ──────────────────────────────────────────────────
+  // Debounced 30s after the last edit. Silent — no UI. Skips the initial
+  // mount (so we never overwrite a fresh-loaded draft with empty initial
+  // state). Only runs while the visit is actively in-progress.
+  const skipNextAutosave = useRef(true)
+  useEffect(() => {
+    if (skipNextAutosave.current) {
+      skipNextAutosave.current = false
+      return
+    }
+    if (entry.status !== 'in-progress') return
+    const timer = window.setTimeout(() => {
+      saveConsultationDraft(clinicId, branchId, entry.id, {
+        diagnoses: selectedDiagnoses,
+        consultationNotes,
+        medicines: selectedMedicines,
+        services: selectedServices,
+        vaccineName,
+        vaccineBatch,
+        vaccineNextDue,
+      }).catch(() => {
+        // intentionally silent — autosave is best-effort
+      })
+    }, 30_000)
+    return () => clearTimeout(timer)
+  }, [
+    clinicId,
+    branchId,
+    entry.id,
+    entry.status,
+    selectedDiagnoses,
+    consultationNotes,
+    selectedMedicines,
+    selectedServices,
+    vaccineName,
+    vaccineBatch,
+    vaccineNextDue,
+  ])
 
   const complete = useMutation({
     mutationFn: () => {
@@ -259,14 +326,17 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
             </div>
             <p className="mt-0.5 text-[15px] font-bold text-foreground">
               {entry.petName}
-              {pet && (
-                <span className="ml-1.5 text-[12px] font-medium text-muted">
-                  · {SPECIES_LABEL[pet.species] ?? pet.species}
-                  {pet.breed ? `, ${pet.breed}` : ''}
-                  {pet.age ? `, ${pet.age}y` : ''}
-                  {pet.color ? `, ${pet.color}` : ''}
-                </span>
-              )}
+              {pet && (() => {
+                const ageLabel = getAgeFromDob(pet.dateOfBirth)
+                return (
+                  <span className="ml-1.5 text-[12px] font-medium text-muted">
+                    · {SPECIES_LABEL[pet.species] ?? pet.species}
+                    {pet.breed ? `, ${pet.breed}` : ''}
+                    {ageLabel ? `, ${ageLabel}` : ''}
+                    {pet.color ? `, ${pet.color}` : ''}
+                  </span>
+                )
+              })()}
             </p>
             {pet?.microchipNumber && (
               <p className="text-[11px] text-muted mt-0.5">
@@ -592,21 +662,30 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
                   )}
 
                   {/* Payment */}
-                  {lastVisit.paymentMethod && (
+                  {lastVisit.payments && lastVisit.payments.length > 0 && (
                     <div className="space-y-1.5">
                       <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted">
                         <Wallet size={10} />
                         Payment
                       </p>
-                      <div className="rounded-[4px] bg-surface px-3 py-2 flex items-center justify-between">
-                        <span className="text-[12px] font-semibold text-foreground">
-                          {PAYMENT_METHOD_LABELS[lastVisit.paymentMethod]}
-                        </span>
-                        {lastVisit.status === 'billed' && (
-                          <span className="rounded-[3px] bg-success/10 border border-success/25 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-success">
-                            Billed
-                          </span>
-                        )}
+                      <div className="rounded-[4px] bg-surface px-3 py-2 space-y-1">
+                        {lastVisit.payments.map((p, i) => (
+                          <div key={i} className="flex items-center justify-between">
+                            <span className="text-[12px] font-semibold text-foreground">
+                              {PAYMENT_METHOD_LABELS[p.method]}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[12px] font-semibold text-foreground tabular-nums">
+                                {formatInr(p.amount)}
+                              </span>
+                              {i === 0 && lastVisit.status === 'billed' && (
+                                <span className="rounded-[3px] bg-success/10 border border-success/25 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-success">
+                                  Billed
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -639,15 +718,18 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
             ) : (
               <div className="rounded-[4px] border border-border-base bg-surface px-4 py-3">
                 <p className={cn(labelClass, 'mb-1')}>New Patient</p>
-                {pet && (
-                  <p className="text-[12px] text-muted">
-                    {SPECIES_LABEL[pet.species] ?? pet.species}
-                    {pet.breed ? ` · ${pet.breed}` : ''}
-                    {pet.age ? ` · ${pet.age} years old` : ''}
-                    {pet.color ? ` · ${pet.color}` : ''}
-                    {pet.microchipNumber ? ` · Chip: ${pet.microchipNumber}` : ''}
-                  </p>
-                )}
+                {pet && (() => {
+                  const ageLabel = getAgeFromDob(pet.dateOfBirth)
+                  return (
+                    <p className="text-[12px] text-muted">
+                      {SPECIES_LABEL[pet.species] ?? pet.species}
+                      {pet.breed ? ` · ${pet.breed}` : ''}
+                      {ageLabel ? ` · ${ageLabel} old` : ''}
+                      {pet.color ? ` · ${pet.color}` : ''}
+                      {pet.microchipNumber ? ` · Chip: ${pet.microchipNumber}` : ''}
+                    </p>
+                  )
+                })()}
               </div>
             )}
 

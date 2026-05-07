@@ -5,12 +5,17 @@ import { cn, formatInr } from '@/lib/utils'
 import { WhatsAppShareModal } from '@/components/blocks/whatsapp-share-modal'
 import { ServicesSelect, type ServiceEntry } from '@/components/blocks/services-select'
 import { PaymentMethodDialog } from '@/components/blocks/payment-method-dialog'
+import { SplitPaymentDialog } from '@/components/blocks/split-payment-dialog'
 import { useClinic } from '@/features/clinic'
 import { useCompletedVisits, type CompletedVisit } from '@/features/dashboard/services/use-completed-visits'
 import { useClinicName } from '@/features/clinic/hooks/use-clinic-name'
 import { useClinicServices } from '@/features/vet/services/use-clinic-services'
 import { useCheckoutDetail } from '../services/use-checkout-detail'
-import { completeBilling, type PaymentMethod } from '../services/complete-billing'
+import {
+  recordPayments,
+  type PaymentEntry,
+  type PaymentMethod,
+} from '../services/complete-billing'
 
 // ── Toast ────────────────────────────────────────────────────────────────────
 
@@ -63,6 +68,7 @@ function CheckoutPanel({ visit, clinicId, branchId, clinicName, onBilled, onToas
   const [editedServices, setEditedServices] = useState<ServiceEntry[]>(() => normalize(visit.services))
   const [showWAModal, setShowWAModal] = useState(false)
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
+  const [showSplitDialog, setShowSplitDialog] = useState(false)
 
   // Reset services when a different visit is opened
   useEffect(() => {
@@ -70,16 +76,34 @@ function CheckoutPanel({ visit, clinicId, branchId, clinicName, onBilled, onToas
   }, [visit.id, visit.services])
 
   const billTotal = editedServices.reduce((s, item) => s + item.quantity * item.price, 0)
+  const existingPaid = visit.amountPaid ?? 0
+  const hasPartial = existingPaid > 0 && existingPaid < billTotal
 
   const billing = useMutation({
-    mutationFn: (method: PaymentMethod) =>
-      completeBilling(clinicId, branchId, visit.id, editedServices, method),
-    onSuccess: () => {
+    mutationFn: (payments: PaymentEntry[]) =>
+      recordPayments(clinicId, branchId, visit.id, editedServices, payments),
+    onSuccess: (_data, payments) => {
       setShowPaymentDialog(false)
-      onToast(`${visit.petName} billed — ${formatInr(billTotal)}`)
-      onBilled()
+      setShowSplitDialog(false)
+      const paid = payments.reduce((s, p) => s + p.amount, 0)
+      if (paid >= billTotal) {
+        onToast(`${visit.petName} billed — ${formatInr(billTotal)}`)
+        onBilled()
+      } else {
+        onToast(
+          `${visit.petName} partial — ${formatInr(paid)} of ${formatInr(billTotal)}`,
+        )
+      }
     },
   })
+
+  function confirmSingle(method: PaymentMethod) {
+    billing.mutate([{ method, amount: billTotal }])
+  }
+
+  function confirmSplit(payments: PaymentEntry[]) {
+    billing.mutate(payments)
+  }
 
   const baseUrl = import.meta.env.VITE_APP_BASE_URL ?? 'https://shomer-app-test.web.app'
   const summaryLink = `${baseUrl}/visit/${visit.id}/summary?clinicId=${clinicId}&branchId=${branchId}`
@@ -226,11 +250,14 @@ function CheckoutPanel({ visit, clinicId, branchId, clinicName, onBilled, onToas
           <button
             type="button"
             disabled={billing.isPending || editedServices.length === 0}
-            onClick={() => setShowPaymentDialog(true)}
+            onClick={() => {
+              if (hasPartial) setShowSplitDialog(true)
+              else setShowPaymentDialog(true)
+            }}
             className="flex-1 flex items-center justify-center gap-2 rounded-[4px] bg-primary px-4 py-[9px] text-[13px] font-semibold text-white hover:opacity-85 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <CheckCheck size={13} />
-            {billing.isPending ? 'Saving…' : 'Mark Billed'}
+            {billing.isPending ? 'Saving…' : hasPartial ? 'Continue Payment' : 'Mark Billed'}
           </button>
         </div>
       </div>
@@ -247,7 +274,28 @@ function CheckoutPanel({ visit, clinicId, branchId, clinicName, onBilled, onToas
         onCancel={() => {
           if (!billing.isPending) setShowPaymentDialog(false)
         }}
-        onConfirm={(method) => billing.mutate(method)}
+        onConfirm={confirmSingle}
+        onSwitchToSplit={() => {
+          setShowPaymentDialog(false)
+          setShowSplitDialog(true)
+        }}
+      />
+
+      <SplitPaymentDialog
+        open={showSplitDialog}
+        mode="billing"
+        total={billTotal}
+        initialPayments={visit.payments}
+        loading={billing.isPending}
+        error={
+          billing.isError
+            ? (billing.error as Error)?.message ?? 'Failed to save. Try again.'
+            : null
+        }
+        onCancel={() => {
+          if (!billing.isPending) setShowSplitDialog(false)
+        }}
+        onConfirm={confirmSplit}
       />
 
       {detail?.ownerPhone && (
@@ -263,6 +311,104 @@ function CheckoutPanel({ visit, clinicId, branchId, clinicName, onBilled, onToas
   )
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function todayString(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function daysAgo(visitDate: string, today: string): number {
+  if (!visitDate) return 0
+  const [y1, m1, d1] = visitDate.split('-').map(Number)
+  const [y2, m2, d2] = today.split('-').map(Number)
+  const a = new Date(y1, m1 - 1, d1).getTime()
+  const b = new Date(y2, m2 - 1, d2).getTime()
+  return Math.round((b - a) / (1000 * 60 * 60 * 24))
+}
+
+function relativeDate(visitDate: string, today: string): string {
+  const n = daysAgo(visitDate, today)
+  if (n <= 0) return 'today'
+  if (n === 1) return 'yesterday'
+  return `${n} days ago`
+}
+
+// ── List item ────────────────────────────────────────────────────────────────
+
+interface VisitListItemProps {
+  visit: CompletedVisit
+  selected: boolean
+  showRelativeDate: boolean
+  today: string
+  onSelect: () => void
+}
+
+function VisitListItem({ visit, selected, showRelativeDate, today, onSelect }: VisitListItemProps) {
+  const billAmt = (visit.services ?? []).reduce(
+    (s, item) => s + (item.quantity ?? 1) * item.price,
+    0,
+  )
+  const paid = visit.amountPaid ?? 0
+  const isPartial = paid > 0 && paid < billAmt
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        onSelect()
+      }}
+      className={cn(
+        'w-full text-left px-5 py-4 border-b border-border-base transition-colors',
+        selected ? 'bg-surface-2 border-l-2 border-l-primary' : 'hover:bg-surface',
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[13px] font-bold text-primary">
+              {visit.tokenDisplay}
+            </span>
+            {visit.isEmergency && (
+              <span className="rounded-[3px] bg-danger/10 border border-danger/25 px-1 py-0.5 text-[9px] font-bold uppercase text-danger">
+                ER
+              </span>
+            )}
+            {isPartial && (
+              <span className="rounded-[3px] bg-warning/10 border border-warning/25 px-1 py-0.5 text-[9px] font-bold uppercase text-warning">
+                Partial
+              </span>
+            )}
+            {showRelativeDate && (
+              <span className="text-[10px] font-semibold uppercase tracking-[0.04em] text-warning">
+                {relativeDate(visit.date, today)}
+              </span>
+            )}
+          </div>
+          <p className="text-[13px] font-semibold text-foreground mt-0.5 truncate">
+            {visit.petName}
+          </p>
+          <p className="text-[11px] text-muted truncate">{visit.ownerName}</p>
+          <p className="text-[11px] text-muted">{visit.doctorName}</p>
+        </div>
+        <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+          {billAmt > 0 && (
+            <span className="text-[13px] font-bold text-foreground tabular-nums">
+              {formatInr(billAmt)}
+            </span>
+          )}
+          {isPartial && (
+            <span className="text-[10px] font-semibold text-warning tabular-nums">
+              {formatInr(paid)} paid
+            </span>
+          )}
+        </div>
+      </div>
+    </button>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function CheckoutPage() {
@@ -271,6 +417,20 @@ export function CheckoutPage() {
   const clinicName = useClinicName(clinicId)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+
+  const today = todayString()
+
+  const { todayVisits, carryOverVisits } = (() => {
+    const todayList: CompletedVisit[] = []
+    const carryList: CompletedVisit[] = []
+    for (const v of visits) {
+      if (v.date === today) todayList.push(v)
+      else carryList.push(v)
+    }
+    // Carry-overs: oldest first (most stale at the top)
+    carryList.sort((a, b) => a.date.localeCompare(b.date))
+    return { todayVisits: todayList, carryOverVisits: carryList }
+  })()
 
   const selectedVisit: CompletedVisit | null = visits.find((v) => v.id === selectedId) ?? null
   const hasPanel = !!selectedVisit
@@ -287,9 +447,16 @@ export function CheckoutPage() {
           Check-out
         </h1>
         {!loading && visits.length > 0 && (
-          <span className="rounded-full bg-primary/10 border border-primary/20 px-2.5 py-0.5 text-[11px] font-bold text-primary">
-            {visits.length} pending
-          </span>
+          <div className="flex items-center gap-2">
+            {carryOverVisits.length > 0 && (
+              <span className="rounded-full bg-warning/10 border border-warning/25 px-2.5 py-0.5 text-[11px] font-bold text-warning">
+                {carryOverVisits.length} carry-over
+              </span>
+            )}
+            <span className="rounded-full bg-primary/10 border border-primary/20 px-2.5 py-0.5 text-[11px] font-bold text-primary">
+              {todayVisits.length} today
+            </span>
+          </div>
         )}
       </header>
 
@@ -313,49 +480,53 @@ export function CheckoutPage() {
                 </p>
               </div>
             ) : (
-              visits.map((visit) => {
-                const isSelected = selectedId === visit.id
-                const billAmt = (visit.services ?? []).reduce((s, item) => s + (item.quantity ?? 1) * item.price, 0)
-
-                return (
-                  <button
-                    key={visit.id}
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setSelectedId(isSelected ? null : visit.id) }}
-                    className={cn(
-                      'w-full text-left px-5 py-4 border-b border-border-base transition-colors',
-                      isSelected
-                        ? 'bg-surface-2 border-l-2 border-l-primary'
-                        : 'hover:bg-surface',
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[13px] font-bold text-primary">
-                            {visit.tokenDisplay}
-                          </span>
-                          {visit.isEmergency && (
-                            <span className="rounded-[3px] bg-danger/10 border border-danger/25 px-1 py-0.5 text-[9px] font-bold uppercase text-danger">
-                              ER
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[13px] font-semibold text-foreground mt-0.5 truncate">
-                          {visit.petName}
-                        </p>
-                        <p className="text-[11px] text-muted truncate">{visit.ownerName}</p>
-                        <p className="text-[11px] text-muted">{visit.doctorName}</p>
-                      </div>
-                      {billAmt > 0 && (
-                        <span className="text-[13px] font-bold text-foreground flex-shrink-0 tabular-nums">
-                          {formatInr(billAmt)}
-                        </span>
-                      )}
+              <>
+                {carryOverVisits.length > 0 && (
+                  <>
+                    <div className="px-5 py-2 border-b border-border-base bg-warning/5">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-warning">
+                        Pending from earlier days · {carryOverVisits.length}
+                      </p>
                     </div>
-                  </button>
-                )
-              })
+                    {carryOverVisits.map((visit) => (
+                      <VisitListItem
+                        key={visit.id}
+                        visit={visit}
+                        selected={selectedId === visit.id}
+                        showRelativeDate
+                        today={today}
+                        onSelect={() =>
+                          setSelectedId(selectedId === visit.id ? null : visit.id)
+                        }
+                      />
+                    ))}
+                  </>
+                )}
+
+                {todayVisits.length > 0 && (
+                  <>
+                    {carryOverVisits.length > 0 && (
+                      <div className="px-5 py-2 border-b border-border-base bg-surface">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-muted">
+                          Today · {todayVisits.length}
+                        </p>
+                      </div>
+                    )}
+                    {todayVisits.map((visit) => (
+                      <VisitListItem
+                        key={visit.id}
+                        visit={visit}
+                        selected={selectedId === visit.id}
+                        showRelativeDate={false}
+                        today={today}
+                        onSelect={() =>
+                          setSelectedId(selectedId === visit.id ? null : visit.id)
+                        }
+                      />
+                    ))}
+                  </>
+                )}
+              </>
             )}
           </div>
         </div>

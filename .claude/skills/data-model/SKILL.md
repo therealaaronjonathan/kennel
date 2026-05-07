@@ -162,13 +162,15 @@ interface Pet {
   species: 'dog' | 'cat' | 'bird' | 'rabbit' | 'other'
   speciesName?: string    // when species === 'other'
   breed?: string
-  age?: number
+  dateOfBirth?: string    // YYYY-MM-DD; age is derived at display time via lib/age.ts
   color?: string          // coat color/markings, free text
   microchipNumber?: string
   createdAt: Timestamp
   updatedAt: Timestamp
 }
 ```
+
+**Legacy `age` field**: pre-existing pet docs created before v1.1.14 may have an `age?: number` field. The current code never reads it; new writes use `dateOfBirth` only. The legacy field can stay on old docs without affecting behaviour (display falls through to nothing if `dateOfBirth` is absent).
 
 ### DiagnosisCatalog (collection: `diagnosisCatalog`)
 Clinic-level master list. Soft-deleted via `isActive`.
@@ -280,10 +282,23 @@ interface Visit {
   consultationNotes?: string
   services?: ServiceLineItem[]
   billAmount?: number     // sum of (quantity × price) for all service line items
-  paymentMethod?: 'cash' | 'card' | 'upi'  // captured at billing; required to mark a visit billed
-  billedAt?: Timestamp    // set when status transitions to 'billed'; preserved when paymentMethod is later edited
+  payments?: PaymentEntry[]  // up to 3 entries, each method at most once; sum equals billAmount when status is 'billed'
+  amountPaid?: number     // denormalized sum of payments[].amount; used for queue filters and partial display
+  billedAt?: Timestamp    // set when status transitions to 'billed'; preserved when payments are later edited
+  consultationDraft?: ConsultationDraft  // vet's in-progress form state; cleared on completeVisit
   createdAt: Timestamp
   updatedAt: Timestamp
+}
+
+interface ConsultationDraft {
+  diagnoses: { diagnosisId: string | null; name: string; notes: string; isCustom: boolean }[]
+  consultationNotes: string
+  medicines: { medicineId: string | null; name: string; type: 'tablet'|'syrup'|'injection'; quantity: string; morning: boolean; afternoon: boolean; evening: boolean; night: boolean; days: number; isCustom: boolean }[]
+  services: { serviceId: string; name: string; price: number; quantity: number }[]
+  vaccineName: string
+  vaccineBatch: string
+  vaccineNextDue: string
+  savedAt: Timestamp
 }
 
 interface ServiceLineItem {
@@ -292,11 +307,28 @@ interface ServiceLineItem {
   price: number           // unit price at time of visit (may differ from catalog price if edited)
   quantity: number        // defaults to 1; line total = quantity × price
 }
+
+interface PaymentEntry {
+  method: 'cash' | 'card' | 'upi'
+  amount: number          // INR integer; > 0
+}
 ```
 
 **Status flow**: `waiting` → `in-progress` → `completed` → `billed`
 
-**Billing**: a visit can only transition from `completed` → `billed` once a `paymentMethod` is captured. Receptionists may edit `paymentMethod` after billing from the queue; `billedAt` is preserved on edits.
+**Billing & partial payments**: at checkout the receptionist records one or more `PaymentEntry` rows.
+- `sum(payments) === billAmount` → status flips to `billed`, `billedAt` set.
+- `0 < sum(payments) < billAmount` → status stays `completed` (partial payment); the visit remains in the Checkout queue and **carries over across days** until fully paid.
+- Receptionists may edit `payments` on a billed visit from the queue, but the new sum must equal `billAmount`. Zero-amount entries are dropped on save (so a 4500/0 split saves as a single-method visit).
+- `billedAt` is preserved on edits.
+
+**Checkout list semantics**: the Checkout page queries all branch visits with `status === 'completed'` (no date filter). Client-side it keeps (a) today's pending bills regardless of payment state, plus (b) any cross-day visit where `amountPaid > 0` (partial). Cross-day completed visits with no payment are dropped so abandoned consultations don't pile up. Carry-overs render in a separate "Pending from earlier days" section above today's pending list, sorted oldest-first.
+
+**Consultation drafts**: while a vet is filling in diagnoses/notes/medicines/services/vaccine on a visit, the in-progress form is persisted to `visit.consultationDraft`. Two write paths:
+- **Pause**: when the vet taps Pause, `pauseVisit()` writes the current draft alongside `status: 'waiting'` so resuming the patient (or switching back from another) restores the form.
+- **Background autosave**: while a visit is `in-progress`, the `ConsultationView` component runs a debounced 30s autosave that writes the latest draft silently (no UI). Best-effort — failures are swallowed.
+
+`ConsultationView` is keyed by `entry.id` in the vet page, so switching patients remounts the component and re-reads the draft from `entry.consultationDraft` (surfaced by `useVetQueue`). `completeVisit()` clears the draft via `deleteField()` on success so finished visits don't carry stale draft data.
 
 ### Diagnosis (Visit subcollection)
 
@@ -433,6 +465,14 @@ Tabs:
 - **Services**: CRUD for `clinics/{clinicId}/services`
 
 Admin panel provides full catalog management at `/admin/clinics/:id/catalogs` (adds Grooming tab).
+
+## Visit History Page
+
+Route: `/reception/history` — accessible to receptionist, admin, owner. Read-only.
+
+Always restricted to finished visits (`status ∈ {billed, completed}`); waiting/in-progress/cancelled are excluded. Filters: date range (default today→today, presets Today / Last 7 days), search (pet/owner/token), services multi-select (from `clinics/{clinicId}/services`), payment method (All/Cash/Card/UPI/Split — same semantics as Queue). KPI strip shows Total Earned (sum of `amountPaid`), Visits Completed (count where status ∈ {billed, completed}), and per-method breakdown summing to total.
+
+Query: range filter on `date` field (no composite index needed — single-field range). Capped at 200 most recent results sorted by `billedAt` desc with fallback to `updatedAt`/`createdAt`. Detail panel reuses `VisitDetailPanel` with `canEditPaymentMethod` omitted (read-only).
 
 ## Firestore Conventions
 

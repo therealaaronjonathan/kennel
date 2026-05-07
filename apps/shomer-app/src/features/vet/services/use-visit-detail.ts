@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react'
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import type { PaymentMethod } from '@/features/checkout/services/complete-billing'
+import {
+  sumPayments,
+  type PaymentEntry,
+} from '@/features/checkout/services/complete-billing'
 
 export interface PetDetail {
   name: string
   species: string
   speciesName?: string
   breed?: string
-  age?: number
+  dateOfBirth?: string
   color?: string
   microchipNumber?: string
 }
@@ -63,7 +66,8 @@ export interface LastVisitSummary {
   vaccines: LastVisitVaccine[]
   services: LastVisitService[]
   billAmount?: number
-  paymentMethod?: PaymentMethod
+  payments?: PaymentEntry[]
+  amountPaid?: number
   status?: string
 }
 
@@ -75,7 +79,8 @@ export interface EarlierVisitSummary {
   isEmergency?: boolean
   complaints: string[]
   billAmount?: number
-  paymentMethod?: PaymentMethod
+  payments?: PaymentEntry[]
+  amountPaid?: number
   status?: string
 }
 
@@ -184,6 +189,10 @@ export function useVisitDetail(
             }))
           : []
 
+        const lastPayments = Array.isArray(visitData.payments)
+          ? (visitData.payments as PaymentEntry[])
+          : undefined
+
         lastVisit = {
           visitId: lastVisitId,
           date: visitData.date,
@@ -198,7 +207,11 @@ export function useVisitDetail(
           vaccines,
           services,
           billAmount: typeof visitData.billAmount === 'number' ? visitData.billAmount : undefined,
-          paymentMethod: (visitData.paymentMethod as PaymentMethod | undefined) ?? undefined,
+          payments: lastPayments,
+          amountPaid:
+            typeof visitData.amountPaid === 'number'
+              ? visitData.amountPaid
+              : sumPayments(lastPayments),
           status: (visitData.status as string) || undefined,
         }
 
@@ -206,6 +219,9 @@ export function useVisitDetail(
         for (let i = 1; i < sortedPast.length; i++) {
           const d = sortedPast[i]
           const data = d.data()
+          const earlierPayments = Array.isArray(data.payments)
+            ? (data.payments as PaymentEntry[])
+            : undefined
           earlierVisits.push({
             visitId: d.id,
             date: data.date as string,
@@ -214,7 +230,11 @@ export function useVisitDetail(
             isEmergency: !!data.isEmergency,
             complaints: (data.complaints as string[]) ?? [],
             billAmount: typeof data.billAmount === 'number' ? data.billAmount : undefined,
-            paymentMethod: (data.paymentMethod as PaymentMethod | undefined) ?? undefined,
+            payments: earlierPayments,
+            amountPaid:
+              typeof data.amountPaid === 'number'
+                ? data.amountPaid
+                : sumPayments(earlierPayments),
             status: (data.status as string) || undefined,
           })
         }
