@@ -20,3 +20,7 @@ build/
 
 # Firebase Admin SDK Credentials
 apps/backend/shomer-b6212-firebase-adminsdk-fbsvc-aa38ea9fd4.json
+
+# Pet import data + reports — contain personal info, never commit
+PET DETAILS.xlsx
+import-report.json
