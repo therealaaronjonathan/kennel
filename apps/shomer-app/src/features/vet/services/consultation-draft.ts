@@ -22,6 +22,7 @@ export interface ConsultationDraft {
   vaccineName: string
   vaccineBatch: string
   vaccineNextDue: string
+  petWeightKg?: number
   savedAt?: Timestamp
 }
 

@@ -12,6 +12,8 @@ import {
   Stethoscope,
   Receipt,
   Wallet,
+  UserCheck,
+  Scale,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getAgeFromDob } from '@/lib/age'
@@ -22,6 +24,7 @@ import { useClinicServices } from '../services/use-clinic-services'
 import { completeVisit, type ConsultationFormData } from '../services/complete-visit'
 import { markVisitInProgress } from '../services/mark-in-progress'
 import { pauseVisit } from '../services/pause-visit'
+import { reassignVisit } from '../services/reassign-visit'
 import {
   saveConsultationDraft,
   type ConsultationDraftInput,
@@ -38,6 +41,8 @@ import { ServicesSelect, type ServiceEntry } from '@/components/blocks/services-
 import { formatInr } from '@/lib/utils'
 import { PAYMENT_METHOD_LABELS } from '@/features/checkout/services/complete-billing'
 import { EarlierVisitsModal } from './earlier-visits-modal'
+import { useDoctors } from '@/features/checkin/services/use-doctors'
+import { useDutyRoster } from '@/features/settings/services/use-duty-roster'
 import type { VetQueueEntry } from '../services/use-vet-queue'
 
 interface ConsultationViewProps {
@@ -103,7 +108,7 @@ function isOverdue(yyyymmdd: string | undefined): boolean {
 }
 
 function formatTimingDays(m: {
-  morning: boolean; afternoon: boolean; evening: boolean; night: boolean; days: number
+  morning: boolean; afternoon: boolean; evening: boolean; night: boolean; days: number; mealTiming?: 'before' | 'after'
 }): string {
   const times = [
     m.morning && 'Morning',
@@ -112,7 +117,8 @@ function formatTimingDays(m: {
     m.night && 'Night',
   ].filter(Boolean) as string[]
   const timing = times.length ? times.join(' · ') : 'As prescribed'
-  return `${timing} · ${m.days} day${m.days !== 1 ? 's' : ''}`
+  const meal = m.mealTiming === 'before' ? ' · Before food' : m.mealTiming === 'after' ? ' · After food' : ''
+  return `${timing} · ${m.days} day${m.days !== 1 ? 's' : ''}${meal}`
 }
 
 function formatDose(type?: string, quantity?: string): string | null {
@@ -138,6 +144,8 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
   const { diagnoses, loading: diagLoading } = useClinicDiagnoses(clinicId)
   const { medicines, loading: medLoading } = useClinicMedicines(clinicId)
   const { services: serviceItems, loading: svcLoading } = useClinicServices(clinicId)
+  const { data: allDoctors = [] } = useDoctors(clinicId, branchId)
+  const { onDuty } = useDutyRoster(clinicId, branchId)
   const vaccinationServices = serviceItems.filter(
     (s) => s.serviceType?.toLowerCase() === 'vaccination',
   )
@@ -157,6 +165,9 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
   const [selectedServices, setSelectedServices] = useState<ServiceEntry[]>(
     () => draft?.services ?? [],
   )
+  const [petWeightKg, setPetWeightKg] = useState<string>(() =>
+    draft?.petWeightKg != null ? String(draft.petWeightKg) : '',
+  )
   const [showConfirm, setShowConfirm] = useState(false)
   const [vaccineOpen, setVaccineOpen] = useState(() => !!draft?.vaccineName)
   const [vaccineName, setVaccineName] = useState(() => draft?.vaccineName ?? '')
@@ -166,6 +177,8 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
   const [attemptedSubmit, setAttemptedSubmit] = useState(false)
   const [showEarlierVisits, setShowEarlierVisits] = useState(false)
   const [lastVisitOpen, setLastVisitOpen] = useState(false)
+  const [showReassignDialog, setShowReassignDialog] = useState(false)
+  const [reassignDoctorId, setReassignDoctorId] = useState('')
 
   // ── Validation ────────────────────────────────────────────────────────────
   const vaccineInUse = !!(vaccineName || vaccineBatch || vaccineNextDue)
@@ -213,6 +226,7 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
   })
 
   function buildDraft(): ConsultationDraftInput {
+    const weightNum = parseFloat(petWeightKg)
     return {
       diagnoses: selectedDiagnoses,
       consultationNotes,
@@ -221,6 +235,7 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
       vaccineName,
       vaccineBatch,
       vaccineNextDue,
+      petWeightKg: !isNaN(weightNum) && weightNum > 0 ? weightNum : undefined,
     }
   }
 
@@ -240,15 +255,7 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
     }
     if (entry.status !== 'in-progress') return
     const timer = window.setTimeout(() => {
-      saveConsultationDraft(clinicId, branchId, entry.id, {
-        diagnoses: selectedDiagnoses,
-        consultationNotes,
-        medicines: selectedMedicines,
-        services: selectedServices,
-        vaccineName,
-        vaccineBatch,
-        vaccineNextDue,
-      }).catch(() => {
+      saveConsultationDraft(clinicId, branchId, entry.id, buildDraft()).catch(() => {
         // intentionally silent — autosave is best-effort
       })
     }, 30_000)
@@ -265,10 +272,12 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
     vaccineName,
     vaccineBatch,
     vaccineNextDue,
+    petWeightKg,
   ])
 
   const complete = useMutation({
     mutationFn: () => {
+      const draft = buildDraft()
       const form: ConsultationFormData = {
         diagnoses: selectedDiagnoses,
         consultationNotes,
@@ -277,11 +286,25 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
         vaccineName,
         vaccineBatch,
         vaccineNextDue,
+        petWeightKg: draft.petWeightKg,
       }
       return completeVisit(clinicId, branchId, entry.id, form)
     },
     onSuccess: onCompleted,
   })
+
+  const reassign = useMutation({
+    mutationFn: ({ doctorId, doctorName }: { doctorId: string; doctorName: string }) =>
+      reassignVisit(clinicId, branchId, entry.id, doctorId, doctorName,
+        entry.status === 'in-progress' ? buildDraft() : undefined,
+      ),
+    onSuccess: () => {
+      setShowReassignDialog(false)
+      onCompleted()
+    },
+  })
+
+  const otherDoctors = allDoctors.filter((d) => d.id !== entry.doctorId && onDuty.includes(d.id))
 
   async function handleConfirmComplete() {
     try {
@@ -438,6 +461,16 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
           {callPatient.isError && (
             <p className="text-[11px] text-danger">Failed to update status. Try again.</p>
           )}
+          {otherDoctors.length > 0 && (
+            <button
+              type="button"
+              onClick={() => { setReassignDoctorId(''); setShowReassignDialog(true) }}
+              className="flex items-center gap-2 text-[12px] font-semibold text-muted hover:text-foreground transition-colors"
+            >
+              <UserCheck size={13} />
+              Reassign to another doctor
+            </button>
+          )}
         </div>
       )}
 
@@ -506,6 +539,15 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
 
                 {lastVisitOpen && (
                 <div className="p-4 space-y-4">
+                  {/* Weight */}
+                  {typeof lastVisit.petWeightKg === 'number' && (
+                    <div className="flex items-center gap-2">
+                      <Scale size={10} className="text-muted flex-shrink-0" />
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">Weight</span>
+                      <span className="text-[13px] font-semibold text-foreground">{lastVisit.petWeightKg} kg</span>
+                    </div>
+                  )}
+
                   {/* Complaints */}
                   {(lastVisit.complaints.length > 0 || lastVisit.otherComplaintText) && (
                     <div className="space-y-1.5">
@@ -735,6 +777,28 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
 
             {/* Consultation form */}
             <div className="space-y-5">
+              {/* Weight */}
+              <div className="space-y-1.5">
+                <label className={labelClass}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Scale size={10} />
+                    Pet Weight (kg)
+                  </span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    placeholder="e.g. 12.5"
+                    value={petWeightKg}
+                    onChange={(e) => setPetWeightKg(e.target.value)}
+                    className={cn(inputClass, 'w-36')}
+                  />
+                  <span className="text-[12px] text-muted">kg</span>
+                </div>
+              </div>
+
               {/* Diagnosis */}
               <div className="space-y-1.5">
                 <label className={labelClass}>Diagnosis</label>
@@ -892,15 +956,96 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
           >
             Mark Complete
           </button>
-          <button
-            type="button"
-            disabled={pause.isPending || complete.isPending}
-            onClick={() => pause.mutate()}
-            className="w-full flex items-center justify-center gap-2 rounded-[4px] border border-border-base px-4 py-[9px] text-[13px] font-semibold text-muted hover:text-foreground hover:border-foreground/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <PauseCircle size={14} />
-            {pause.isPending ? 'Pausing…' : 'Pause — Patient Not Present'}
-          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={pause.isPending || complete.isPending}
+              onClick={() => pause.mutate()}
+              className="flex items-center justify-center gap-2 rounded-[4px] border border-border-base px-4 py-[9px] text-[13px] font-semibold text-muted hover:text-foreground hover:border-foreground/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <PauseCircle size={14} />
+              {pause.isPending ? 'Pausing…' : 'Pause'}
+            </button>
+            <button
+              type="button"
+              disabled={pause.isPending || complete.isPending || otherDoctors.length === 0}
+              onClick={() => { setReassignDoctorId(''); setShowReassignDialog(true) }}
+              title={otherDoctors.length === 0 ? 'No other doctors on duty' : undefined}
+              className="flex items-center justify-center gap-2 rounded-[4px] border border-border-base px-4 py-[9px] text-[13px] font-semibold text-muted hover:text-foreground hover:border-foreground/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <UserCheck size={14} />
+              Reassign
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Reassign dialog */}
+      {showReassignDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/20">
+          <div className="w-[340px] rounded-[6px] bg-background border border-border-base shadow-lg p-5 space-y-4">
+            <div>
+              <p className="text-[14px] font-bold text-foreground">Reassign token</p>
+              <p className="mt-0.5 text-[12px] text-muted">
+                Select a doctor to transfer {entry.tokenDisplay} — {entry.petName} to.
+              </p>
+            </div>
+
+            {otherDoctors.length === 0 ? (
+              <p className="text-[12px] text-muted text-center py-2">
+                No other active doctors at this branch.
+              </p>
+            ) : (
+              <div className="space-y-1.5 max-h-52 overflow-y-auto">
+                {otherDoctors.map((d) => (
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => setReassignDoctorId(d.id)}
+                    className={cn(
+                      'w-full text-left flex items-center justify-between rounded-[4px] border px-3 py-2.5 text-[13px] font-semibold transition-colors',
+                      reassignDoctorId === d.id
+                        ? 'border-primary bg-primary/8 text-primary'
+                        : 'border-border-base bg-surface text-foreground hover:border-primary/40',
+                    )}
+                  >
+                    {d.name}
+                    {reassignDoctorId === d.id && (
+                      <span className="text-[10px] font-bold uppercase tracking-[0.06em] text-primary">Selected</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {reassign.isError && (
+              <p className="text-[12px] text-danger">
+                {(reassign.error as Error)?.message ?? 'Failed to reassign. Try again.'}
+              </p>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={reassign.isPending}
+                onClick={() => setShowReassignDialog(false)}
+                className="flex-1 rounded-[4px] border border-border-base px-4 py-[9px] text-[13px] font-semibold text-muted hover:text-foreground transition-colors disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!reassignDoctorId || reassign.isPending}
+                onClick={() => {
+                  const doc = otherDoctors.find((d) => d.id === reassignDoctorId)
+                  if (doc) reassign.mutate({ doctorId: doc.id, doctorName: doc.name })
+                }}
+                className="flex-1 rounded-[4px] bg-primary px-4 py-[9px] text-[13px] font-semibold text-white hover:opacity-85 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {reassign.isPending ? 'Reassigning…' : 'Confirm Reassign'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

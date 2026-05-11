@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MessageCircle, ExternalLink, Pill, Syringe, Pencil } from 'lucide-react'
+import { MessageCircle, ExternalLink, Pill, Syringe, Pencil, Scale } from 'lucide-react'
 import { useMutation } from '@tanstack/react-query'
 import { useClinicName } from '@/features/clinic/hooks/use-clinic-name'
 import { cn, formatInr } from '@/lib/utils'
@@ -30,6 +30,7 @@ function formatDosage(m: {
   evening: boolean
   night: boolean
   days: number
+  mealTiming?: 'before' | 'after'
 }): string {
   const times = [
     m.morning && 'Morning',
@@ -39,7 +40,8 @@ function formatDosage(m: {
   ].filter(Boolean) as string[]
 
   const timingStr = times.length > 0 ? times.join(' · ') : 'As prescribed'
-  return `${timingStr} · ${m.days} day${m.days !== 1 ? 's' : ''}`
+  const meal = m.mealTiming === 'before' ? ' · Before food' : m.mealTiming === 'after' ? ' · After food' : ''
+  return `${timingStr} · ${m.days} day${m.days !== 1 ? 's' : ''}${meal}`
 }
 
 export function VisitDetailPanel({
@@ -104,6 +106,13 @@ export function VisitDetailPanel({
         <p className="mt-0.5 text-[12px] text-muted">
           {visit.ownerName} · {visit.doctorName}
         </p>
+        {typeof visit.petWeightKg === 'number' && (
+          <p className="mt-1 flex items-center gap-1.5 text-[11px] text-muted">
+            <Scale size={10} className="flex-shrink-0" />
+            <span className="font-semibold text-foreground">{visit.petWeightKg} kg</span>
+            <span>at time of visit</span>
+          </p>
+        )}
 
         {visit.complaints.length > 0 && (
           <div className="mt-3">

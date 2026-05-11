@@ -284,6 +284,7 @@ interface Visit {
   billAmount?: number     // sum of (quantity × price) for all service line items
   payments?: PaymentEntry[]  // up to 3 entries, each method at most once; sum equals billAmount when status is 'billed'
   amountPaid?: number     // denormalized sum of payments[].amount; used for queue filters and partial display
+  petWeightKg?: number    // weight at time of consultation (kg); optional, entered by vet
   billedAt?: Timestamp    // set when status transitions to 'billed'; preserved when payments are later edited
   consultationDraft?: ConsultationDraft  // vet's in-progress form state; cleared on completeVisit
   createdAt: Timestamp
@@ -293,11 +294,12 @@ interface Visit {
 interface ConsultationDraft {
   diagnoses: { diagnosisId: string | null; name: string; notes: string; isCustom: boolean }[]
   consultationNotes: string
-  medicines: { medicineId: string | null; name: string; type: 'tablet'|'syrup'|'injection'; quantity: string; morning: boolean; afternoon: boolean; evening: boolean; night: boolean; days: number; isCustom: boolean }[]
+  medicines: { medicineId: string | null; name: string; type: 'tablet'|'syrup'|'injection'; quantity: string; morning: boolean; afternoon: boolean; evening: boolean; night: boolean; days: number; isCustom: boolean; mealTiming?: 'before'|'after' }[]
   services: { serviceId: string; name: string; price: number; quantity: number }[]
   vaccineName: string
   vaccineBatch: string
   vaccineNextDue: string
+  petWeightKg?: number
   savedAt: Timestamp
 }
 
@@ -358,6 +360,7 @@ interface VisitPrescription {
   night: boolean
   days: number
   isCustom: boolean
+  mealTiming?: 'before' | 'after'  // optional; whether medicine is taken before or after food
   createdAt: Timestamp
 }
 ```

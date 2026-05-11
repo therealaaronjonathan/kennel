@@ -19,6 +19,7 @@ export interface PrescriptionEntry {
   night: boolean
   days: number
   isCustom: boolean
+  mealTiming?: 'before' | 'after'
 }
 
 export interface ServiceEntry {
@@ -35,6 +36,7 @@ export interface ConsultationFormData {
   vaccineName: string
   vaccineBatch: string
   vaccineNextDue: string
+  petWeightKg?: number
 }
 
 export async function completeVisit(
@@ -47,14 +49,18 @@ export async function completeVisit(
   const billAmount = form.services.reduce((sum, s) => sum + s.price, 0)
 
   const batch = writeBatch(db)
-  batch.update(visitRef, {
+  const visitUpdate: Record<string, unknown> = {
     status: 'completed',
     services: form.services,
     billAmount,
     consultationNotes: form.consultationNotes,
     consultationDraft: deleteField(),
     updatedAt: serverTimestamp(),
-  })
+  }
+  if (typeof form.petWeightKg === 'number') {
+    visitUpdate.petWeightKg = form.petWeightKg
+  }
+  batch.update(visitRef, visitUpdate)
   await batch.commit()
 
   const visitBase = `clinics/${clinicId}/branches/${branchId}/visits/${visitId}`
@@ -73,21 +79,21 @@ export async function completeVisit(
   }
 
   for (const medicine of form.medicines) {
-    writes.push(
-      addDoc(collection(db, `${visitBase}/prescriptions`), {
-        medicineId: medicine.medicineId,
-        name: medicine.name,
-        type: medicine.type,
-        quantity: medicine.quantity,
-        morning: medicine.morning,
-        afternoon: medicine.afternoon,
-        evening: medicine.evening,
-        night: medicine.night,
-        days: medicine.days,
-        isCustom: medicine.isCustom,
-        createdAt: serverTimestamp(),
-      }),
-    )
+    const presDoc: Record<string, unknown> = {
+      medicineId: medicine.medicineId,
+      name: medicine.name,
+      type: medicine.type,
+      quantity: medicine.quantity,
+      morning: medicine.morning,
+      afternoon: medicine.afternoon,
+      evening: medicine.evening,
+      night: medicine.night,
+      days: medicine.days,
+      isCustom: medicine.isCustom,
+      createdAt: serverTimestamp(),
+    }
+    if (medicine.mealTiming) presDoc.mealTiming = medicine.mealTiming
+    writes.push(addDoc(collection(db, `${visitBase}/prescriptions`), presDoc))
   }
 
   if (form.vaccineName) {

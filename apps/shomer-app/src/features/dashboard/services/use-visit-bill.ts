@@ -14,6 +14,7 @@ export interface MedicineDetail {
   evening: boolean
   night: boolean
   days: number
+  mealTiming?: 'before' | 'after'
 }
 
 export interface BillDetail {
@@ -66,6 +67,7 @@ export function useVisitBill(
         evening: (d.data().evening as boolean) ?? false,
         night: (d.data().night as boolean) ?? false,
         days: (d.data().days as number) ?? 1,
+        mealTiming: (d.data().mealTiming as 'before' | 'after' | undefined) ?? undefined,
       }))
 
       setDetail({

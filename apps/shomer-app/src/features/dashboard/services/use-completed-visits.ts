@@ -30,6 +30,7 @@ export interface CompletedVisit {
   payments?: PaymentEntry[]
   amountPaid?: number
   consultationNotes?: string
+  petWeightKg?: number
   status?: string
   completedAt: Timestamp | null
   date: string
@@ -91,6 +92,7 @@ export function useCompletedVisits(clinicId: string | null, branchId: string | n
                   ? data.amountPaid
                   : sumPayments(payments),
               consultationNotes: data.consultationNotes ?? undefined,
+              petWeightKg: typeof data.petWeightKg === 'number' ? data.petWeightKg : undefined,
               completedAt: data.updatedAt ?? null,
               date: data.date ?? today,
             } as CompletedVisit

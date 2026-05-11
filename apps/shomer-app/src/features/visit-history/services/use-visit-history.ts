@@ -34,6 +34,7 @@ export interface HistoryVisit {
   billAmount?: number
   payments?: PaymentEntry[]
   amountPaid?: number
+  petWeightKg?: number
   date: string
   billedAt: Timestamp | null
   updatedAt: Timestamp | null
@@ -97,6 +98,7 @@ export function useVisitHistory(
               typeof data.amountPaid === 'number'
                 ? data.amountPaid
                 : sumPayments(payments),
+            petWeightKg: typeof data.petWeightKg === 'number' ? data.petWeightKg : undefined,
             date: data.date ?? '',
             billedAt: (data.billedAt as Timestamp | undefined) ?? null,
             updatedAt: (data.updatedAt as Timestamp | undefined) ?? null,

@@ -25,6 +25,18 @@ interface BranchData {
   phone?: string
 }
 
+interface ServiceEntry {
+  serviceId?: string
+  name: string
+  price: number
+  quantity?: number
+}
+
+interface PaymentEntry {
+  method: 'cash' | 'card' | 'upi'
+  amount: number
+}
+
 interface VisitData {
   petName: string
   petSpecies?: string
@@ -37,6 +49,11 @@ interface VisitData {
   consultationNotes?: string
   date?: string
   createdAt?: { toDate?: () => Date; seconds?: number }
+  status?: string
+  services?: ServiceEntry[]
+  billAmount?: number
+  payments?: PaymentEntry[]
+  petWeightKg?: number
 }
 
 interface DiagnosisItem {
@@ -51,6 +68,7 @@ interface PrescriptionItem {
   evening: boolean
   night: boolean
   days: number
+  mealTiming?: 'before' | 'after'
 }
 
 interface VaccineItem {
@@ -81,6 +99,16 @@ const DEFAULTS: ClinicBranding = {
   accentColor: '#FAE8C7',
   backgroundColor: '#FEFAFF',
   textColor: '#1A1825',
+}
+
+const PAYMENT_LABELS: Record<string, string> = {
+  cash: 'Cash',
+  card: 'Card',
+  upi: 'UPI',
+}
+
+function formatInr(amount: number): string {
+  return `₹${amount.toLocaleString('en-IN')}`
 }
 
 function formatVisitDate(visit: VisitData): string {
@@ -239,6 +267,7 @@ export function VisitSummaryPage() {
             evening: (d.data().evening as boolean) ?? false,
             night: (d.data().night as boolean) ?? false,
             days: (d.data().days as number) ?? 1,
+            mealTiming: (d.data().mealTiming as 'before' | 'after' | undefined) ?? undefined,
           })),
           vaccines: vacSnap.docs.map((d) => ({
             name: (d.data().name as string) ?? '',
@@ -272,6 +301,12 @@ export function VisitSummaryPage() {
   const hasPrescriptions = data.prescriptions.length > 0
   const hasVaccines = data.vaccines.length > 0
   const hasNotes = !!data.visit.consultationNotes?.trim()
+
+  const isBilled = data.visit.status === 'billed'
+  const services = data.visit.services ?? []
+  const billAmount = data.visit.billAmount ?? 0
+  const payments = data.visit.payments ?? []
+  const hasBilling = isBilled && services.length > 0
 
   // ── Inline styles (print-safe, no Tailwind tokens) ──────────────────────────
 
@@ -556,6 +591,12 @@ export function VisitSummaryPage() {
                 <div style={styles.metaLabel}>Phone</div>
                 <div style={styles.metaValue}>{data.visit.ownerPhone ?? '—'}</div>
               </div>
+              {typeof data.visit.petWeightKg === 'number' && (
+                <div>
+                  <div style={styles.metaLabel}>Weight</div>
+                  <div style={styles.metaValue}>{data.visit.petWeightKg} kg</div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -595,7 +636,14 @@ export function VisitSummaryPage() {
                 <tbody>
                   {data.prescriptions.map((p, i) => (
                     <tr key={i}>
-                      <td style={styles.td}>{p.name}</td>
+                      <td style={styles.td}>
+                        {p.name}
+                        {p.mealTiming && (
+                          <span style={{ display: 'block', fontSize: '11px', opacity: 0.6, marginTop: '2px' }}>
+                            {p.mealTiming === 'before' ? 'Before food' : 'After food'}
+                          </span>
+                        )}
+                      </td>
                       <td style={styles.tdCenter}>
                         {p.morning ? <span style={styles.checkMark}>✓</span> : null}
                       </td>
@@ -645,6 +693,104 @@ export function VisitSummaryPage() {
             <div style={styles.section}>
               <div style={styles.sectionTitle}>Consultation Notes</div>
               <div style={styles.notesBox}>{data.visit.consultationNotes}</div>
+            </div>
+          )}
+
+          {/* ── Services & Payment ──────────────────────────────────────────── */}
+          {hasBilling && (
+            <div style={styles.section}>
+              <div style={styles.sectionTitle}>Services &amp; Payment</div>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.th}>Service</th>
+                    <th style={{ ...styles.th, textAlign: 'right' }}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {services.map((s, i) => (
+                    <tr key={s.serviceId ?? i}>
+                      <td style={styles.td}>{s.name}</td>
+                      <td style={{ ...styles.td, textAlign: 'right', fontWeight: 600 }}>
+                        {formatInr((s.quantity ?? 1) * s.price)}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td
+                      style={{
+                        ...styles.td,
+                        background: primary + '12',
+                        fontWeight: 700,
+                        fontSize: '13px',
+                        color: primary,
+                        borderTop: `1px solid ${primary}30`,
+                        borderBottom: 'none',
+                      }}
+                    >
+                      Total
+                    </td>
+                    <td
+                      style={{
+                        ...styles.td,
+                        background: primary + '12',
+                        fontWeight: 700,
+                        fontSize: '15px',
+                        color: primary,
+                        textAlign: 'right',
+                        borderTop: `1px solid ${primary}30`,
+                        borderBottom: 'none',
+                      }}
+                    >
+                      {formatInr(billAmount)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* Payment method(s) */}
+              {payments.length > 0 && (
+                <div
+                  style={{
+                    marginTop: '12px',
+                    padding: '10px 14px',
+                    background: primary + '08',
+                    border: `1px solid ${primary}25`,
+                    borderRadius: '6px',
+                    display: 'flex',
+                    flexDirection: 'column' as const,
+                    gap: '6px',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase' as const,
+                      color: primary,
+                      marginBottom: '2px',
+                    }}
+                  >
+                    Paid via
+                  </div>
+                  {payments.map((p, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        color: text,
+                      }}
+                    >
+                      <span>{PAYMENT_LABELS[p.method] ?? p.method}</span>
+                      <span>{formatInr(p.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

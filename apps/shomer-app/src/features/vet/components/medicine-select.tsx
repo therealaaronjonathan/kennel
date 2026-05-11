@@ -14,6 +14,7 @@ export interface PrescriptionEntry {
   night: boolean
   days: number
   isCustom: boolean
+  mealTiming?: 'before' | 'after'
 }
 
 export interface MedicineEntryErrors {
@@ -93,6 +94,7 @@ export function MedicineSelect({ selected, onChange, items, loading, showErrors 
         night: false,
         days: 1,
         isCustom: false,
+        mealTiming: undefined,
       },
     ])
     setFilter('')
@@ -253,6 +255,27 @@ export function MedicineSelect({ selected, onChange, items, loading, showErrors 
                   : 'Enter a valid number of days.'}
             </p>
           )}
+
+          {/* Before / After food */}
+          <div className="grid grid-cols-2 divide-x divide-border-base border-t border-border-base">
+            {(['before', 'after'] as const).map((val) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() =>
+                  updateEntry(i, { mealTiming: entry.mealTiming === val ? undefined : val })
+                }
+                className={cn(
+                  'py-2 text-[12px] font-semibold transition-colors',
+                  entry.mealTiming === val
+                    ? 'bg-primary/10 text-primary'
+                    : 'bg-surface text-muted hover:bg-surface-2 hover:text-foreground',
+                )}
+              >
+                {val === 'before' ? 'Before food' : 'After food'}
+              </button>
+            ))}
+          </div>
 
         </div>
         )

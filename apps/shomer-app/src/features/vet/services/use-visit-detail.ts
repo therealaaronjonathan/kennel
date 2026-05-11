@@ -38,6 +38,7 @@ export interface LastVisitMedicine {
   evening: boolean
   night: boolean
   days: number
+  mealTiming?: 'before' | 'after'
 }
 
 export interface LastVisitVaccine {
@@ -69,6 +70,7 @@ export interface LastVisitSummary {
   payments?: PaymentEntry[]
   amountPaid?: number
   status?: string
+  petWeightKg?: number
 }
 
 export interface EarlierVisitSummary {
@@ -170,6 +172,7 @@ export function useVisitDetail(
             evening: d.data().evening ?? false,
             night: d.data().night ?? false,
             days: d.data().days ?? 1,
+            mealTiming: (d.data().mealTiming as 'before' | 'after' | undefined) ?? undefined,
           }))
           .filter((m) => m.name.length > 0)
 
@@ -213,6 +216,7 @@ export function useVisitDetail(
               ? visitData.amountPaid
               : sumPayments(lastPayments),
           status: (visitData.status as string) || undefined,
+          petWeightKg: typeof visitData.petWeightKg === 'number' ? visitData.petWeightKg : undefined,
         }
 
         // Build summary list of all earlier (older than `lastVisit`) visits.
