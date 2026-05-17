@@ -26,6 +26,8 @@ export interface AllVisit {
   payments?: PaymentEntry[]
   amountPaid?: number
   petWeightKg?: number
+  petTemperatureF?: number
+  date: string
   createdAt: Timestamp | null
 }
 
@@ -81,6 +83,8 @@ export function useAllVisits(clinicId: string | null, branchId: string | null) {
                 ? data.amountPaid
                 : sumPayments(payments),
             petWeightKg: typeof data.petWeightKg === 'number' ? data.petWeightKg : undefined,
+            petTemperatureF: typeof data.petTemperatureF === 'number' ? data.petTemperatureF : undefined,
+            date: data.date ?? today,
             createdAt: data.createdAt ?? null,
           } as AllVisit
         })

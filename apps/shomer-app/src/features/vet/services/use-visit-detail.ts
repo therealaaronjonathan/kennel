@@ -71,6 +71,7 @@ export interface LastVisitSummary {
   amountPaid?: number
   status?: string
   petWeightKg?: number
+  petTemperatureF?: number
 }
 
 export interface EarlierVisitSummary {
@@ -217,6 +218,7 @@ export function useVisitDetail(
               : sumPayments(lastPayments),
           status: (visitData.status as string) || undefined,
           petWeightKg: typeof visitData.petWeightKg === 'number' ? visitData.petWeightKg : undefined,
+          petTemperatureF: typeof visitData.petTemperatureF === 'number' ? visitData.petTemperatureF : undefined,
         }
 
         // Build summary list of all earlier (older than `lastVisit`) visits.

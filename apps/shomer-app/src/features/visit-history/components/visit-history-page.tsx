@@ -103,6 +103,7 @@ function toCompletedVisit(v: HistoryVisit): CompletedVisit {
     payments: v.payments,
     amountPaid: v.amountPaid,
     petWeightKg: v.petWeightKg,
+    petTemperatureF: v.petTemperatureF,
     completedAt: v.billedAt ?? v.updatedAt,
     date: v.date,
   }

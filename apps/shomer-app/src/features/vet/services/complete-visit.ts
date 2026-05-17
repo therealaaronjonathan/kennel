@@ -28,15 +28,20 @@ export interface ServiceEntry {
   price: number
 }
 
+export interface VaccineEntry {
+  name: string
+  batch: string
+  nextDue: string
+}
+
 export interface ConsultationFormData {
   diagnoses: DiagnosisEntry[]
   consultationNotes: string
   medicines: PrescriptionEntry[]
   services: ServiceEntry[]
-  vaccineName: string
-  vaccineBatch: string
-  vaccineNextDue: string
+  vaccines: VaccineEntry[]
   petWeightKg?: number
+  petTemperatureF?: number
 }
 
 export async function completeVisit(
@@ -59,6 +64,9 @@ export async function completeVisit(
   }
   if (typeof form.petWeightKg === 'number') {
     visitUpdate.petWeightKg = form.petWeightKg
+  }
+  if (typeof form.petTemperatureF === 'number') {
+    visitUpdate.petTemperatureF = form.petTemperatureF
   }
   batch.update(visitRef, visitUpdate)
   await batch.commit()
@@ -96,15 +104,17 @@ export async function completeVisit(
     writes.push(addDoc(collection(db, `${visitBase}/prescriptions`), presDoc))
   }
 
-  if (form.vaccineName) {
-    writes.push(
-      addDoc(collection(db, `${visitBase}/vaccines`), {
-        name: form.vaccineName,
-        batch: form.vaccineBatch || null,
-        nextDue: form.vaccineNextDue || null,
-        createdAt: serverTimestamp(),
-      }),
-    )
+  for (const vaccine of form.vaccines) {
+    if (vaccine.name) {
+      writes.push(
+        addDoc(collection(db, `${visitBase}/vaccines`), {
+          name: vaccine.name,
+          batch: vaccine.batch || null,
+          nextDue: vaccine.nextDue || null,
+          createdAt: serverTimestamp(),
+        }),
+      )
+    }
   }
 
   await Promise.all(writes)

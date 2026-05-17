@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { MessageCircle, ExternalLink, Pill, Syringe, Pencil, Scale } from 'lucide-react'
+import { MessageCircle, ExternalLink, Pill, Syringe, Pencil, Scale, Thermometer, CalendarClock } from 'lucide-react'
+import type { Timestamp } from 'firebase/firestore'
 import { useMutation } from '@tanstack/react-query'
 import { useClinicName } from '@/features/clinic/hooks/use-clinic-name'
 import { cn, formatInr } from '@/lib/utils'
@@ -23,6 +24,32 @@ interface VisitDetailPanelProps {
 }
 
 const labelClass = 'text-[10px] font-semibold uppercase tracking-[0.08em] text-muted'
+
+function formatVisitDateTime(date: string, ts: Timestamp | null): string {
+  const parts: string[] = []
+  if (date) {
+    const [y, m, d] = date.split('-').map(Number)
+    if (y && m && d) {
+      parts.push(
+        new Date(y, m - 1, d).toLocaleDateString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        }),
+      )
+    }
+  }
+  if (ts) {
+    parts.push(
+      ts.toDate().toLocaleTimeString('en-IN', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      }),
+    )
+  }
+  return parts.join(' · ')
+}
 
 function formatDosage(m: {
   morning: boolean
@@ -106,12 +133,31 @@ export function VisitDetailPanel({
         <p className="mt-0.5 text-[12px] text-muted">
           {visit.ownerName} · {visit.doctorName}
         </p>
-        {typeof visit.petWeightKg === 'number' && (
-          <p className="mt-1 flex items-center gap-1.5 text-[11px] text-muted">
-            <Scale size={10} className="flex-shrink-0" />
-            <span className="font-semibold text-foreground">{visit.petWeightKg} kg</span>
-            <span>at time of visit</span>
-          </p>
+        {(visit.date || visit.completedAt) && (() => {
+          const label = formatVisitDateTime(visit.date, visit.completedAt)
+          return label ? (
+            <p className="mt-1 flex items-center gap-1.5 text-[12px] font-semibold text-foreground">
+              <CalendarClock size={12} className="text-primary flex-shrink-0" />
+              {label}
+            </p>
+          ) : null
+        })()}
+        {(typeof visit.petWeightKg === 'number' || typeof visit.petTemperatureF === 'number') && (
+          <div className="mt-1 flex items-center gap-3 flex-wrap">
+            {typeof visit.petWeightKg === 'number' && (
+              <span className="flex items-center gap-1.5 text-[11px] text-muted">
+                <Scale size={10} className="flex-shrink-0" />
+                <span className="font-semibold text-foreground">{visit.petWeightKg} kg</span>
+              </span>
+            )}
+            {typeof visit.petTemperatureF === 'number' && (
+              <span className="flex items-center gap-1.5 text-[11px] text-muted">
+                <Thermometer size={10} className="flex-shrink-0" />
+                <span className="font-semibold text-foreground">{visit.petTemperatureF}°F</span>
+              </span>
+            )}
+            <span className="text-[11px] text-muted">at time of visit</span>
+          </div>
         )}
 
         {visit.complaints.length > 0 && (

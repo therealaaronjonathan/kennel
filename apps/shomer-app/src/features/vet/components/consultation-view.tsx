@@ -8,9 +8,11 @@ import {
   PauseCircle,
   History,
   Pill,
+  Plus,
   Syringe,
   Stethoscope,
   Receipt,
+  Thermometer,
   Wallet,
   UserCheck,
   Scale,
@@ -44,6 +46,13 @@ import { EarlierVisitsModal } from './earlier-visits-modal'
 import { useDoctors } from '@/features/checkin/services/use-doctors'
 import { useDutyRoster } from '@/features/settings/services/use-duty-roster'
 import type { VetQueueEntry } from '../services/use-vet-queue'
+
+interface VaccineFormEntry {
+  name: string
+  batch: string
+  nextDue: string
+  nextYear: boolean
+}
 
 interface ConsultationViewProps {
   entry: VetQueueEntry
@@ -168,12 +177,17 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
   const [petWeightKg, setPetWeightKg] = useState<string>(() =>
     draft?.petWeightKg != null ? String(draft.petWeightKg) : '',
   )
+  const [petTemperatureF, setPetTemperatureF] = useState<string>(() =>
+    draft?.petTemperatureF != null ? String(draft.petTemperatureF) : '',
+  )
   const [showConfirm, setShowConfirm] = useState(false)
-  const [vaccineOpen, setVaccineOpen] = useState(() => !!draft?.vaccineName)
-  const [vaccineName, setVaccineName] = useState(() => draft?.vaccineName ?? '')
-  const [vaccineBatch, setVaccineBatch] = useState(() => draft?.vaccineBatch ?? '')
-  const [vaccineNextDue, setVaccineNextDue] = useState(() => draft?.vaccineNextDue ?? '')
-  const [vaccineNextYear, setVaccineNextYear] = useState(false)
+  const [vaccineEntries, setVaccineEntries] = useState<VaccineFormEntry[]>(() => {
+    if (draft?.vaccines?.length) {
+      return draft.vaccines.map((v) => ({ ...v, nextYear: false }))
+    }
+    return []
+  })
+  const [vaccineOpen, setVaccineOpen] = useState(() => !!(draft?.vaccines?.length))
   const [attemptedSubmit, setAttemptedSubmit] = useState(false)
   const [showEarlierVisits, setShowEarlierVisits] = useState(false)
   const [lastVisitOpen, setLastVisitOpen] = useState(false)
@@ -181,15 +195,18 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
   const [reassignDoctorId, setReassignDoctorId] = useState('')
 
   // ── Validation ────────────────────────────────────────────────────────────
-  const vaccineInUse = !!(vaccineName || vaccineBatch || vaccineNextDue)
-  const vaccineNameMissing = vaccineInUse && !vaccineName
-  const vaccineNextDueMissing = vaccineInUse && !vaccineNextDue
+  const vaccineErrors = vaccineEntries.map((entry) => ({
+    nameMissing: !!(!entry.name && (entry.batch || entry.nextDue)),
+    nextDueMissing: !!(entry.name && !entry.nextDue),
+  }))
 
   function findFirstErrorElementId(): string | null {
     const idx = selectedMedicines.findIndex(entryHasError)
     if (idx >= 0) return MEDICINE_ENTRY_DOM_ID(idx)
-    if (vaccineNameMissing) return 'vaccine-name-field'
-    if (vaccineNextDueMissing) return 'vaccine-next-due-field'
+    for (let i = 0; i < vaccineErrors.length; i++) {
+      if (vaccineErrors[i].nameMissing) return `vaccine-name-field-${i}`
+      if (vaccineErrors[i].nextDueMissing) return `vaccine-next-due-field-${i}`
+    }
     return null
   }
 
@@ -210,14 +227,68 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
     setShowConfirm(true)
   }
 
-  function toggleNextYear(on: boolean) {
-    setVaccineNextYear(on)
+  function handleVaccineNameChange(idx: number, newName: string) {
+    const oldName = vaccineEntries[idx].name
+    setVaccineEntries((prev) => prev.map((e, i) => (i === idx ? { ...e, name: newName } : e)))
+    setSelectedServices((prev) => {
+      let updated = [...prev]
+      if (oldName) {
+        const removeIdx = updated.findIndex((s) => s.name === oldName)
+        if (removeIdx >= 0) {
+          if (updated[removeIdx].quantity > 1) {
+            updated = updated.map((s, i) => i === removeIdx ? { ...s, quantity: s.quantity - 1 } : s)
+          } else {
+            updated = updated.filter((_, i) => i !== removeIdx)
+          }
+        }
+      }
+      if (newName) {
+        const svc = vaccinationServices.find((s) => s.name === newName)
+        if (svc) {
+          const existingIdx = updated.findIndex((s) => s.name === newName)
+          if (existingIdx >= 0) {
+            updated = updated.map((s, i) => i === existingIdx ? { ...s, quantity: s.quantity + 1 } : s)
+          } else {
+            updated = [...updated, { serviceId: svc.id, name: svc.name, price: svc.price, quantity: 1 }]
+          }
+        }
+      }
+      return updated
+    })
+  }
+
+  function addVaccineEntry() {
+    setVaccineEntries((prev) => [...prev, { name: '', batch: '', nextDue: '', nextYear: false }])
+    setVaccineOpen(true)
+  }
+
+  function removeVaccineEntry(idx: number) {
+    const entry = vaccineEntries[idx]
+    setVaccineEntries((prev) => prev.filter((_, i) => i !== idx))
+    if (entry.name) {
+      setSelectedServices((prev) => {
+        const removeIdx = prev.findIndex((s) => s.name === entry.name)
+        if (removeIdx < 0) return prev
+        if (prev[removeIdx].quantity > 1) {
+          return prev.map((s, i) => i === removeIdx ? { ...s, quantity: s.quantity - 1 } : s)
+        }
+        return prev.filter((_, i) => i !== removeIdx)
+      })
+    }
+  }
+
+  function toggleVaccineNextYear(idx: number, on: boolean) {
     if (on) {
       const d = new Date()
       d.setFullYear(d.getFullYear() + 1)
-      setVaccineNextDue(d.toISOString().split('T')[0])
+      const nextDue = d.toISOString().split('T')[0]
+      setVaccineEntries((prev) =>
+        prev.map((e, i) => (i === idx ? { ...e, nextDue, nextYear: true } : e)),
+      )
     } else {
-      setVaccineNextDue('')
+      setVaccineEntries((prev) =>
+        prev.map((e, i) => (i === idx ? { ...e, nextDue: '', nextYear: false } : e)),
+      )
     }
   }
 
@@ -227,15 +298,15 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
 
   function buildDraft(): ConsultationDraftInput {
     const weightNum = parseFloat(petWeightKg)
+    const tempNum = parseFloat(petTemperatureF)
     return {
       diagnoses: selectedDiagnoses,
       consultationNotes,
       medicines: selectedMedicines,
       services: selectedServices,
-      vaccineName,
-      vaccineBatch,
-      vaccineNextDue,
+      vaccines: vaccineEntries.map((v) => ({ name: v.name, batch: v.batch, nextDue: v.nextDue })),
       petWeightKg: !isNaN(weightNum) && weightNum > 0 ? weightNum : undefined,
+      petTemperatureF: !isNaN(tempNum) && tempNum > 0 ? tempNum : undefined,
     }
   }
 
@@ -269,10 +340,9 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
     consultationNotes,
     selectedMedicines,
     selectedServices,
-    vaccineName,
-    vaccineBatch,
-    vaccineNextDue,
+    vaccineEntries,
     petWeightKg,
+    petTemperatureF,
   ])
 
   const complete = useMutation({
@@ -283,10 +353,9 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
         consultationNotes,
         medicines: selectedMedicines,
         services: selectedServices,
-        vaccineName,
-        vaccineBatch,
-        vaccineNextDue,
+        vaccines: vaccineEntries.map((v) => ({ name: v.name, batch: v.batch, nextDue: v.nextDue })),
         petWeightKg: draft.petWeightKg,
+        petTemperatureF: draft.petTemperatureF,
       }
       return completeVisit(clinicId, branchId, entry.id, form)
     },
@@ -539,12 +608,23 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
 
                 {lastVisitOpen && (
                 <div className="p-4 space-y-4">
-                  {/* Weight */}
-                  {typeof lastVisit.petWeightKg === 'number' && (
-                    <div className="flex items-center gap-2">
-                      <Scale size={10} className="text-muted flex-shrink-0" />
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">Weight</span>
-                      <span className="text-[13px] font-semibold text-foreground">{lastVisit.petWeightKg} kg</span>
+                  {/* Vitals */}
+                  {(typeof lastVisit.petWeightKg === 'number' || typeof lastVisit.petTemperatureF === 'number') && (
+                    <div className="flex items-center gap-4 flex-wrap">
+                      {typeof lastVisit.petWeightKg === 'number' && (
+                        <div className="flex items-center gap-2">
+                          <Scale size={10} className="text-muted flex-shrink-0" />
+                          <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">Weight</span>
+                          <span className="text-[13px] font-semibold text-foreground">{lastVisit.petWeightKg} kg</span>
+                        </div>
+                      )}
+                      {typeof lastVisit.petTemperatureF === 'number' && (
+                        <div className="flex items-center gap-2">
+                          <Thermometer size={10} className="text-muted flex-shrink-0" />
+                          <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">Temp</span>
+                          <span className="text-[13px] font-semibold text-foreground">{lastVisit.petTemperatureF}°F</span>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -777,25 +857,36 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
 
             {/* Consultation form */}
             <div className="space-y-5">
-              {/* Weight */}
+              {/* Vitals — weight + temperature */}
               <div className="space-y-1.5">
-                <label className={labelClass}>
-                  <span className="inline-flex items-center gap-1.5">
-                    <Scale size={10} />
-                    Pet Weight (kg)
-                  </span>
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.1}
-                    placeholder="e.g. 12.5"
-                    value={petWeightKg}
-                    onChange={(e) => setPetWeightKg(e.target.value)}
-                    className={cn(inputClass, 'w-36')}
-                  />
-                  <span className="text-[12px] text-muted">kg</span>
+                <label className={labelClass}>Vitals</label>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Scale size={12} className="text-muted flex-shrink-0" />
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      placeholder="e.g. 12.5"
+                      value={petWeightKg}
+                      onChange={(e) => setPetWeightKg(e.target.value)}
+                      className={cn(inputClass, 'w-28')}
+                    />
+                    <span className="text-[12px] text-muted">kg</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Thermometer size={12} className="text-muted flex-shrink-0" />
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      placeholder="e.g. 101.5"
+                      value={petTemperatureF}
+                      onChange={(e) => setPetTemperatureF(e.target.value)}
+                      className={cn(inputClass, 'w-28')}
+                    />
+                    <span className="text-[12px] text-muted">°F</span>
+                  </div>
                 </div>
               </div>
 
@@ -841,7 +932,15 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
                   onClick={() => setVaccineOpen((v) => !v)}
                   className="w-full flex items-center justify-between px-4 py-3 bg-surface hover:bg-surface-2 transition-colors"
                 >
-                  <span className={labelClass}>Vaccine Details</span>
+                  <span className={cn(labelClass, 'flex items-center gap-1.5')}>
+                    <Syringe size={10} />
+                    Vaccine Details
+                    {vaccineEntries.filter((e) => e.name).length > 0 && (
+                      <span className="ml-1 rounded-full bg-primary/15 px-1.5 py-px text-[10px] font-bold text-primary">
+                        {vaccineEntries.filter((e) => e.name).length}
+                      </span>
+                    )}
+                  </span>
                   {vaccineOpen ? (
                     <ChevronUp size={13} className="text-muted" />
                   ) : (
@@ -849,82 +948,115 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
                   )}
                 </button>
                 {vaccineOpen && (
-                  <div className="px-4 pb-4 pt-3 bg-surface space-y-3">
-                    <div id="vaccine-name-field" className="space-y-1.5 scroll-mt-4">
-                      <label className={labelClass}>Vaccine Name</label>
-                      <select
-                        value={vaccineName}
-                        onChange={(e) => setVaccineName(e.target.value)}
-                        className={cn(
-                          inputClass,
-                          'resize-none',
-                          attemptedSubmit && vaccineNameMissing && 'border-danger focus:border-danger',
-                        )}
-                      >
-                        <option value="">Select a vaccine…</option>
-                        {vaccinationServices.map((v) => (
-                          <option key={v.id} value={v.name}>{v.name}</option>
-                        ))}
-                      </select>
-                      {attemptedSubmit && vaccineNameMissing && (
-                        <p className="text-[11px] font-semibold text-danger">
-                          Pick a vaccine or clear the other vaccine fields.
-                        </p>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <label className={labelClass}>Batch No.</label>
-                        <input
-                          type="text"
-                          placeholder="Batch number (optional)"
-                          value={vaccineBatch}
-                          onChange={(e) => setVaccineBatch(e.target.value)}
-                          className={cn(inputClass, 'resize-none')}
-                        />
-                      </div>
-                      <div id="vaccine-next-due-field" className="space-y-1.5 scroll-mt-4">
-                        <div className="flex items-center justify-between">
-                          <label className={labelClass}>Next Due</label>
-                          <button
-                            type="button"
-                            onClick={() => toggleNextYear(!vaccineNextYear)}
+                  <div className="px-4 pb-4 pt-3 bg-surface space-y-4">
+                    {vaccineEntries.map((entry, idx) => (
+                      <div key={idx} className="space-y-3">
+                        {idx > 0 && <div className="border-t border-border-base pt-1" />}
+                        <div id={`vaccine-name-field-${idx}`} className="space-y-1.5 scroll-mt-4">
+                          <div className="flex items-center justify-between">
+                            <label className={labelClass}>
+                              {vaccineEntries.length > 1 ? `Vaccine ${idx + 1}` : 'Vaccine'}
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => removeVaccineEntry(idx)}
+                              className="text-[11px] font-semibold text-muted hover:text-danger transition-colors"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                          <select
+                            value={entry.name}
+                            onChange={(e) => handleVaccineNameChange(idx, e.target.value)}
                             className={cn(
-                              'flex items-center gap-1.5 rounded-[3px] border px-2 py-0.5 text-[10px] font-semibold transition-colors',
-                              vaccineNextYear
-                                ? 'border-primary/40 bg-primary/10 text-primary'
-                                : 'border-border-base text-muted hover:text-foreground',
+                              inputClass,
+                              'resize-none',
+                              attemptedSubmit && vaccineErrors[idx]?.nameMissing && 'border-danger focus:border-danger',
                             )}
                           >
-                            <span className={cn(
-                              'inline-block h-2.5 w-2.5 rounded-full transition-colors',
-                              vaccineNextYear ? 'bg-primary' : 'bg-border-base',
-                            )} />
-                            Next Year
-                          </button>
-                        </div>
-                        <input
-                          type="date"
-                          value={vaccineNextDue}
-                          onChange={(e) => {
-                            setVaccineNextDue(e.target.value)
-                            setVaccineNextYear(false)
-                          }}
-                          disabled={vaccineNextYear}
-                          className={cn(
-                            inputClass,
-                            'resize-none',
-                            vaccineNextYear && 'opacity-60 cursor-not-allowed',
-                            attemptedSubmit && vaccineNextDueMissing && 'border-danger focus:border-danger',
+                            <option value="">Select a vaccine…</option>
+                            {vaccinationServices.map((v) => (
+                              <option key={v.id} value={v.name}>{v.name}</option>
+                            ))}
+                          </select>
+                          {attemptedSubmit && vaccineErrors[idx]?.nameMissing && (
+                            <p className="text-[11px] font-semibold text-danger">
+                              Pick a vaccine or clear the other vaccine fields.
+                            </p>
                           )}
-                        />
-                        {attemptedSubmit && vaccineNextDueMissing && (
-                          <p className="text-[11px] font-semibold text-danger">
-                            Set the next due date or clear the other vaccine fields.
-                          </p>
-                        )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <label className={labelClass}>Batch No.</label>
+                            <input
+                              type="text"
+                              placeholder="Batch number (optional)"
+                              value={entry.batch}
+                              onChange={(e) =>
+                                setVaccineEntries((prev) =>
+                                  prev.map((v, i) => (i === idx ? { ...v, batch: e.target.value } : v)),
+                                )
+                              }
+                              className={cn(inputClass, 'resize-none')}
+                            />
+                          </div>
+                          <div id={`vaccine-next-due-field-${idx}`} className="space-y-1.5 scroll-mt-4">
+                            <div className="flex items-center justify-between">
+                              <label className={labelClass}>Next Due</label>
+                              <button
+                                type="button"
+                                onClick={() => toggleVaccineNextYear(idx, !entry.nextYear)}
+                                className={cn(
+                                  'flex items-center gap-1.5 rounded-[3px] border px-2 py-0.5 text-[10px] font-semibold transition-colors',
+                                  entry.nextYear
+                                    ? 'border-primary/40 bg-primary/10 text-primary'
+                                    : 'border-border-base text-muted hover:text-foreground',
+                                )}
+                              >
+                                <span
+                                  className={cn(
+                                    'inline-block h-2.5 w-2.5 rounded-full transition-colors',
+                                    entry.nextYear ? 'bg-primary' : 'bg-border-base',
+                                  )}
+                                />
+                                Next Year
+                              </button>
+                            </div>
+                            <input
+                              type="date"
+                              value={entry.nextDue}
+                              onChange={(e) => {
+                                setVaccineEntries((prev) =>
+                                  prev.map((v, i) =>
+                                    i === idx ? { ...v, nextDue: e.target.value, nextYear: false } : v,
+                                  ),
+                                )
+                              }}
+                              disabled={entry.nextYear}
+                              className={cn(
+                                inputClass,
+                                'resize-none',
+                                entry.nextYear && 'opacity-60 cursor-not-allowed',
+                                attemptedSubmit && vaccineErrors[idx]?.nextDueMissing && 'border-danger focus:border-danger',
+                              )}
+                            />
+                            {attemptedSubmit && vaccineErrors[idx]?.nextDueMissing && (
+                              <p className="text-[11px] font-semibold text-danger">
+                                Set the next due date or clear the other vaccine fields.
+                              </p>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={addVaccineEntry}
+                      className="w-full flex items-center justify-center gap-1.5 rounded-[4px] border border-dashed border-border-base px-4 py-2.5 text-[12px] font-semibold text-muted hover:border-primary hover:text-primary transition-colors"
+                    >
+                      <Plus size={12} />
+                      Add Vaccine
+                    </button>
                   </div>
                 )}
               </div>

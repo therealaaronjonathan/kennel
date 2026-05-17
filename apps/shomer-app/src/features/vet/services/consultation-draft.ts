@@ -19,10 +19,9 @@ export interface ConsultationDraft {
   consultationNotes: string
   medicines: PrescriptionEntry[]
   services: ServiceEntry[]
-  vaccineName: string
-  vaccineBatch: string
-  vaccineNextDue: string
+  vaccines: { name: string; batch: string; nextDue: string }[]
   petWeightKg?: number
+  petTemperatureF?: number
   savedAt?: Timestamp
 }
 

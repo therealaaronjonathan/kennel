@@ -97,8 +97,9 @@ function toCompletedVisit(v: AllVisit): CompletedVisit {
     payments: v.payments,
     amountPaid: v.amountPaid,
     petWeightKg: v.petWeightKg,
-    completedAt: null,
-    date: '',
+    petTemperatureF: v.petTemperatureF,
+    completedAt: v.createdAt,
+    date: v.date,
   }
 }
 
@@ -112,16 +113,30 @@ export function ReceptionQueuePage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>('all')
+  const [doctorFilter, setDoctorFilter] = useState<string>('all')
+
+  const doctors = useMemo(() => {
+    const seen = new Map<string, string>()
+    for (const v of visits) {
+      if (v.doctorId && !seen.has(v.doctorId)) seen.set(v.doctorId, v.doctorName)
+    }
+    return Array.from(seen.entries()).map(([id, name]) => ({ id, name }))
+  }, [visits])
 
   const filteredVisits = useMemo(() => {
-    if (paymentFilter === 'all') return visits
-    if (paymentFilter === 'split') {
-      return visits.filter((v) => (v.payments?.length ?? 0) > 1)
+    let result = visits
+    if (doctorFilter !== 'all') {
+      result = result.filter((v) => v.doctorId === doctorFilter)
     }
-    return visits.filter((v) =>
-      (v.payments ?? []).some((p) => p.method === paymentFilter && p.amount > 0),
-    )
-  }, [visits, paymentFilter])
+    if (paymentFilter === 'split') {
+      result = result.filter((v) => (v.payments?.length ?? 0) > 1)
+    } else if (paymentFilter !== 'all') {
+      result = result.filter((v) =>
+        (v.payments ?? []).some((p) => p.method === paymentFilter && p.amount > 0),
+      )
+    }
+    return result
+  }, [visits, paymentFilter, doctorFilter])
 
   const selectedVisit = filteredVisits.find((v) => v.id === selectedId) ?? null
   const hasPanel = !!selectedVisit
@@ -134,6 +149,23 @@ export function ReceptionQueuePage() {
           Queue
         </h1>
         <div className="flex items-center gap-3">
+          {doctors.length > 1 && (
+            <label className="flex items-center gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+                Doctor
+              </span>
+              <select
+                value={doctorFilter}
+                onChange={(e) => setDoctorFilter(e.target.value)}
+                className="h-8 rounded-[4px] border border-border-base bg-background px-2 text-[12px] font-semibold text-foreground focus:outline-none focus:border-primary"
+              >
+                <option value="all">All</option>
+                {doctors.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="flex items-center gap-2">
             <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
               Payment
@@ -153,7 +185,7 @@ export function ReceptionQueuePage() {
           {!loading && (
             <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-[11px] font-bold text-muted">
               {filteredVisits.length}
-              {paymentFilter === 'all' ? ' today' : ' filtered'}
+              {doctorFilter === 'all' && paymentFilter === 'all' ? ' today' : ' filtered'}
             </span>
           )}
         </div>
