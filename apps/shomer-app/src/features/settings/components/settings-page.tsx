@@ -12,7 +12,7 @@ import {
 } from '../services/use-settings-lists'
 import {
   addClinicDiagnosis,
-  setClinicDiagnosisActive,
+  deleteClinicDiagnosis,
   addClinicMedicine,
   setClinicMedicineActive,
   addClinicService,
@@ -136,8 +136,11 @@ function DiagnosesTab({ clinicId }: { clinicId: string }) {
   const [name, setName] = useState('')
   const [adding, setAdding] = useState(false)
   const [filter, setFilter] = useState('')
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
-  const filtered = items.filter((i) => i.name.toLowerCase().includes(filter.toLowerCase()))
+  const activeItems = items.filter((i) => i.isActive)
+  const filtered = activeItems.filter((i) => i.name.toLowerCase().includes(filter.toLowerCase()))
 
   async function handleAdd() {
     const trimmed = name.trim()
@@ -151,8 +154,14 @@ function DiagnosesTab({ clinicId }: { clinicId: string }) {
     }
   }
 
-  async function toggle(id: string, current: boolean) {
-    await setClinicDiagnosisActive(clinicId, id, !current)
+  async function handleDelete(id: string) {
+    setDeleting(true)
+    try {
+      await deleteClinicDiagnosis(clinicId, id)
+      setConfirmDeleteId(null)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   return (
@@ -180,7 +189,7 @@ function DiagnosesTab({ clinicId }: { clinicId: string }) {
         </div>
       </div>
 
-      {items.length > 6 && (
+      {activeItems.length > 6 && (
         <input
           type="text"
           placeholder="Filter list…"
@@ -199,21 +208,38 @@ function DiagnosesTab({ clinicId }: { clinicId: string }) {
           {filtered.map((item) => (
             <div
               key={item.id}
-              className={cn('flex items-center justify-between px-4 py-3 bg-surface transition-colors', !item.isActive && 'opacity-40')}
+              className="flex items-center justify-between px-4 py-3 bg-surface transition-colors"
             >
-              <span className={cn('text-[13px] text-foreground', !item.isActive && 'line-through text-muted')}>
-                {item.name}
-              </span>
-              <button
-                type="button"
-                onClick={() => toggle(item.id, item.isActive)}
-                className={cn(
-                  'flex items-center gap-1.5 rounded-[3px] px-2.5 py-1 text-[11px] font-semibold transition-colors',
-                  item.isActive ? 'text-danger hover:bg-danger/10' : 'text-success hover:bg-success/10',
-                )}
-              >
-                {item.isActive ? <><Trash2 size={11} /> Remove</> : <><RotateCcw size={11} /> Restore</>}
-              </button>
+              <span className="text-[13px] text-foreground">{item.name}</span>
+              {confirmDeleteId === item.id ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-muted">Delete permanently?</span>
+                  <button
+                    type="button"
+                    disabled={deleting}
+                    onClick={() => handleDelete(item.id)}
+                    className="rounded-[3px] bg-danger px-2.5 py-1 text-[11px] font-semibold text-white hover:opacity-85 transition-opacity disabled:opacity-50"
+                  >
+                    {deleting ? 'Deleting…' : 'Yes, delete'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deleting}
+                    onClick={() => setConfirmDeleteId(null)}
+                    className="rounded-[3px] px-2.5 py-1 text-[11px] font-semibold text-muted hover:bg-surface-2 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteId(item.id)}
+                  className="flex items-center gap-1.5 rounded-[3px] px-2.5 py-1 text-[11px] font-semibold text-danger hover:bg-danger/10 transition-colors"
+                >
+                  <Trash2 size={11} /> Delete
+                </button>
+              )}
             </div>
           ))}
         </div>

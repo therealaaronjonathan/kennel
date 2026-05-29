@@ -199,6 +199,7 @@ export async function registerAndCheckin(
         ? { speciesName: newOwner.speciesName.trim() }
         : {}),
       breed: newOwner.breed || null,
+      gender: newOwner.gender || null,
       dateOfBirth: newOwner.dateOfBirth || null,
       color: newOwner.color || null,
       microchipNumber: newOwner.microchipNumber || null,

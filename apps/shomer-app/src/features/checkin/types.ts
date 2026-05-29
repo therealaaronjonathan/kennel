@@ -21,6 +21,7 @@ export interface Pet {
   species: 'dog' | 'cat' | 'bird' | 'rabbit' | 'other'
   speciesName?: string   // custom species label when species === 'other'
   breed?: string
+  gender?: 'male' | 'female'
   dateOfBirth?: string   // YYYY-MM-DD; age is derived at display time
   microchipNumber?: string
   color?: string
@@ -59,6 +60,7 @@ export interface NewOwnerFormData {
   species: 'dog' | 'cat' | 'other'
   speciesName: string   // required when species === 'other'
   breed: string
+  gender: 'male' | 'female' | ''
   dateOfBirth: string   // YYYY-MM-DD; empty string when not provided
   color: string
   microchipNumber: string

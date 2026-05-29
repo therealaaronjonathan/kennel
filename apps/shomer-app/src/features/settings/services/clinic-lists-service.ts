@@ -1,4 +1,4 @@
-import { addDoc, collection, doc, serverTimestamp, updateDoc } from 'firebase/firestore'
+import { addDoc, collection, deleteDoc, doc, serverTimestamp, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 
 // Diagnoses
@@ -11,15 +11,8 @@ export async function addClinicDiagnosis(clinicId: string, name: string): Promis
   })
 }
 
-export async function setClinicDiagnosisActive(
-  clinicId: string,
-  diagnosisId: string,
-  isActive: boolean,
-): Promise<void> {
-  await updateDoc(doc(db, `clinics/${clinicId}/diagnoses/${diagnosisId}`), {
-    isActive,
-    updatedAt: serverTimestamp(),
-  })
+export async function deleteClinicDiagnosis(clinicId: string, diagnosisId: string): Promise<void> {
+  await deleteDoc(doc(db, `clinics/${clinicId}/diagnosisCatalog/${diagnosisId}`))
 }
 
 // Medicines
@@ -37,7 +30,7 @@ export async function setClinicMedicineActive(
   medicineId: string,
   isActive: boolean,
 ): Promise<void> {
-  await updateDoc(doc(db, `clinics/${clinicId}/medicines/${medicineId}`), {
+  await updateDoc(doc(db, `clinics/${clinicId}/medicinesCatalog/${medicineId}`), {
     isActive,
     updatedAt: serverTimestamp(),
   })

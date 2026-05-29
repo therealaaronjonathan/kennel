@@ -162,6 +162,7 @@ interface Pet {
   species: 'dog' | 'cat' | 'bird' | 'rabbit' | 'other'
   speciesName?: string    // when species === 'other'
   breed?: string
+  gender?: 'male' | 'female'  // captured during new-owner registration; may be absent on legacy docs
   dateOfBirth?: string    // YYYY-MM-DD; age is derived at display time via lib/age.ts
   color?: string          // coat color/markings, free text
   microchipNumber?: string
@@ -173,7 +174,7 @@ interface Pet {
 **Legacy `age` field**: pre-existing pet docs created before v1.1.14 may have an `age?: number` field. The current code never reads it; new writes use `dateOfBirth` only. The legacy field can stay on old docs without affecting behaviour (display falls through to nothing if `dateOfBirth` is absent).
 
 ### DiagnosisCatalog (collection: `diagnosisCatalog`)
-Clinic-level master list. Soft-deleted via `isActive`.
+Clinic-level master list. Hard-deleted (documents removed from Firestore on delete). The `isActive` field exists on legacy docs but is no longer written or read by the Settings UI.
 
 ```ts
 interface DiagnosisCatalogItem {

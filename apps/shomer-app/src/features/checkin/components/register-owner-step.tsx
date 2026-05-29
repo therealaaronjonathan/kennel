@@ -11,6 +11,11 @@ const SPECIES_OPTIONS: { value: NewOwnerFormData['species']; label: string }[] =
   { value: 'other', label: 'Other' },
 ]
 
+const GENDER_OPTIONS: { value: 'male' | 'female'; label: string }[] = [
+  { value: 'male', label: 'Male' },
+  { value: 'female', label: 'Female' },
+]
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 // ── RegisterOwnerStep ─────────────────────────────────────────────────────────
@@ -43,6 +48,7 @@ export function RegisterOwnerStep({
     species: prefillSpecies,
     speciesName: '',
     breed: prefillBreed,
+    gender: '',
     dateOfBirth: '',
     color: '',
     microchipNumber: '',
@@ -109,6 +115,7 @@ export function RegisterOwnerStep({
     }
     if (!form.petName.trim()) next.petName = 'Required'
     if (form.species === 'other' && !form.speciesName.trim()) next.speciesName = 'Required'
+    if (!form.gender) next.gender = 'Required'
     if (form.microchipNumber.length > 15) next.microchipNumber = 'Maximum 15 characters'
     setErrors(next)
     return Object.keys(next).length === 0
@@ -311,6 +318,39 @@ export function RegisterOwnerStep({
             )}
           </div>
         )}
+
+        {/* Gender */}
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
+            Gender <span className="text-danger">*</span>
+          </label>
+          <div
+            className={cn(
+              'grid grid-cols-2 rounded-[4px] border overflow-hidden',
+              errors.gender ? 'border-danger' : 'border-border-base',
+            )}
+          >
+            {GENDER_OPTIONS.map((opt, i) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => set('gender', opt.value)}
+                className={cn(
+                  'py-[9px] text-[13px] font-semibold transition-colors',
+                  i < GENDER_OPTIONS.length - 1 && 'border-r border-border-base',
+                  form.gender === opt.value
+                    ? 'bg-primary text-white'
+                    : 'bg-surface text-muted hover:bg-surface-2 hover:text-foreground',
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {errors.gender && (
+            <p className="text-[11px] text-danger">{errors.gender}</p>
+          )}
+        </div>
 
         {/* Breed + Age */}
         <div className="grid grid-cols-2 gap-3">

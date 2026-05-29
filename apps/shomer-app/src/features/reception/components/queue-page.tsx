@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle } from 'lucide-react'
+import { CheckCircle, CheckCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useClinic } from '@/features/clinic'
 import { useAllVisits, type AllVisit } from '../services/use-all-visits'
@@ -9,6 +9,7 @@ import {
   PAYMENT_METHOD_LABELS,
   type PaymentMethod,
 } from '@/features/checkout/services/complete-billing'
+import { markVisitCompleted } from '../services/mark-visit-completed'
 
 const PAYMENT_FILTER_LABELS: Record<PaymentMethod | 'split', string> = {
   cash: 'Cash',
@@ -114,6 +115,8 @@ export function ReceptionQueuePage() {
   const [toast, setToast] = useState<string | null>(null)
   const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>('all')
   const [doctorFilter, setDoctorFilter] = useState<string>('all')
+  const [confirmComplete, setConfirmComplete] = useState(false)
+  const [completing, setCompleting] = useState(false)
 
   const doctors = useMemo(() => {
     const seen = new Map<string, string>()
@@ -140,6 +143,21 @@ export function ReceptionQueuePage() {
 
   const selectedVisit = filteredVisits.find((v) => v.id === selectedId) ?? null
   const hasPanel = !!selectedVisit
+  const canMarkComplete =
+    !!selectedVisit &&
+    (selectedVisit.status === 'waiting' || selectedVisit.status === 'in-progress')
+
+  async function handleMarkComplete() {
+    if (!clinicId || !branchId || !selectedVisit) return
+    setCompleting(true)
+    try {
+      await markVisitCompleted(clinicId, branchId, selectedVisit.id)
+      setConfirmComplete(false)
+      setToast('Visit marked as complete')
+    } finally {
+      setCompleting(false)
+    }
+  }
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -237,7 +255,7 @@ export function ReceptionQueuePage() {
                   <button
                     key={visit.id}
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); setSelectedId(isSelected ? null : visit.id) }}
+                    onClick={(e) => { e.stopPropagation(); setSelectedId(isSelected ? null : visit.id); setConfirmComplete(false) }}
                     className={cn(
                       'w-full grid gap-3 px-5 py-3 text-left border-b border-border-base transition-colors',
                       COLS,
@@ -273,6 +291,22 @@ export function ReceptionQueuePage() {
         {/* Right: detail panel */}
         {selectedVisit && clinicId && branchId && (
           <div className="flex-1 overflow-hidden flex flex-col bg-background">
+            {/* Mark complete action bar */}
+            {canMarkComplete && (
+              <div className="flex-shrink-0 border-b border-border-base bg-surface px-4 py-2.5 flex items-center justify-between gap-3">
+                <span className="text-[12px] text-muted">
+                  Doctor hasn't completed this visit yet.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setConfirmComplete(true)}
+                  className="flex items-center gap-1.5 rounded-[4px] border border-success/40 bg-success/10 px-3 py-1.5 text-[12px] font-semibold text-success hover:bg-success/20 transition-colors"
+                >
+                  <CheckCheck size={13} />
+                  Mark as Complete
+                </button>
+              </div>
+            )}
             <VisitDetailPanel
               key={selectedVisit.id}
               visit={toCompletedVisit(selectedVisit)}
@@ -284,6 +318,49 @@ export function ReceptionQueuePage() {
           </div>
         )}
       </div>
+
+      {/* Mark complete confirmation modal */}
+      {confirmComplete && selectedVisit && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+          onClick={() => !completing && setConfirmComplete(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-[4px] bg-surface border border-border-base"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 border-b border-border-base px-5 py-4">
+              <CheckCheck size={14} className="text-success flex-shrink-0" />
+              <span className="text-[14px] font-bold text-foreground">Mark visit as complete?</span>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-[13px] text-muted">
+                This will mark{' '}
+                <span className="font-semibold text-foreground">{selectedVisit.petName}</span>'s visit as
+                complete and move it to the checkout tab.
+              </p>
+            </div>
+            <div className="flex gap-2 border-t border-border-base px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setConfirmComplete(false)}
+                disabled={completing}
+                className="flex-1 rounded-[4px] border border-border-base px-4 py-[9px] text-[13px] font-semibold text-muted hover:text-foreground hover:border-foreground/20 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleMarkComplete}
+                disabled={completing}
+                className="flex-1 rounded-[4px] bg-success px-4 py-[9px] text-[13px] font-semibold text-white hover:opacity-85 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {completing ? 'Completing…' : 'Yes, mark complete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && <Toast message={toast} onDone={() => setToast(null)} />}
     </div>
