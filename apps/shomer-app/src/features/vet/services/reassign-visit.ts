@@ -1,6 +1,6 @@
 import { doc, serverTimestamp, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import type { ConsultationDraftInput } from './consultation-draft'
+import { buildDraftDoc, type ConsultationDraftInput } from './consultation-draft'
 
 export async function reassignVisit(
   clinicId: string,
@@ -17,7 +17,7 @@ export async function reassignVisit(
     updatedAt: serverTimestamp(),
   }
   if (draft) {
-    update.consultationDraft = { ...draft, savedAt: serverTimestamp() }
+    update.consultationDraft = buildDraftDoc(draft, serverTimestamp())
   }
   await updateDoc(
     doc(db, `clinics/${clinicId}/branches/${branchId}/visits/${visitId}`),

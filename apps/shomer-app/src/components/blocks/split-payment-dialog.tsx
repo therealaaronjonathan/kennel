@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Banknote, CreditCard, Smartphone } from 'lucide-react'
+import { Banknote, CreditCard, Smartphone } from 'lucide-react'
 import { cn, formatInr } from '@/lib/utils'
+import { ErrorDetails } from '@/components/primitives/error-details'
 import {
   PAYMENT_METHODS,
   PAYMENT_METHOD_LABELS,
@@ -285,10 +286,7 @@ export function SplitPaymentDialog({
           </div>
 
           {(error || saveHint) && (
-            <div className="flex items-start gap-2 rounded-[4px] border border-danger/30 bg-danger/5 px-3 py-2">
-              <AlertTriangle size={12} className="text-danger flex-shrink-0 mt-0.5" />
-              <p className="text-[11px] text-danger">{error ?? saveHint}</p>
-            </div>
+            <ErrorDetails message={error ?? saveHint ?? ''} />
           )}
         </div>
 

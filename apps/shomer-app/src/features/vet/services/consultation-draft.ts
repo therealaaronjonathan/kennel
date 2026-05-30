@@ -27,6 +27,20 @@ export interface ConsultationDraft {
 
 export type ConsultationDraftInput = Omit<ConsultationDraft, 'savedAt'>
 
+export function buildDraftDoc(draft: ConsultationDraftInput, savedAt: unknown): Record<string, unknown> {
+  const doc: Record<string, unknown> = {
+    diagnoses: draft.diagnoses,
+    consultationNotes: draft.consultationNotes,
+    medicines: draft.medicines,
+    services: draft.services,
+    vaccines: draft.vaccines,
+    savedAt,
+  }
+  if (typeof draft.petWeightKg === 'number') doc.petWeightKg = draft.petWeightKg
+  if (typeof draft.petTemperatureF === 'number') doc.petTemperatureF = draft.petTemperatureF
+  return doc
+}
+
 export async function saveConsultationDraft(
   clinicId: string,
   branchId: string,
@@ -36,7 +50,7 @@ export async function saveConsultationDraft(
   await updateDoc(
     doc(db, `clinics/${clinicId}/branches/${branchId}/visits/${visitId}`),
     {
-      consultationDraft: { ...draft, savedAt: serverTimestamp() },
+      consultationDraft: buildDraftDoc(draft, serverTimestamp()),
       updatedAt: serverTimestamp(),
     },
   )

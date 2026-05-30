@@ -1,6 +1,6 @@
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import type { ConsultationDraftInput } from './consultation-draft'
+import { buildDraftDoc, type ConsultationDraftInput } from './consultation-draft'
 
 export async function pauseVisit(
   clinicId: string,
@@ -14,7 +14,7 @@ export async function pauseVisit(
     updatedAt: serverTimestamp(),
   }
   if (draft) {
-    update.consultationDraft = { ...draft, savedAt: serverTimestamp() }
+    update.consultationDraft = buildDraftDoc(draft, serverTimestamp())
   }
   await updateDoc(visitRef, update)
 }

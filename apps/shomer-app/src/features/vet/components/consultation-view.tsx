@@ -32,6 +32,7 @@ import {
   type ConsultationDraftInput,
 } from '../services/consultation-draft'
 import { addClinicDiagnosis } from '@/features/settings/services/clinic-lists-service'
+import { ErrorDetails } from '@/components/primitives/error-details'
 import { DiagnosisSelect, type DiagnosisEntry } from './diagnosis-select'
 import {
   MedicineSelect,
@@ -1151,9 +1152,7 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
             )}
 
             {reassign.isError && (
-              <p className="text-[12px] text-danger">
-                {(reassign.error as Error)?.message ?? 'Failed to reassign. Try again.'}
-              </p>
+              <ErrorDetails message={(reassign.error as Error)?.message ?? 'Failed to reassign. Try again.'} />
             )}
 
             <div className="flex gap-2">
@@ -1217,9 +1216,7 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
               <p className="text-[12px] text-muted text-center">No services added.</p>
             )}
             {complete.isError && (
-              <p className="text-[12px] text-danger">
-                {(complete.error as Error)?.message ?? 'Failed to save. Try again.'}
-              </p>
+              <ErrorDetails message={(complete.error as Error)?.message ?? 'Failed to save. Try again.'} />
             )}
             <div className="flex gap-2">
               <button

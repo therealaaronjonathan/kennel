@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { LogOut, AlertTriangle } from 'lucide-react'
+import { LogOut } from 'lucide-react'
+import { ErrorDetails } from '@/components/primitives/error-details'
 
 interface LogoutConfirmDialogProps {
   open: boolean
@@ -60,12 +61,7 @@ export function LogoutConfirmDialog({ open, onCancel, onConfirm }: LogoutConfirm
         {/* Body */}
         <div className="px-5 py-4">
           <p className="text-[13px] text-muted">You'll be returned to the login screen.</p>
-          {error && (
-            <div className="mt-3 flex items-start gap-2 rounded-[4px] border border-danger/30 bg-danger/5 px-3 py-2">
-              <AlertTriangle size={12} className="text-danger flex-shrink-0 mt-0.5" />
-              <p className="text-[11px] text-danger">{error}</p>
-            </div>
-          )}
+          {error && <ErrorDetails message={error} className="mt-3" />}
         </div>
 
         {/* Actions */}
