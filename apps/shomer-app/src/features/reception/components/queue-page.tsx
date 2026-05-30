@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle, CheckCheck } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, formatInr } from '@/lib/utils'
 import { useClinic } from '@/features/clinic'
 import { useAllVisits, type AllVisit } from '../services/use-all-visits'
 import { VisitDetailPanel } from '@/features/dashboard/components/visit-detail-panel'
@@ -10,6 +10,8 @@ import {
   type PaymentMethod,
 } from '@/features/checkout/services/complete-billing'
 import { markVisitCompleted } from '../services/mark-visit-completed'
+import { ServicesSelect, type ServiceEntry } from '@/components/blocks/services-select'
+import { useClinicServices } from '@/features/vet/services/use-clinic-services'
 
 const PAYMENT_FILTER_LABELS: Record<PaymentMethod | 'split', string> = {
   cash: 'Cash',
@@ -117,6 +119,8 @@ export function ReceptionQueuePage() {
   const [doctorFilter, setDoctorFilter] = useState<string>('all')
   const [confirmComplete, setConfirmComplete] = useState(false)
   const [completing, setCompleting] = useState(false)
+  const [selectedServices, setSelectedServices] = useState<ServiceEntry[]>([])
+  const { services: catalogServices, loading: servicesLoading } = useClinicServices(clinicId)
 
   const doctors = useMemo(() => {
     const seen = new Map<string, string>()
@@ -151,8 +155,9 @@ export function ReceptionQueuePage() {
     if (!clinicId || !branchId || !selectedVisit) return
     setCompleting(true)
     try {
-      await markVisitCompleted(clinicId, branchId, selectedVisit.id)
+      await markVisitCompleted(clinicId, branchId, selectedVisit.id, selectedServices)
       setConfirmComplete(false)
+      setSelectedServices([])
       setToast('Visit marked as complete')
     } finally {
       setCompleting(false)
@@ -255,7 +260,7 @@ export function ReceptionQueuePage() {
                   <button
                     key={visit.id}
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); setSelectedId(isSelected ? null : visit.id); setConfirmComplete(false) }}
+                    onClick={(e) => { e.stopPropagation(); setSelectedId(isSelected ? null : visit.id); setConfirmComplete(false); setSelectedServices([]) }}
                     className={cn(
                       'w-full grid gap-3 px-5 py-3 text-left border-b border-border-base transition-colors',
                       COLS,
@@ -291,20 +296,37 @@ export function ReceptionQueuePage() {
         {/* Right: detail panel */}
         {selectedVisit && clinicId && branchId && (
           <div className="flex-1 overflow-hidden flex flex-col bg-background">
-            {/* Mark complete action bar */}
+            {/* Mark complete action bar + services */}
             {canMarkComplete && (
-              <div className="flex-shrink-0 border-b border-border-base bg-surface px-4 py-2.5 flex items-center justify-between gap-3">
-                <span className="text-[12px] text-muted">
-                  Doctor hasn't completed this visit yet.
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setConfirmComplete(true)}
-                  className="flex items-center gap-1.5 rounded-[4px] border border-success/40 bg-success/10 px-3 py-1.5 text-[12px] font-semibold text-success hover:bg-success/20 transition-colors"
-                >
-                  <CheckCheck size={13} />
-                  Mark as Complete
-                </button>
+              <div className="flex-shrink-0 border-b border-border-base bg-surface">
+                {/* Action row */}
+                <div className="px-4 py-2.5 flex items-center justify-between gap-3">
+                  <span className="text-[12px] text-muted">
+                    Doctor hasn't completed this visit yet.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmComplete(true)}
+                    className="flex items-center gap-1.5 rounded-[4px] border border-success/40 bg-success/10 px-3 py-1.5 text-[12px] font-semibold text-success hover:bg-success/20 transition-colors"
+                  >
+                    <CheckCheck size={13} />
+                    Mark as Complete
+                  </button>
+                </div>
+                {/* Services picker */}
+                <div className="border-t border-border-base px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted mb-2">
+                    Services <span className="normal-case font-normal">(optional)</span>
+                  </p>
+                  <div className="max-h-64 overflow-y-auto">
+                    <ServicesSelect
+                      selected={selectedServices}
+                      onChange={setSelectedServices}
+                      items={catalogServices}
+                      loading={servicesLoading}
+                    />
+                  </div>
+                </div>
               </div>
             )}
             <VisitDetailPanel
@@ -333,12 +355,35 @@ export function ReceptionQueuePage() {
               <CheckCheck size={14} className="text-success flex-shrink-0" />
               <span className="text-[14px] font-bold text-foreground">Mark visit as complete?</span>
             </div>
-            <div className="px-5 py-4">
+            <div className="px-5 py-4 space-y-3">
               <p className="text-[13px] text-muted">
                 This will mark{' '}
                 <span className="font-semibold text-foreground">{selectedVisit.petName}</span>'s visit as
                 complete and move it to the checkout tab.
               </p>
+              {/* Services summary */}
+              {selectedServices.length > 0 ? (
+                <div className="rounded-[4px] border border-border-base overflow-hidden divide-y divide-border-base">
+                  {selectedServices.map((s) => (
+                    <div key={s.serviceId} className="flex items-center justify-between px-3 py-2 bg-surface">
+                      <span className="text-[12px] text-foreground">
+                        {s.name}{s.quantity > 1 ? ` ×${s.quantity}` : ''}
+                      </span>
+                      <span className="text-[12px] font-semibold text-muted tabular-nums">
+                        {formatInr(s.price * s.quantity)}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between px-3 py-2 bg-surface-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">Total</span>
+                    <span className="text-[14px] font-bold text-primary tabular-nums">
+                      {formatInr(selectedServices.reduce((sum, s) => sum + s.price * s.quantity, 0))}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[12px] text-muted italic">No services added.</p>
+              )}
             </div>
             <div className="flex gap-2 border-t border-border-base px-5 py-4">
               <button
