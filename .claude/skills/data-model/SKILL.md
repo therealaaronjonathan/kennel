@@ -126,6 +126,8 @@ interface Doctor {
   name: string
   phone: string
   specialization?: string
+  bio?: string          // short bio/description; editable by admin
+  photoUrl?: string     // Firebase Storage download URL; stored at clinics/{clinicId}/doctors/{uid}/profile.*
   isActive: boolean
   createdAt: Timestamp
   updatedAt: Timestamp

@@ -10,6 +10,7 @@ interface ClinicContextValue {
   branchId: string | null
   branchIds: string[]
   branchName: string | null
+  branchNameMap: Record<string, string>
   doctorId: string | null
   role: StaffRole | null
   loading: boolean
@@ -22,6 +23,7 @@ const ClinicContext = createContext<ClinicContextValue>({
   branchId: null,
   branchIds: [],
   branchName: null,
+  branchNameMap: {},
   doctorId: null,
   role: null,
   loading: true,
@@ -144,7 +146,7 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <ClinicContext.Provider
-      value={{ clinicId, branchId, branchIds, branchName, doctorId, role, loading, error, selectBranch }}
+      value={{ clinicId, branchId, branchIds, branchName, branchNameMap, doctorId, role, loading, error, selectBranch }}
     >
       {children}
     </ClinicContext.Provider>

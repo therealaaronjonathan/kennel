@@ -1,5 +1,13 @@
 import { adminAuth } from '../../lib/firebase-admin'
-import { createStaffDoc, createDoctorDoc, createClinicStaffDoc, updateStaffDoc } from './repository'
+import {
+  createStaffDoc,
+  createDoctorDoc,
+  createClinicStaffDoc,
+  updateStaffDoc,
+  getStaffBootstrap,
+  updateDoctorDocFields,
+  updateClinicStaffDocFields,
+} from './repository'
 import type { CreateUserBodyType, UpdateUserBodyType } from './models'
 
 export async function createUser(body: CreateUserBodyType) {
@@ -55,7 +63,33 @@ export async function createUser(body: CreateUserBodyType) {
 }
 
 export async function updateUser(uid: string, body: UpdateUserBodyType) {
-  await updateStaffDoc(uid, body)
+  const bootstrap = await getStaffBootstrap(uid)
+  if (!bootstrap) throw new Error('User not found')
+  const { clinicId, role } = bootstrap
+
+  // Update root auth-bootstrap doc (branchIds, role, isActive only)
+  const rootFields: { branchIds?: string[]; role?: string; isActive?: boolean } = {}
+  if (body.branchIds !== undefined) rootFields.branchIds = body.branchIds
+  if (body.role !== undefined) rootFields.role = body.role
+  if (body.isActive !== undefined) rootFields.isActive = body.isActive
+  if (Object.keys(rootFields).length > 0) await updateStaffDoc(uid, rootFields)
+
+  // Update clinic-level doc (all editable fields)
+  if (role === 'doctor') {
+    await updateDoctorDocFields(uid, clinicId, {
+      branchIds: body.branchIds,
+      name: body.name,
+      phone: body.phone,
+      bio: body.bio,
+      photoUrl: body.photoUrl,
+    })
+  } else {
+    await updateClinicStaffDocFields(uid, clinicId, {
+      branchIds: body.branchIds,
+      name: body.name,
+      phone: body.phone,
+    })
+  }
 
   if (body.isActive === false) {
     await adminAuth.updateUser(uid, { disabled: true })

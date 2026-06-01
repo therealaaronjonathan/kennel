@@ -79,6 +79,7 @@ async function performCheckin(
       doctorName,
       ownerId,
       ownerName,
+      ...(ownerPhone ? { ownerPhone } : {}),
       petId,
       petName,
       tokenNumber: nextToken,

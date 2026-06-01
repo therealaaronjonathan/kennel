@@ -18,6 +18,10 @@ export const UpdateUserBody = t.Object({
     t.Union([t.Literal('doctor'), t.Literal('receptionist'), t.Literal('admin')]),
   ),
   isActive: t.Optional(t.Boolean()),
+  name: t.Optional(t.String()),
+  phone: t.Optional(t.String()),
+  bio: t.Optional(t.String()),
+  photoUrl: t.Optional(t.String()),
 })
 
 export type CreateUserBodyType = typeof CreateUserBody.static

@@ -62,7 +62,7 @@ function QueueRow({
 
 export function VetPage() {
   const navigate = useNavigate()
-  const { clinicId, branchId, branchName, branchIds, doctorId, loading: clinicLoading, error: clinicError, selectBranch } = useClinic()
+  const { clinicId, branchId, branchName, branchIds, branchNameMap, doctorId, loading: clinicLoading, error: clinicError, selectBranch } = useClinic()
   const { entries, loading: queueLoading, error: queueError } = useVetQueue(clinicId, branchId, doctorId)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
@@ -141,7 +141,7 @@ export function VetPage() {
                   className="text-[12px] font-semibold text-primary bg-transparent border-none outline-none cursor-pointer"
                 >
                   {branchIds.map((bid) => (
-                    <option key={bid} value={bid}>{bid === branchId ? branchName : bid}</option>
+                    <option key={bid} value={bid}>{branchNameMap[bid] ?? bid}</option>
                   ))}
                 </select>
               ) : (

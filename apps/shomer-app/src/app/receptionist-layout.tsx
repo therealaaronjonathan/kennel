@@ -98,7 +98,7 @@ function playNotificationSound() {
 export default function ReceptionistLayout() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { clinicId, branchId, branchIds, branchName, selectBranch } = useClinic()
+  const { clinicId, branchId, branchIds, branchName, branchNameMap, selectBranch } = useClinic()
   const { visits: unbilledVisits } = useCompletedVisits(clinicId, branchId)
   const { visits, loading } = useAllVisits(clinicId, branchId)
   const unbilledCount = unbilledVisits.length
@@ -191,7 +191,7 @@ export default function ReceptionistLayout() {
                   className="w-full text-[11px] font-semibold text-primary bg-transparent border-none outline-none cursor-pointer truncate"
                 >
                   {branchIds.map((bid) => (
-                    <option key={bid} value={bid}>{bid === branchId ? branchName : bid}</option>
+                    <option key={bid} value={bid}>{branchNameMap[bid] ?? bid}</option>
                   ))}
                 </select>
               ) : (

@@ -1,7 +1,7 @@
 # Shomer App — Current State
 
-## Version: 1.1.17
-## Last Updated: 2026-05-30
+## Version: 1.1.19
+## Last Updated: 2026-06-02
 
 ---
 
@@ -56,8 +56,8 @@
 - `/admin` dashboard
 - Clinic management: create/edit clinics with white-label branding (colors, logo, tagline)
 - Branch management: add/edit branches per clinic
-- Doctor management: invite doctors via backend API (Firebase Auth + Firestore + invite link)
-- Staff management: invite receptionists via backend API; staff page reads from `clinics/{clinicId}/staff` subcollection and displays the list; role is always Receptionist
+- Doctor management: invite doctors via backend API (Firebase Auth + Firestore + invite link); inline edit per doctor (name, phone, bio, profile photo via Firebase Storage upload, branch assignment); doctor rows show avatar (photo or initials) and branch tags
+- Staff management: invite receptionists via backend API; inline edit per staff member (name, phone, branch assignment); staff rows show branch tags; reads from `clinics/{clinicId}/staff` subcollection
 - Catalog management (4 tabs): Diagnoses, Medicines, Services, Grooming
 
 ### Consultation Summary Page
@@ -72,7 +72,7 @@
 ### Backend API (`apps/backend`)
 - Bun + Elysia layered architecture
 - `POST /api/admin/users` — create Firebase Auth user + staff doc + doctor doc, returns invite link
-- `PUT /api/admin/users/:uid` — update branchIds/role/isActive
+- `PUT /api/admin/users/:uid` — update branchIds/role/isActive/name/phone/bio/photoUrl; writes atomically to both root `staff/{uid}` and clinic-level `doctors/{uid}` or `staff/{uid}`
 - `DELETE /api/admin/users/:uid` — disable user
 - Auth middleware: verifies Firebase ID token, checks admin/owner role
 
@@ -92,6 +92,8 @@
 
 | Version | Date       | Changes |
 |---------|------------|---------|
+| 1.1.19  | 2026-06-02 | **Owner phone on consultation summary link**: fixed bug where owner phone number showed `—` on the public `/visit/:id/summary` page even when the owner had a phone on file. Root cause: `ownerPhone` was passed into `createVisit()` but never written to the Firestore visit doc. The summary page's fallback (fetching from `petOwners`) silently failed because `petOwners` requires auth and the summary page is public. Fix: `ownerPhone` is now denormalized onto the visit doc at check-in time (omitted if absent). Existing visits are unaffected — only new check-ins will carry the field. |
+| 1.1.18  | 2026-06-02 | **Admin doctor & staff editing**: doctors and staff can now be edited inline from the admin panel. Doctor edit form covers name, phone, bio (textarea), profile photo (upload to Firebase Storage with progress indicator or paste a URL), and branch assignment — all saved in one action. Staff edit form covers name, phone, and branch assignment. Doctor list rows now show an avatar (photo thumbnail or initials fallback) and branch name tags; staff rows show branch tags. **Backend data consistency fix**: `PUT /api/admin/users/:uid` previously only updated the root `staff/{uid}` auth-bootstrap doc, leaving the clinic-level `clinics/{clinicId}/doctors/{uid}` and `clinics/{clinicId}/staff/{uid}` docs stale. The endpoint now reads the root doc to resolve `clinicId` and `role`, then writes to both docs atomically. API extended to accept `name`, `phone`, `bio`, `photoUrl` fields. **Branch dropdown fix**: the branch switcher dropdown in both the receptionist sidebar and vet console was showing raw branch IDs for non-selected branches. Fixed by exposing `branchNameMap` from `ClinicContext` and using it in both layouts. **Firebase Storage initialised**: `storage` exported from `lib/firebase.ts`; Storage rules restrict writes to `clinics/{clinicId}/doctors/{uid}/` path, image files only, max 5 MB. |
 | 1.1.17  | 2026-05-30 | **Diagnosis delete fixed**: diagnoses in Settings now perform a hard delete (Firestore document removed). Previous implementation had a broken collection path (`diagnoses/` instead of `diagnosisCatalog/`) causing all delete attempts to silently fail. UI replaced the Remove/Restore soft-delete toggle with a two-step inline confirm (Delete → "Delete permanently? / Yes, delete / Cancel"). Past visit records are unaffected — diagnosis names are stored as text snapshots. The same path bug was fixed for medicines (`medicines/` → `medicinesCatalog/`), restoring the soft-delete toggle for that catalog. **Receptionist mark visit complete**: receptionists can now mark a `waiting` or `in-progress` visit as complete directly from the Queue tab (for cases where the doctor completes the visit without using the app). Selecting such a visit shows a banner with a "Mark as Complete" button; clicking opens a modal confirmation dialog; confirming sets `status: 'completed'` and moves the visit to the checkout tab. **Pet gender in check-in**: Male / Female toggle added to the new-owner registration form — required field, blocks submission until selected. Gender is saved to `clinics/{clinicId}/pets/{petId}` as `gender: 'male' \| 'female'`. Pet data model (`checkin/types.ts`) and Firestore data-model skill updated. Legacy pet records without `gender` are unaffected. |
 | 1.1.16  | 2026-05-18 | **Temperature tracking**: new `petTemperatureF` field (°F) added to the vet consultation form on the same row as weight; saved on the visit doc; shown in all detail panels (Queue, History, Checkout). **Multiple vaccines per visit**: vaccine section replaced with a dynamic list — vets can add/remove vaccine rows, each with its own name, batch number, and next-due date; all saved as separate `vaccines/` subcollection docs per visit. **Vaccine → Services auto-sync**: selecting a vaccine name immediately adds the matching vaccination service to the services line items; selecting the same vaccine again increments the quantity rather than adding a duplicate; removing a vaccine decrements/removes the corresponding service. **Visit date & time in detail panel**: Queue, History, and Checkout detail panels now show the visit date and time prominently in the header (e.g. "18 May 2026 · 10:35 am"). **Doctor filter in Queue**: a Doctor dropdown filter appears in the Queue header when more than one doctor has visits today, independent of the existing Payment filter. **Data model**: `ConsultationDraft.vaccines[]` array replaces the old flat `vaccineName`/`vaccineBatch`/`vaccineNextDue` fields; `Visit` gains `petTemperatureF`; all hooks and type definitions updated (`use-all-visits`, `use-completed-visits`, `use-visit-history`, `use-visit-detail`). |
 | 1.1.15  | 2026-05-12 | **Services & Payment on shareable summary link**: billed visits now show an itemized services table (name · qty · price), grand total, and payment method(s) on the patient-facing `/visit/:id/summary` page; section is hidden for unbilled visits or visits with no services recorded. **Pet weight tracking**: optional kg input added at the top of the vet's consultation form; `petWeightKg` is persisted on the visit doc and surfaced in the last-visit panel, Queue/History detail panel, and the shareable summary link. **Before/After food medicine timing**: optional per-medicine toggle (Before food / After food) in the prescription card; saved as `mealTiming: 'before' \| 'after'` on the prescription subcollection doc; rendered in the dosage line in the detail panel and the shareable link. **Token reassignment**: vets can hand a waiting or in-progress visit to another on-duty doctor — footer **Reassign** button (in-progress) or a text link (waiting) opens a doctor-picker dialog filtered to today's duty roster; confirming saves the current consultation draft to the visit doc, updates `doctorId`/`doctorName`, and resets status to `'waiting'`; button/link hidden when no other on-duty doctors are available. |

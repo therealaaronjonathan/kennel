@@ -81,3 +81,51 @@ export async function updateStaffDoc(
     updatedAt: FieldValue.serverTimestamp(),
   })
 }
+
+export async function getStaffBootstrap(
+  uid: string,
+): Promise<{ clinicId: string; role: string } | null> {
+  const snap = await adminDb.doc(`staff/${uid}`).get()
+  if (!snap.exists) return null
+  const data = snap.data() as { clinicId: string; role: string; doctorId?: string }
+  return {
+    clinicId: data.clinicId,
+    role: data.role ?? (data.doctorId ? 'doctor' : 'receptionist'),
+  }
+}
+
+export async function updateDoctorDocFields(
+  uid: string,
+  clinicId: string,
+  data: {
+    branchIds?: string[]
+    name?: string
+    phone?: string
+    bio?: string
+    photoUrl?: string
+  },
+): Promise<void> {
+  const payload: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() }
+  if (data.branchIds !== undefined) payload.branchIds = data.branchIds
+  if (data.name !== undefined) payload.name = data.name
+  if (data.phone !== undefined) payload.phone = data.phone
+  if (data.bio !== undefined) payload.bio = data.bio
+  if (data.photoUrl !== undefined) payload.photoUrl = data.photoUrl
+  await adminDb.doc(`clinics/${clinicId}/doctors/${uid}`).update(payload)
+}
+
+export async function updateClinicStaffDocFields(
+  uid: string,
+  clinicId: string,
+  data: {
+    branchIds?: string[]
+    name?: string
+    phone?: string
+  },
+): Promise<void> {
+  const payload: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() }
+  if (data.branchIds !== undefined) payload.branchIds = data.branchIds
+  if (data.name !== undefined) payload.name = data.name
+  if (data.phone !== undefined) payload.phone = data.phone
+  await adminDb.doc(`clinics/${clinicId}/staff/${uid}`).update(payload)
+}
