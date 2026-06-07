@@ -78,7 +78,7 @@ export function VisitDetailPanel({
   onToast,
   canEditPaymentMethod = false,
 }: VisitDetailPanelProps) {
-  const { detail, loading } = useVisitBill(clinicId, branchId, visit.id, visit.ownerId)
+  const { detail, loading } = useVisitBill(clinicId, branchId, visit.id, visit.ownerId, visit.petId)
   const [showWAModal, setShowWAModal] = useState(false)
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
   const clinicName = useClinicName(clinicId)
@@ -133,6 +133,13 @@ export function VisitDetailPanel({
         <p className="mt-0.5 text-[12px] text-muted">
           {visit.ownerName} · {visit.doctorName}
         </p>
+        {detail && (detail.petSpecies || detail.petBreed || detail.petAge || detail.petColor) && (
+          <p className="mt-1 text-[11px] text-muted">
+            {[detail.petSpecies, detail.petBreed, detail.petAge, detail.petColor]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        )}
         {(visit.date || visit.completedAt) && (() => {
           const label = formatVisitDateTime(visit.date, visit.completedAt)
           return label ? (

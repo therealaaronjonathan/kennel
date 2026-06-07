@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { collection, doc, getDoc, getDocs } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { getAgeFromDob } from '@/lib/age'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -39,6 +40,7 @@ interface PaymentEntry {
 
 interface VisitData {
   petName: string
+  petId?: string
   petSpecies?: string
   ownerName: string
   ownerPhone?: string
@@ -54,6 +56,14 @@ interface VisitData {
   billAmount?: number
   payments?: PaymentEntry[]
   petWeightKg?: number
+}
+
+interface PetData {
+  breed?: string
+  dateOfBirth?: string
+  color?: string
+  species?: string
+  speciesName?: string
 }
 
 interface DiagnosisItem {
@@ -86,6 +96,7 @@ interface SummaryData {
   clinic: ClinicData
   branch: BranchData
   visit: VisitData
+  pet: PetData | null
   doctor: DoctorData | null
   diagnoses: DiagnosisItem[]
   prescriptions: PrescriptionItem[]
@@ -217,20 +228,24 @@ export function VisitSummaryPage() {
         const branchRaw = branchSnap.exists() ? branchSnap.data() : {}
         const visitRaw = visitSnap.data() as VisitData
 
-        // Fetch doctor doc if doctorId present
+        // Fetch doctor and pet docs in parallel if IDs are present
         let doctorData: DoctorData | null = null
-        if (visitRaw.doctorId) {
-          try {
-            const doctorSnap = await getDoc(doc(db, `clinics/${clinicId}/doctors/${visitRaw.doctorId}`))
-            if (doctorSnap.exists()) {
-              doctorData = doctorSnap.data() as DoctorData
-            }
-          } catch {
-            // doctor doc optional — ignore
-          }
-        }
+        let petData: PetData | null = null
 
-        // Fetch owner phone from petOwners if not embedded in visit doc
+        await Promise.all([
+          visitRaw.doctorId
+            ? getDoc(doc(db, `clinics/${clinicId}/doctors/${visitRaw.doctorId}`))
+                .then((s) => { if (s.exists()) doctorData = s.data() as DoctorData })
+                .catch(() => {})
+            : Promise.resolve(),
+          visitRaw.petId
+            ? getDoc(doc(db, `clinics/${clinicId}/pets/${visitRaw.petId}`))
+                .then((s) => { if (s.exists()) petData = s.data() as PetData })
+                .catch(() => {})
+            : Promise.resolve(),
+        ])
+
+        // Fetch owner phone from petOwners if not embedded in visit doc (sequential — needs visitRaw.ownerId)
         let ownerPhone = visitRaw.ownerPhone
         if (!ownerPhone && visitRaw.ownerId) {
           try {
@@ -255,6 +270,7 @@ export function VisitSummaryPage() {
             phone: (branchRaw.phone as string) ?? undefined,
           },
           visit: { ...visitRaw, ownerPhone },
+          pet: petData,
           doctor: doctorData,
           diagnoses: diagSnap.docs.map((d) => ({
             name: (d.data().name as string) ?? '',
@@ -575,12 +591,17 @@ export function VisitSummaryPage() {
                 </div>
               </div>
               <div>
-                <div style={styles.metaLabel}>Pet</div>
+                <div style={styles.metaLabel}>Pet Name</div>
                 <div style={styles.metaValue}>
                   {data.visit.petName ?? '—'}
-                  {data.visit.petSpecies
-                    ? <span style={{ fontWeight: 400, opacity: 0.65 }}> ({data.visit.petSpecies})</span>
-                    : null}
+                  {(() => {
+                    const species = data.pet?.speciesName
+                      || (data.pet?.species ? ({ dog: 'Dog', cat: 'Cat', bird: 'Bird', rabbit: 'Rabbit', other: 'Other' }[data.pet.species] ?? data.pet.species) : null)
+                      || data.visit.petSpecies
+                    return species
+                      ? <span style={{ fontWeight: 400, opacity: 0.65 }}> ({species})</span>
+                      : null
+                  })()}
                 </div>
               </div>
               <div>
@@ -591,10 +612,28 @@ export function VisitSummaryPage() {
                 <div style={styles.metaLabel}>Phone</div>
                 <div style={styles.metaValue}>{data.visit.ownerPhone ?? '—'}</div>
               </div>
+              {data.pet?.breed && (
+                <div>
+                  <div style={styles.metaLabel}>Pet Breed</div>
+                  <div style={styles.metaValue}>{data.pet.breed}</div>
+                </div>
+              )}
+              {getAgeFromDob(data.pet?.dateOfBirth) && (
+                <div>
+                  <div style={styles.metaLabel}>Pet Age</div>
+                  <div style={styles.metaValue}>{getAgeFromDob(data.pet?.dateOfBirth)}</div>
+                </div>
+              )}
               {typeof data.visit.petWeightKg === 'number' && (
                 <div>
                   <div style={styles.metaLabel}>Weight</div>
                   <div style={styles.metaValue}>{data.visit.petWeightKg} kg</div>
+                </div>
+              )}
+              {data.pet?.color && (
+                <div>
+                  <div style={styles.metaLabel}>Pet Color / Marking</div>
+                  <div style={styles.metaValue}>{data.pet.color}</div>
                 </div>
               )}
             </div>

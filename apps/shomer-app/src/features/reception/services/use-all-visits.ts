@@ -12,6 +12,7 @@ export interface AllVisit {
   tokenDisplay: string
   tokenNumber: number
   petName: string
+  petId: string
   ownerName: string
   ownerId: string
   doctorName: string
@@ -66,6 +67,7 @@ export function useAllVisits(clinicId: string | null, branchId: string | null) {
             tokenDisplay: data.tokenDisplay ?? '',
             tokenNumber: data.tokenNumber ?? 0,
             petName: data.petName ?? '',
+            petId: data.petId ?? '',
             ownerName: data.ownerName ?? '',
             ownerId: data.ownerId ?? '',
             doctorName: data.doctorName ?? '',

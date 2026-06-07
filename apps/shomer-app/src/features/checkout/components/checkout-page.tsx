@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
-import { MessageCircle, CheckCheck, Pill, CheckCircle, Syringe } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { MessageCircle, CheckCheck, Pill, CheckCircle, Syringe, Pin } from 'lucide-react'
 import { useMutation } from '@tanstack/react-query'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
 import { cn, formatInr } from '@/lib/utils'
 import { WhatsAppShareModal } from '@/components/blocks/whatsapp-share-modal'
 import { ServicesSelect, type ServiceEntry } from '@/components/blocks/services-select'
@@ -13,9 +15,12 @@ import { useClinicServices } from '@/features/vet/services/use-clinic-services'
 import { useCheckoutDetail } from '../services/use-checkout-detail'
 import {
   recordPayments,
+  sumPayments,
   type PaymentEntry,
   type PaymentMethod,
 } from '../services/complete-billing'
+import { useBillingDefaults, type BillingDefaultEntry } from '../services/use-billing-defaults'
+import { addToBillingDefaults, removeFromBillingDefaults } from '../services/billing-defaults-service'
 
 // ── Toast ────────────────────────────────────────────────────────────────────
 
@@ -54,12 +59,23 @@ interface CheckoutPanelProps {
   clinicId: string
   branchId: string
   clinicName: string | null
+  isDefaulted: boolean
   onBilled: () => void
   onToast: (msg: string) => void
+  onToggleDefault: () => void
 }
 
-function CheckoutPanel({ visit, clinicId, branchId, clinicName, onBilled, onToast }: CheckoutPanelProps) {
-  const { detail, loading: detailLoading } = useCheckoutDetail(clinicId, branchId, visit.id, visit.ownerId)
+function CheckoutPanel({
+  visit,
+  clinicId,
+  branchId,
+  clinicName,
+  isDefaulted,
+  onBilled,
+  onToast,
+  onToggleDefault,
+}: CheckoutPanelProps) {
+  const { detail, loading: detailLoading } = useCheckoutDetail(clinicId, branchId, visit.id, visit.ownerId, visit.petId)
   const { services: catalogServices, loading: svcLoading } = useClinicServices(clinicId)
 
   const normalize = (svcs: typeof visit.services): ServiceEntry[] =>
@@ -70,7 +86,6 @@ function CheckoutPanel({ visit, clinicId, branchId, clinicName, onBilled, onToas
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
   const [showSplitDialog, setShowSplitDialog] = useState(false)
 
-  // Reset services when a different visit is opened
   useEffect(() => {
     setEditedServices(normalize(visit.services))
   }, [visit.id, visit.services])
@@ -132,6 +147,19 @@ function CheckoutPanel({ visit, clinicId, branchId, clinicName, onBilled, onToas
         <p className="mt-0.5 text-[12px] text-muted">
           {visit.ownerName} · {visit.doctorName}
         </p>
+        {detail && (detail.petSpecies || detail.petBreed || detail.petAge || detail.petColor) && (
+          <p className="mt-1 text-[11px] text-muted">
+            {[detail.petSpecies, detail.petBreed, detail.petAge, detail.petColor]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        )}
+        {typeof visit.petWeightKg === 'number' && (
+          <p className="mt-0.5 text-[11px] text-muted">
+            <span className="font-semibold text-foreground">{visit.petWeightKg} kg</span>
+            {' '}at time of visit
+          </p>
+        )}
 
         {visit.complaints.length > 0 && (
           <div className="mt-3">
@@ -160,7 +188,6 @@ function CheckoutPanel({ visit, clinicId, branchId, clinicName, onBilled, onToas
           <p className="text-[12px] text-muted">Loading details…</p>
         ) : (
           <>
-            {/* Diagnosis */}
             {hasDiagnosis && (
               <div className="space-y-2">
                 <p className={labelClass}>Diagnosis</p>
@@ -173,7 +200,6 @@ function CheckoutPanel({ visit, clinicId, branchId, clinicName, onBilled, onToas
               </div>
             )}
 
-            {/* Consultation notes */}
             {visit.consultationNotes ? (
               <div className="space-y-1.5">
                 <p className={labelClass}>Consultation Notes</p>
@@ -183,7 +209,6 @@ function CheckoutPanel({ visit, clinicId, branchId, clinicName, onBilled, onToas
               </div>
             ) : null}
 
-            {/* Prescription — medicines only */}
             {hasMeds && (
               <div className="rounded-[4px] border border-border-base bg-surface p-4 space-y-3">
                 <p className={cn(labelClass, 'flex items-center gap-1.5')}>
@@ -199,7 +224,6 @@ function CheckoutPanel({ visit, clinicId, branchId, clinicName, onBilled, onToas
               </div>
             )}
 
-            {/* Vaccines — separate section */}
             {hasVaccines && (
               <div className="rounded-[4px] border border-border-base bg-surface p-4 space-y-3">
                 <p className={cn(labelClass, 'flex items-center gap-1.5')}>
@@ -216,7 +240,6 @@ function CheckoutPanel({ visit, clinicId, branchId, clinicName, onBilled, onToas
               </div>
             )}
 
-            {/* Services — editable */}
             <div className="space-y-2">
               <p className={labelClass}>Services &amp; Bill</p>
               <ServicesSelect
@@ -260,6 +283,23 @@ function CheckoutPanel({ visit, clinicId, branchId, clinicName, onBilled, onToas
             {billing.isPending ? 'Saving…' : hasPartial ? 'Continue Payment' : 'Mark Billed'}
           </button>
         </div>
+
+        {/* Pin to billing defaults — receptionist can pin; removal only via full payment */}
+        {isDefaulted ? (
+          <p className="mt-2 flex items-center justify-center gap-1.5 text-[11px] font-medium text-primary/60">
+            <Pin size={11} />
+            Pinned to billing defaults
+          </p>
+        ) : (
+          <button
+            type="button"
+            onClick={onToggleDefault}
+            className="mt-2 w-full flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-medium text-muted hover:text-foreground transition-colors"
+          >
+            <Pin size={11} />
+            Pin to billing defaults
+          </button>
+        )}
       </div>
 
       <PaymentMethodDialog
@@ -311,7 +351,7 @@ function CheckoutPanel({ visit, clinicId, branchId, clinicName, onBilled, onToas
   )
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function todayString(): string {
   const d = new Date()
@@ -334,7 +374,7 @@ function relativeDate(visitDate: string, today: string): string {
   return `${n} days ago`
 }
 
-// ── List item ────────────────────────────────────────────────────────────────
+// ── List items ────────────────────────────────────────────────────────────────
 
 interface VisitListItemProps {
   visit: CompletedVisit
@@ -409,35 +449,153 @@ function VisitListItem({ visit, selected, showRelativeDate, today, onSelect }: V
   )
 }
 
+interface BillingDefaultListItemProps {
+  entry: BillingDefaultEntry
+  selected: boolean
+  today: string
+  onSelect: () => void
+}
+
+function BillingDefaultListItem({ entry, selected, today, onSelect }: BillingDefaultListItemProps) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        onSelect()
+      }}
+      className={cn(
+        'w-full text-left px-5 py-4 border-b border-border-base transition-colors',
+        selected ? 'bg-surface-2 border-l-2 border-l-primary' : 'hover:bg-surface',
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[13px] font-bold text-primary">
+              {entry.tokenDisplay}
+            </span>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.04em] text-muted">
+              {relativeDate(entry.date, today)}
+            </span>
+          </div>
+          <p className="text-[13px] font-semibold text-foreground mt-0.5 truncate">
+            {entry.petName}
+          </p>
+          <p className="text-[11px] text-muted truncate">{entry.ownerName}</p>
+        </div>
+        <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+          {entry.billAmount > 0 && (
+            <span className="text-[13px] font-bold text-foreground tabular-nums">
+              {formatInr(entry.billAmount)}
+            </span>
+          )}
+        </div>
+      </div>
+    </button>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function CheckoutPage() {
   const { clinicId, branchId } = useClinic()
   const { visits, loading, error } = useCompletedVisits(clinicId, branchId)
+  const { defaults } = useBillingDefaults(clinicId, branchId)
   const clinicName = useClinicName(clinicId)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [fetchedVisit, setFetchedVisit] = useState<CompletedVisit | null>(null)
   const [toast, setToast] = useState<string | null>(null)
 
   const today = todayString()
 
+  // Set of visit IDs that have been explicitly pinned to billing defaults
+  const defaultedIds = useMemo(() => new Set(defaults.map((d) => d.visitId)), [defaults])
+
+  // Fetch visit from Firestore when a billing default is selected and the visit
+  // is not already in the completed visits list (e.g. never-paid cross-day visit)
+  useEffect(() => {
+    if (!selectedId || !clinicId || !branchId) {
+      setFetchedVisit(null)
+      return
+    }
+    if (visits.find((v) => v.id === selectedId)) {
+      setFetchedVisit(null)
+      return
+    }
+
+    let cancelled = false
+    getDoc(doc(db, `clinics/${clinicId}/branches/${branchId}/visits/${selectedId}`))
+      .then((snap) => {
+        if (cancelled || !snap.exists()) return
+        const data = snap.data()
+        const payments = Array.isArray(data.payments)
+          ? (data.payments as PaymentEntry[])
+          : undefined
+        setFetchedVisit({
+          id: snap.id,
+          tokenDisplay: data.tokenDisplay ?? '',
+          petName: data.petName ?? '',
+          ownerName: data.ownerName ?? '',
+          ownerId: data.ownerId ?? '',
+          petId: data.petId ?? '',
+          doctorName: data.doctorName ?? '',
+          doctorId: data.doctorId ?? '',
+          complaints: data.complaints ?? [],
+          otherComplaintText: data.otherComplaintText ?? undefined,
+          isEmergency: data.isEmergency ?? false,
+          services: data.services ?? undefined,
+          billAmount: data.billAmount ?? undefined,
+          payments,
+          amountPaid:
+            typeof data.amountPaid === 'number' ? data.amountPaid : sumPayments(payments),
+          consultationNotes: data.consultationNotes ?? undefined,
+          completedAt: data.completedAt ?? null,
+          date: data.date ?? '',
+        })
+      })
+      .catch(() => {})
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedId, visits, clinicId, branchId])
+
+  // Visits in billing defaults are shown in that section; exclude them here
   const { todayVisits, carryOverVisits } = (() => {
     const todayList: CompletedVisit[] = []
     const carryList: CompletedVisit[] = []
     for (const v of visits) {
+      if (defaultedIds.has(v.id)) continue
       if (v.date === today) todayList.push(v)
       else carryList.push(v)
     }
-    // Carry-overs: oldest first (most stale at the top)
     carryList.sort((a, b) => a.date.localeCompare(b.date))
     return { todayVisits: todayList, carryOverVisits: carryList }
   })()
 
-  const selectedVisit: CompletedVisit | null = visits.find((v) => v.id === selectedId) ?? null
+  const selectedVisit: CompletedVisit | null =
+    visits.find((v) => v.id === selectedId) ?? fetchedVisit ?? null
+
+  const isSelectedDefaulted = selectedId ? defaultedIds.has(selectedId) : false
   const hasPanel = !!selectedVisit
 
   function handleBilled() {
+    // Auto-remove from billing defaults when a pinned visit is fully paid
+    if (selectedId && clinicId && branchId && defaultedIds.has(selectedId)) {
+      removeFromBillingDefaults(clinicId, branchId, selectedId).catch(() => {})
+    }
     setSelectedId(null)
+    setFetchedVisit(null)
   }
+
+  function handleToggleDefault() {
+    if (!selectedVisit || !clinicId || !branchId || isSelectedDefaulted) return
+    addToBillingDefaults(clinicId, branchId, selectedVisit).catch(() => {})
+    setToast(`${selectedVisit.petName} pinned to billing defaults`)
+  }
+
+  const totalPending = defaults.length + carryOverVisits.length + todayVisits.length
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -446,16 +604,23 @@ export function CheckoutPage() {
         <h1 className="font-display text-[18px] font-bold text-foreground leading-none">
           Check-out
         </h1>
-        {!loading && visits.length > 0 && (
+        {!loading && totalPending > 0 && (
           <div className="flex items-center gap-2">
+            {defaults.length > 0 && (
+              <span className="rounded-full bg-primary/10 border border-primary/20 px-2.5 py-0.5 text-[11px] font-bold text-primary">
+                {defaults.length} defaulted
+              </span>
+            )}
             {carryOverVisits.length > 0 && (
               <span className="rounded-full bg-warning/10 border border-warning/25 px-2.5 py-0.5 text-[11px] font-bold text-warning">
                 {carryOverVisits.length} carry-over
               </span>
             )}
-            <span className="rounded-full bg-primary/10 border border-primary/20 px-2.5 py-0.5 text-[11px] font-bold text-primary">
-              {todayVisits.length} today
-            </span>
+            {todayVisits.length > 0 && (
+              <span className="rounded-full bg-surface-2 border border-border-base px-2.5 py-0.5 text-[11px] font-bold text-muted">
+                {todayVisits.length} today
+              </span>
+            )}
           </div>
         )}
       </header>
@@ -471,7 +636,7 @@ export function CheckoutPage() {
               <p className="px-5 py-8 text-[12px] text-muted">Loading…</p>
             ) : error ? (
               <p className="px-5 py-8 text-[12px] text-danger">{error}</p>
-            ) : visits.length === 0 ? (
+            ) : totalPending === 0 ? (
               <div className="flex flex-col items-center justify-center h-full gap-2 py-20">
                 <span className="text-[28px]">✓</span>
                 <p className="text-[13px] font-semibold text-muted">All visits billed</p>
@@ -481,6 +646,30 @@ export function CheckoutPage() {
               </div>
             ) : (
               <>
+                {/* Billing defaults — explicitly pinned across-day bills */}
+                {defaults.length > 0 && (
+                  <>
+                    <div className="px-5 py-2 border-b border-border-base bg-primary/5">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-primary flex items-center gap-1.5">
+                        <Pin size={9} />
+                        Billing Defaults · {defaults.length}
+                      </p>
+                    </div>
+                    {defaults.map((entry) => (
+                      <BillingDefaultListItem
+                        key={entry.visitId}
+                        entry={entry}
+                        selected={selectedId === entry.visitId}
+                        today={today}
+                        onSelect={() =>
+                          setSelectedId(selectedId === entry.visitId ? null : entry.visitId)
+                        }
+                      />
+                    ))}
+                  </>
+                )}
+
+                {/* Carry-overs — partial payments from earlier days */}
                 {carryOverVisits.length > 0 && (
                   <>
                     <div className="px-5 py-2 border-b border-border-base bg-warning/5">
@@ -503,9 +692,10 @@ export function CheckoutPage() {
                   </>
                 )}
 
+                {/* Today's visits */}
                 {todayVisits.length > 0 && (
                   <>
-                    {carryOverVisits.length > 0 && (
+                    {(defaults.length > 0 || carryOverVisits.length > 0) && (
                       <div className="px-5 py-2 border-b border-border-base bg-surface">
                         <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-muted">
                           Today · {todayVisits.length}
@@ -540,8 +730,10 @@ export function CheckoutPage() {
               clinicId={clinicId}
               branchId={branchId}
               clinicName={clinicName}
+              isDefaulted={isSelectedDefaulted}
               onBilled={handleBilled}
               onToast={(msg) => setToast(msg)}
+              onToggleDefault={handleToggleDefault}
             />
           </div>
         )}

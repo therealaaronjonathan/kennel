@@ -5,41 +5,73 @@ import type { Pet, PetOwner, PetWithOwner } from '../types'
 
 export type SpeciesFilter = 'dog' | 'cat' | 'other'
 
+async function searchByPhone(clinicId: string, ownerPhone: string): Promise<PetWithOwner[]> {
+  const ownerSnap = await getDocs(
+    query(
+      collection(db, `clinics/${clinicId}/petOwners`),
+      where('phone', '==', ownerPhone),
+    ),
+  )
+  if (ownerSnap.empty) return []
+
+  const owners = ownerSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as PetOwner)
+  const ownerMap = new Map(owners.map((o) => [o.id, o]))
+
+  const allPets: Pet[] = []
+  for (const owner of owners) {
+    const petsSnap = await getDocs(
+      query(
+        collection(db, `clinics/${clinicId}/pets`),
+        where('ownerId', '==', owner.id),
+      ),
+    )
+    allPets.push(...petsSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Pet))
+  }
+
+  return allPets
+    .map((pet) => ({ pet, owner: ownerMap.get(pet.ownerId)! }))
+    .filter((r): r is PetWithOwner => r.owner !== undefined)
+}
+
 export function usePetSearch(
   clinicId: string,
   petName: string,
   breed: string,
   species: SpeciesFilter,
   enabled: boolean,
-  ownerPhone?: string, // full E.164 string e.g. "+919876543210"
+  ownerPhone?: string,
 ) {
+  const phoneOnly = !petName.trim() && !!ownerPhone
+
   return useQuery({
-    queryKey: ['petSearch', clinicId, petName, breed, species, ownerPhone ?? ''],
+    queryKey: ['petSearch', clinicId, petName, breed, species, ownerPhone ?? '', phoneOnly],
     queryFn: async (): Promise<PetWithOwner[]> => {
+      // Phone-only: find owner by phone, return all their pets
+      if (phoneOnly && ownerPhone) {
+        return searchByPhone(clinicId, ownerPhone)
+      }
+
+      // Name-first path (existing)
       const nameLower = petName.toLowerCase().trim()
 
-      // Prefix range query on petNameLower
       const petsSnap = await getDocs(
         query(
           collection(db, `clinics/${clinicId}/pets`),
           where('petNameLower', '>=', nameLower),
-          where('petNameLower', '<=', nameLower + '\uf8ff'),
+          where('petNameLower', '<=', nameLower + ''),
         ),
       )
 
       let pets = petsSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Pet)
 
-      // Client-side species filter
       if (species === 'dog') {
         pets = pets.filter((p) => p.species === 'dog')
       } else if (species === 'cat') {
         pets = pets.filter((p) => p.species === 'cat')
       } else {
-        // 'other' = everything that is not dog or cat
         pets = pets.filter((p) => p.species !== 'dog' && p.species !== 'cat')
       }
 
-      // Client-side breed filter (Firestore can't range-query two fields simultaneously)
       if (breed.trim()) {
         const breedLower = breed.toLowerCase().trim()
         pets = pets.filter((p) => p.breed?.toLowerCase().includes(breedLower))
@@ -47,7 +79,6 @@ export function usePetSearch(
 
       if (pets.length === 0) return []
 
-      // Batch-fetch owners (Firestore 'in' supports up to 30 items per query)
       const ownerIds = [...new Set(pets.map((p) => p.ownerId))]
       const owners: PetOwner[] = []
       for (let i = 0; i < ownerIds.length; i += 30) {
@@ -67,7 +98,7 @@ export function usePetSearch(
         .filter((r): r is PetWithOwner => r.owner !== undefined)
         .filter((r) => !ownerPhone || r.owner.phone === ownerPhone)
     },
-    enabled: enabled && !!petName.trim() && !!clinicId,
+    enabled: enabled && (!!petName.trim() || !!ownerPhone) && !!clinicId,
     retry: false,
     staleTime: 0,
   })

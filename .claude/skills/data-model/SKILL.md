@@ -20,6 +20,7 @@ clinics/{clinicId}
 ├── groomingServices/{groomingServiceId}    # clinic-level — grooming services with prices
 ├── branches/{branchId}
 │   ├── tokenCounters/{date}               # one doc per day — branch-wide token counter
+│   ├── billingDefaults/{visitId}          # watch-list of explicitly pinned unpaid bills
 │   └── visits/{visitId}                   # flat under branch for cross-cutting queries
 │       ├── diagnoses/{diagnosisId}        # one doc per selected diagnosis
 │       ├── prescriptions/{prescriptionId} # one doc per prescribed medicine
@@ -329,6 +330,8 @@ interface PaymentEntry {
 
 **Checkout list semantics**: the Checkout page queries all branch visits with `status === 'completed'` (no date filter). Client-side it keeps (a) today's pending bills regardless of payment state, plus (b) any cross-day visit where `amountPaid > 0` (partial). Cross-day completed visits with no payment are dropped so abandoned consultations don't pile up. Carry-overs render in a separate "Pending from earlier days" section above today's pending list, sorted oldest-first.
 
+Visits explicitly pinned to `billingDefaults` appear in a dedicated "Billing Defaults" section at the top of the checkout list and are excluded from the carry-over/today sections to avoid duplication. When a billing-default visit is fully paid, its `billingDefaults` document is automatically deleted.
+
 **Consultation drafts**: while a vet is filling in diagnoses/notes/medicines/services/vaccine on a visit, the in-progress form is persisted to `visit.consultationDraft`. Two write paths:
 - **Pause**: when the vet taps Pause, `pauseVisit()` writes the current draft alongside `status: 'waiting'` so resuming the patient (or switching back from another) restores the form.
 - **Background autosave**: while a visit is `in-progress`, the `ConsultationView` component runs a debounced 30s autosave that writes the latest draft silently (no UI). Best-effort — failures are swallowed.
@@ -367,6 +370,30 @@ interface VisitPrescription {
   createdAt: Timestamp
 }
 ```
+
+### BillingDefault (branch subcollection: `billingDefaults/{visitId}`)
+A small watch-list collection for bills that can't be settled in a single day. Receptionist explicitly pins a completed visit here; the document is automatically deleted when the visit is fully paid. Doc ID equals the `visitId` (natural deduplication).
+
+```ts
+interface BillingDefault {
+  visitId: string         // = doc ID
+  petName: string         // snapshot at pin time (display only)
+  ownerName: string
+  ownerId: string
+  tokenDisplay: string
+  billAmount: number      // snapshot at pin time
+  date: string            // original visit date YYYY-MM-DD
+  addedAt: Timestamp
+  addedBy: string         // Firebase Auth UID of staff who pinned
+  addedByName: string     // display name / email
+}
+```
+
+**Firestore rules**: covered by the `/{document=**} → request.auth != null` catch-all — no extra rules needed.
+
+**Query**: ordered by `addedAt asc` — oldest pinned first; capped at 50 items in practice since this collection is never expected to be large.
+
+---
 
 ### Vaccine (Visit subcollection)
 

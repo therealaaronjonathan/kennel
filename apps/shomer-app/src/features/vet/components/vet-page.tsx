@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { signOut } from 'firebase/auth'
 import { useNavigate } from 'react-router-dom'
-import { Stethoscope } from 'lucide-react'
+import { Stethoscope, History, ArrowLeft } from 'lucide-react'
 import { LogoutConfirmDialog } from '@/components/blocks/logout-confirm-dialog'
 import { SettingsPage } from '@/features/settings/components/settings-page'
+import { VisitHistoryPage } from '@/features/visit-history/components/visit-history-page'
 import { cn } from '@/lib/utils'
 import { auth } from '@/lib/firebase'
 import { useClinic } from '@/features/clinic'
@@ -66,6 +67,7 @@ export function VetPage() {
   const { entries, loading: queueLoading, error: queueError } = useVetQueue(clinicId, branchId, doctorId)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
 
   async function handleSignOut() {
@@ -149,6 +151,15 @@ export function VetPage() {
               )}
             </>
           )}
+          <span className="text-[13px] text-muted">·</span>
+          <button
+            type="button"
+            onClick={() => setShowHistory(true)}
+            className="flex items-center gap-1.5 text-[12px] font-semibold text-muted hover:text-foreground transition-colors"
+          >
+            <History size={13} />
+            History
+          </button>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -237,6 +248,24 @@ export function VetPage() {
           )}
         </main>
       </div>
+
+      {showHistory && (
+        <div className="fixed inset-0 z-50 bg-background flex flex-col overflow-hidden">
+          <div className="h-[36px] border-b border-border-base bg-surface flex items-center px-5 flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowHistory(false)}
+              className="flex items-center gap-1.5 text-[12px] font-semibold text-muted hover:text-foreground transition-colors"
+            >
+              <ArrowLeft size={13} />
+              Back to queue
+            </button>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <VisitHistoryPage />
+          </div>
+        </div>
+      )}
 
       {showSettings && (
         <div className="fixed inset-0 z-50 bg-background flex flex-col overflow-hidden">

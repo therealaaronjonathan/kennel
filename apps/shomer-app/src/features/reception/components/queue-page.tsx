@@ -86,7 +86,7 @@ function toCompletedVisit(v: AllVisit): CompletedVisit {
     petName: v.petName,
     ownerName: v.ownerName,
     ownerId: v.ownerId,
-    petId: '',
+    petId: v.petId ?? '',
     doctorName: v.doctorName,
     doctorId: v.doctorId,
     complaints: v.complaints,
