@@ -12,6 +12,7 @@ import {
   HISTORY_RESULT_CAP,
   type HistoryVisit,
 } from '../services/use-visit-history'
+import { usePaymentLedger } from '../services/use-payment-ledger'
 import {
   HistoryFilters,
   type PaymentFilter,
@@ -139,6 +140,10 @@ export function VisitHistoryPage() {
     toDate,
   )
 
+  // Money totals come from the payment ledger (bucketed by day received), not
+  // from the visits in range — so cross-day partials are attributed correctly.
+  const { totals: ledgerTotals } = usePaymentLedger(clinicId, branchId, fromDate, toDate)
+
   // Reset selection when range changes
   useEffect(() => {
     setSelectedId(null)
@@ -232,7 +237,7 @@ export function VisitHistoryPage() {
         onApplyPreset={applyPreset}
       />
 
-      <HistorySummary visits={filteredVisits} />
+      <HistorySummary visits={filteredVisits} ledger={ledgerTotals} />
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left: list */}

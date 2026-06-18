@@ -1,11 +1,14 @@
-import { useState } from 'react'
-import { MessageCircle, ExternalLink, Pill, Syringe, Pencil, Scale, Thermometer, CalendarClock } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { MessageCircle, ExternalLink, Pill, Syringe, Pencil, Scale, Thermometer, CalendarClock, Phone, Copy, Check } from 'lucide-react'
 import type { Timestamp } from 'firebase/firestore'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useClinic } from '@/features/clinic/hooks/use-clinic'
 import { useClinicName } from '@/features/clinic/hooks/use-clinic-name'
+import { updatePetName, updateOwnerName } from '@/features/checkin/services/edit-names'
 import { cn, formatInr } from '@/lib/utils'
 import { WhatsAppShareModal } from '@/components/blocks/whatsapp-share-modal'
 import { SplitPaymentDialog } from '@/components/blocks/split-payment-dialog'
+import { EditNameDialog } from '@/components/blocks/edit-name-dialog'
 import {
   PAYMENT_METHOD_LABELS,
   updatePayments,
@@ -81,7 +84,53 @@ export function VisitDetailPanel({
   const { detail, loading } = useVisitBill(clinicId, branchId, visit.id, visit.ownerId, visit.petId)
   const [showWAModal, setShowWAModal] = useState(false)
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
+  const [copied, setCopied] = useState(false)
   const clinicName = useClinicName(clinicId)
+
+  const ownerPhone = detail?.ownerPhone?.trim() || ''
+
+  function handleCopyPhone() {
+    if (!ownerPhone) return
+    navigator.clipboard
+      ?.writeText(ownerPhone)
+      .then(() => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+      })
+      .catch(() => onToast('Could not copy number'))
+  }
+
+  // ── Name editing (pet / owner) ──────────────────────────────────────────────
+  const { branchIds } = useClinic()
+  const queryClient = useQueryClient()
+  const [editTarget, setEditTarget] = useState<'pet' | 'owner' | null>(null)
+  const [petNameOverride, setPetNameOverride] = useState<string | null>(null)
+  const [ownerNameOverride, setOwnerNameOverride] = useState<string | null>(null)
+
+  // Drop optimistic overrides when the panel switches to a different visit.
+  useEffect(() => {
+    setPetNameOverride(null)
+    setOwnerNameOverride(null)
+    setEditTarget(null)
+  }, [visit.id])
+
+  const petName = petNameOverride ?? visit.petName
+  const ownerName = ownerNameOverride ?? visit.ownerName
+
+  const editName = useMutation({
+    mutationFn: ({ target, value }: { target: 'pet' | 'owner'; value: string }) =>
+      target === 'pet'
+        ? updatePetName(clinicId, branchIds, visit.petId, value)
+        : updateOwnerName(clinicId, branchIds, visit.ownerId, value),
+    onSuccess: (_data, { target, value }) => {
+      if (target === 'pet') setPetNameOverride(value)
+      else setOwnerNameOverride(value)
+      // Check-in search reads pets via React Query; lists are real-time.
+      queryClient.invalidateQueries({ queryKey: ['petSearch'] })
+      setEditTarget(null)
+      onToast(target === 'pet' ? 'Pet name updated' : 'Owner name updated')
+    },
+  })
 
   const updateMethod = useMutation({
     mutationFn: (payments: PaymentEntry[]) =>
@@ -100,7 +149,7 @@ export function VisitDetailPanel({
 
   const baseUrl = import.meta.env.VITE_APP_BASE_URL ?? 'https://shomer-app-test.web.app'
   const summaryLink = `${baseUrl}/visit/${visit.id}/summary?clinicId=${clinicId}&branchId=${branchId}`
-  const waMessage = `Hi ${visit.ownerName}, ${visit.petName}'s consultation is complete.\n\nView the summary here:\n${summaryLink}\n\nThank you for choosing ${clinicName ?? 'us'}! 🐾`
+  const waMessage = `Hi ${ownerName}, ${petName}'s consultation is complete.\n\nView the summary here:\n${summaryLink}\n\nThank you for choosing ${clinicName ?? 'us'}! 🐾`
 
   function handleShareConsultation() {
     if (!detail?.ownerPhone) {
@@ -122,24 +171,22 @@ export function VisitDetailPanel({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
+      {/* Header — sticky anchor: token + pet + visit date */}
       <div className="border-b border-border-base px-6 py-4 flex-shrink-0">
         <div className="flex items-baseline gap-2.5">
           <span className="font-display text-[20px] font-bold text-primary leading-none">
             {visit.tokenDisplay}
           </span>
-          <span className="text-[15px] font-bold text-foreground">{visit.petName}</span>
+          <span className="text-[15px] font-bold text-foreground">{petName}</span>
+          <button
+            type="button"
+            onClick={() => setEditTarget('pet')}
+            aria-label="Edit pet name"
+            className="text-muted hover:text-primary transition-colors"
+          >
+            <Pencil size={12} />
+          </button>
         </div>
-        <p className="mt-0.5 text-[12px] text-muted">
-          {visit.ownerName} · {visit.doctorName}
-        </p>
-        {detail && (detail.petSpecies || detail.petBreed || detail.petAge || detail.petColor) && (
-          <p className="mt-1 text-[11px] text-muted">
-            {[detail.petSpecies, detail.petBreed, detail.petAge, detail.petColor]
-              .filter(Boolean)
-              .join(' · ')}
-          </p>
-        )}
         {(visit.date || visit.completedAt) && (() => {
           const label = formatVisitDateTime(visit.date, visit.completedAt)
           return label ? (
@@ -149,48 +196,113 @@ export function VisitDetailPanel({
             </p>
           ) : null
         })()}
-        {(typeof visit.petWeightKg === 'number' || typeof visit.petTemperatureF === 'number') && (
-          <div className="mt-1 flex items-center gap-3 flex-wrap">
-            {typeof visit.petWeightKg === 'number' && (
-              <span className="flex items-center gap-1.5 text-[11px] text-muted">
-                <Scale size={10} className="flex-shrink-0" />
-                <span className="font-semibold text-foreground">{visit.petWeightKg} kg</span>
-              </span>
-            )}
-            {typeof visit.petTemperatureF === 'number' && (
-              <span className="flex items-center gap-1.5 text-[11px] text-muted">
-                <Thermometer size={10} className="flex-shrink-0" />
-                <span className="font-semibold text-foreground">{visit.petTemperatureF}°F</span>
-              </span>
-            )}
-            <span className="text-[11px] text-muted">at time of visit</span>
-          </div>
-        )}
-
-        {visit.complaints.length > 0 && (
-          <div className="mt-3">
-            <p className={cn(labelClass, 'mb-1.5')}>Complaints</p>
-            <div className="flex flex-wrap gap-1.5">
-              {visit.complaints.map((c) => (
-                <span
-                  key={c}
-                  className="rounded-[3px] bg-surface-2 border border-border-base px-2 py-0.5 text-[11px] font-medium text-muted"
-                >
-                  {c}
-                </span>
-              ))}
-            </div>
-            {visit.otherComplaintText && (
-              <p className="mt-1.5 text-[12px] text-foreground italic">
-                "{visit.otherComplaintText}"
-              </p>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Scrollable body */}
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        {/* Owner */}
+        <div className="space-y-1.5">
+          <p className={labelClass}>Owner</p>
+          <div className="flex items-center gap-2">
+            <p className="text-[14px] font-semibold text-foreground">{ownerName}</p>
+            <button
+              type="button"
+              onClick={() => setEditTarget('owner')}
+              aria-label="Edit owner name"
+              className="text-muted hover:text-primary transition-colors"
+            >
+              <Pencil size={12} />
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <Phone size={12} className="text-primary flex-shrink-0" />
+            {ownerPhone ? (
+              <a
+                href={`tel:${ownerPhone}`}
+                className="text-[13px] font-semibold text-foreground tabular-nums hover:text-primary transition-colors"
+              >
+                {ownerPhone}
+              </a>
+            ) : (
+              <span className="text-[13px] text-muted">—</span>
+            )}
+            {ownerPhone && (
+              <button
+                type="button"
+                onClick={handleCopyPhone}
+                aria-label="Copy phone number"
+                className="flex items-center gap-1 text-[11px] font-semibold text-muted hover:text-primary transition-colors"
+              >
+                {copied ? <Check size={12} /> : <Copy size={12} />}
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Pet */}
+        {(detail?.petSpecies ||
+          detail?.petBreed ||
+          detail?.petAge ||
+          detail?.petColor ||
+          typeof visit.petWeightKg === 'number' ||
+          typeof visit.petTemperatureF === 'number') && (
+          <div className="space-y-1.5">
+            <p className={labelClass}>Pet</p>
+            {detail && (detail.petSpecies || detail.petBreed || detail.petAge || detail.petColor) && (
+              <p className="text-[12px] text-foreground">
+                {[detail.petSpecies, detail.petBreed, detail.petAge, detail.petColor]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+            )}
+            {(typeof visit.petWeightKg === 'number' || typeof visit.petTemperatureF === 'number') && (
+              <div className="flex items-center gap-3 flex-wrap">
+                {typeof visit.petWeightKg === 'number' && (
+                  <span className="flex items-center gap-1.5 text-[11px] text-muted">
+                    <Scale size={10} className="flex-shrink-0" />
+                    <span className="font-semibold text-foreground">{visit.petWeightKg} kg</span>
+                  </span>
+                )}
+                {typeof visit.petTemperatureF === 'number' && (
+                  <span className="flex items-center gap-1.5 text-[11px] text-muted">
+                    <Thermometer size={10} className="flex-shrink-0" />
+                    <span className="font-semibold text-foreground">{visit.petTemperatureF}°F</span>
+                  </span>
+                )}
+                <span className="text-[11px] text-muted">at time of visit</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Visit — attending doctor + complaints */}
+        <div className="space-y-1.5">
+          <p className={labelClass}>Visit</p>
+          <p className="text-[12px] text-muted">
+            Attending: <span className="font-semibold text-foreground">{visit.doctorName}</span>
+          </p>
+          {visit.complaints.length > 0 && (
+            <div className="mt-1">
+              <div className="flex flex-wrap gap-1.5">
+                {visit.complaints.map((c) => (
+                  <span
+                    key={c}
+                    className="rounded-[3px] bg-surface-2 border border-border-base px-2 py-0.5 text-[11px] font-medium text-muted"
+                  >
+                    {c}
+                  </span>
+                ))}
+              </div>
+              {visit.otherComplaintText && (
+                <p className="mt-1.5 text-[12px] text-foreground italic">
+                  "{visit.otherComplaintText}"
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
         {loading ? (
           <p className="text-[12px] text-muted">Loading details…</p>
         ) : !detail ? null : (
@@ -399,10 +511,32 @@ export function VisitDetailPanel({
           open={showWAModal}
           onClose={() => setShowWAModal(false)}
           phone={detail.ownerPhone}
-          ownerName={visit.ownerName}
+          ownerName={ownerName}
           message={waMessage}
         />
       )}
+
+      <EditNameDialog
+        open={editTarget !== null}
+        title={editTarget === 'pet' ? 'Edit pet name' : 'Edit owner name'}
+        label={editTarget === 'pet' ? 'Pet name' : 'Owner name'}
+        initialValue={editTarget === 'pet' ? petName : ownerName}
+        loading={editName.isPending}
+        error={
+          editName.isError
+            ? (editName.error as Error)?.message ?? 'Could not save. Try again.'
+            : null
+        }
+        onCancel={() => {
+          if (!editName.isPending) {
+            editName.reset()
+            setEditTarget(null)
+          }
+        }}
+        onConfirm={(value) => {
+          if (editTarget) editName.mutate({ target: editTarget, value })
+        }}
+      />
 
       {canEditPaymentMethod && (
         <SplitPaymentDialog

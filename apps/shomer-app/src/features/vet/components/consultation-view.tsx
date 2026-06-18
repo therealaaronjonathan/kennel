@@ -988,7 +988,11 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1.5">
-                            <label className={labelClass}>Batch No.</label>
+                            {/* h-6 matches the Next Due header (which carries the
+                                'Next Year' toggle) so both inputs align. */}
+                            <div className="flex items-center h-6">
+                              <label className={labelClass}>Batch No.</label>
+                            </div>
                             <input
                               type="text"
                               placeholder="Batch number (optional)"
@@ -1002,7 +1006,7 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
                             />
                           </div>
                           <div id={`vaccine-next-due-field-${idx}`} className="space-y-1.5 scroll-mt-4">
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between h-6">
                               <label className={labelClass}>Next Due</label>
                               <button
                                 type="button"

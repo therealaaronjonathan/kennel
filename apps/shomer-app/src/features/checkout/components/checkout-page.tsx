@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { MessageCircle, CheckCheck, Pill, CheckCircle, Syringe, Pin } from 'lucide-react'
-import { useMutation } from '@tanstack/react-query'
+import { MessageCircle, CheckCheck, Pill, CheckCircle, Syringe, Pin, Pencil, Phone, Copy, Check } from 'lucide-react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { cn, formatInr } from '@/lib/utils'
@@ -8,6 +8,8 @@ import { WhatsAppShareModal } from '@/components/blocks/whatsapp-share-modal'
 import { ServicesSelect, type ServiceEntry } from '@/components/blocks/services-select'
 import { PaymentMethodDialog } from '@/components/blocks/payment-method-dialog'
 import { SplitPaymentDialog } from '@/components/blocks/split-payment-dialog'
+import { EditNameDialog } from '@/components/blocks/edit-name-dialog'
+import { updatePetName, updateOwnerName } from '@/features/checkin/services/edit-names'
 import { useClinic } from '@/features/clinic'
 import { useCompletedVisits, type CompletedVisit } from '@/features/dashboard/services/use-completed-visits'
 import { useClinicName } from '@/features/clinic/hooks/use-clinic-name'
@@ -90,13 +92,65 @@ function CheckoutPanel({
     setEditedServices(normalize(visit.services))
   }, [visit.id, visit.services])
 
+  // ── Name editing (pet / owner) + phone ────────────────────────────────────
+  // Mirrors VisitDetailPanel; see TODOS — these two panels should be consolidated.
+  const { branchIds } = useClinic()
+  const queryClient = useQueryClient()
+  const [copied, setCopied] = useState(false)
+  const [editTarget, setEditTarget] = useState<'pet' | 'owner' | null>(null)
+  const [petNameOverride, setPetNameOverride] = useState<string | null>(null)
+  const [ownerNameOverride, setOwnerNameOverride] = useState<string | null>(null)
+
+  useEffect(() => {
+    setPetNameOverride(null)
+    setOwnerNameOverride(null)
+    setEditTarget(null)
+  }, [visit.id])
+
+  const petName = petNameOverride ?? visit.petName
+  const ownerName = ownerNameOverride ?? visit.ownerName
+  const ownerPhone = detail?.ownerPhone?.trim() || ''
+
+  function handleCopyPhone() {
+    if (!ownerPhone) return
+    navigator.clipboard
+      ?.writeText(ownerPhone)
+      .then(() => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+      })
+      .catch(() => onToast('Could not copy number'))
+  }
+
+  const editName = useMutation({
+    mutationFn: ({ target, value }: { target: 'pet' | 'owner'; value: string }) =>
+      target === 'pet'
+        ? updatePetName(clinicId, branchIds, visit.petId, value)
+        : updateOwnerName(clinicId, branchIds, visit.ownerId, value),
+    onSuccess: (_data, { target, value }) => {
+      if (target === 'pet') setPetNameOverride(value)
+      else setOwnerNameOverride(value)
+      queryClient.invalidateQueries({ queryKey: ['petSearch'] })
+      setEditTarget(null)
+      onToast(target === 'pet' ? 'Pet name updated' : 'Owner name updated')
+    },
+  })
+
   const billTotal = editedServices.reduce((s, item) => s + item.quantity * item.price, 0)
   const existingPaid = visit.amountPaid ?? 0
   const hasPartial = existingPaid > 0 && existingPaid < billTotal
 
   const billing = useMutation({
     mutationFn: (payments: PaymentEntry[]) =>
-      recordPayments(clinicId, branchId, visit.id, editedServices, payments),
+      recordPayments(clinicId, branchId, visit.id, editedServices, payments, {
+        petId: visit.petId,
+        ownerId: visit.ownerId,
+        petName: visit.petName,
+        ownerName: visit.ownerName,
+        tokenDisplay: visit.tokenDisplay,
+        visitDate: visit.date,
+        previousPayments: visit.payments ?? [],
+      }),
     onSuccess: (_data, payments) => {
       setShowPaymentDialog(false)
       setShowSplitDialog(false)
@@ -122,7 +176,7 @@ function CheckoutPanel({
 
   const baseUrl = import.meta.env.VITE_APP_BASE_URL ?? 'https://shomer-app-test.web.app'
   const summaryLink = `${baseUrl}/visit/${visit.id}/summary?clinicId=${clinicId}&branchId=${branchId}`
-  const waMessage = `Hi ${visit.ownerName}, ${visit.petName}'s consultation is complete. View the summary here: ${summaryLink}\n\nPlease visit the reception for billing. Thank you for choosing ${clinicName ?? 'us'}! 🐾`
+  const waMessage = `Hi ${ownerName}, ${petName}'s consultation is complete. View the summary here: ${summaryLink}\n\nPlease visit the reception for billing. Thank you for choosing ${clinicName ?? 'us'}! 🐾`
 
   const hasDiagnosis = detail && detail.diagnoses.length > 0
   const hasMeds = detail && detail.medicines.length > 0
@@ -137,16 +191,56 @@ function CheckoutPanel({
           <span className="font-display text-[20px] font-bold text-primary leading-none">
             {visit.tokenDisplay}
           </span>
-          <span className="text-[15px] font-bold text-foreground">{visit.petName}</span>
+          <span className="text-[15px] font-bold text-foreground">{petName}</span>
+          <button
+            type="button"
+            onClick={() => setEditTarget('pet')}
+            aria-label="Edit pet name"
+            className="text-muted hover:text-primary transition-colors"
+          >
+            <Pencil size={12} />
+          </button>
           {visit.isEmergency && (
             <span className="rounded-[3px] bg-danger/10 border border-danger/25 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.04em] text-danger">
               ER
             </span>
           )}
         </div>
-        <p className="mt-0.5 text-[12px] text-muted">
-          {visit.ownerName} · {visit.doctorName}
+        <p className="mt-0.5 flex items-center gap-1.5 text-[12px] text-muted">
+          <span>{ownerName} · {visit.doctorName}</span>
+          <button
+            type="button"
+            onClick={() => setEditTarget('owner')}
+            aria-label="Edit owner name"
+            className="text-muted hover:text-primary transition-colors flex-shrink-0"
+          >
+            <Pencil size={11} />
+          </button>
         </p>
+        <div className="mt-1 flex items-center gap-2">
+          <Phone size={12} className="text-primary flex-shrink-0" />
+          {ownerPhone ? (
+            <a
+              href={`tel:${ownerPhone}`}
+              className="text-[13px] font-semibold text-foreground tabular-nums hover:text-primary transition-colors"
+            >
+              {ownerPhone}
+            </a>
+          ) : (
+            <span className="text-[13px] text-muted">—</span>
+          )}
+          {ownerPhone && (
+            <button
+              type="button"
+              onClick={handleCopyPhone}
+              aria-label="Copy phone number"
+              className="flex items-center gap-1 text-[11px] font-semibold text-muted hover:text-primary transition-colors"
+            >
+              {copied ? <Check size={12} /> : <Copy size={12} />}
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          )}
+        </div>
         {detail && (detail.petSpecies || detail.petBreed || detail.petAge || detail.petColor) && (
           <p className="mt-1 text-[11px] text-muted">
             {[detail.petSpecies, detail.petBreed, detail.petAge, detail.petColor]
@@ -343,10 +437,32 @@ function CheckoutPanel({
           open={showWAModal}
           onClose={() => setShowWAModal(false)}
           phone={detail.ownerPhone}
-          ownerName={visit.ownerName}
+          ownerName={ownerName}
           message={waMessage}
         />
       )}
+
+      <EditNameDialog
+        open={editTarget !== null}
+        title={editTarget === 'pet' ? 'Edit pet name' : 'Edit owner name'}
+        label={editTarget === 'pet' ? 'Pet name' : 'Owner name'}
+        initialValue={editTarget === 'pet' ? petName : ownerName}
+        loading={editName.isPending}
+        error={
+          editName.isError
+            ? (editName.error as Error)?.message ?? 'Could not save. Try again.'
+            : null
+        }
+        onCancel={() => {
+          if (!editName.isPending) {
+            editName.reset()
+            setEditTarget(null)
+          }
+        }}
+        onConfirm={(value) => {
+          if (editTarget) editName.mutate({ target: editTarget, value })
+        }}
+      />
     </div>
   )
 }

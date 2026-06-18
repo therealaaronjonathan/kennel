@@ -319,10 +319,15 @@ export function VisitSummaryPage() {
   const hasNotes = !!data.visit.consultationNotes?.trim()
 
   const isBilled = data.visit.status === 'billed'
+  const isFinished = isBilled || data.visit.status === 'completed'
   const services = data.visit.services ?? []
   const billAmount = data.visit.billAmount ?? 0
   const payments = data.visit.payments ?? []
-  const hasBilling = isBilled && services.length > 0
+  // Show the itemized bill for finished visits (completed OR billed) so customers
+  // can review charges before paying. The "Paid via" block below stays gated on
+  // payments.length, so an unpaid completed visit shows a "Payment pending" note.
+  const hasBilling = isFinished && services.length > 0
+  const paymentPending = isFinished && services.length > 0 && payments.length === 0
 
   // ── Inline styles (print-safe, no Tailwind tokens) ──────────────────────────
 
@@ -828,6 +833,26 @@ export function VisitSummaryPage() {
                       <span>{formatInr(p.amount)}</span>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Unpaid finished visit — show pending note instead of a payment block.
+                  Tone derived from `text` so it stays legible on any branded background. */}
+              {paymentPending && (
+                <div
+                  style={{
+                    marginTop: '12px',
+                    padding: '10px 14px',
+                    background: text + '0D',
+                    border: `1px solid ${text}26`,
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: text,
+                    opacity: 0.85,
+                  }}
+                >
+                  Payment pending — please settle at the clinic.
                 </div>
               )}
             </div>

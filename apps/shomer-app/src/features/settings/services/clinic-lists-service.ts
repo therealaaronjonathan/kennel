@@ -16,9 +16,22 @@ export async function deleteClinicDiagnosis(clinicId: string, diagnosisId: strin
 }
 
 // Medicines
-export async function addClinicMedicine(clinicId: string, name: string): Promise<void> {
+export type MedicineType = 'tablet' | 'syrup' | 'injection'
+
+export const MEDICINE_TYPES: { value: MedicineType; label: string }[] = [
+  { value: 'tablet', label: 'Tablet' },
+  { value: 'syrup', label: 'Syrup' },
+  { value: 'injection', label: 'Injection' },
+]
+
+export async function addClinicMedicine(
+  clinicId: string,
+  name: string,
+  type: MedicineType,
+): Promise<void> {
   await addDoc(collection(db, `clinics/${clinicId}/medicinesCatalog`), {
     name,
+    type,
     isActive: true,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),

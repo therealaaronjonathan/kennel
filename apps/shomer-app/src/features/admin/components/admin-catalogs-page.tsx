@@ -11,6 +11,7 @@ import {
 import { db } from '@/lib/firebase'
 import { Plus, Trash2, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { MEDICINE_TYPES, type MedicineType } from '@/features/settings/services/clinic-lists-service'
 
 type CatalogTab = 'diagnoses' | 'medicines' | 'services' | 'grooming'
 
@@ -19,6 +20,7 @@ interface CatalogItem {
   name: string
   isActive: boolean
   price?: number
+  type?: MedicineType
 }
 
 const labelClass = 'text-[10px] font-semibold uppercase tracking-[0.08em] text-muted'
@@ -51,6 +53,8 @@ function CatalogTabContent({ clinicId, tab }: { clinicId: string; tab: CatalogTa
   const [filter, setFilter] = useState('')
 
   const withPrice = hasPrice(tab)
+  const isMedicine = tab === 'medicines'
+  const [medType, setMedType] = useState<MedicineType>('tablet')
   const path = collectionPath(clinicId, tab)
 
   async function loadItems() {
@@ -83,9 +87,11 @@ function CatalogTabContent({ clinicId, tab }: { clinicId: string; tab: CatalogTa
         updatedAt: serverTimestamp(),
       }
       if (withPrice) data.price = parseFloat(price)
+      if (isMedicine) data.type = medType
       await addDoc(collection(db, path), data)
       setName('')
       setPrice('')
+      setMedType('tablet')
       await loadItems()
     } finally {
       setAdding(false)
@@ -153,6 +159,26 @@ function CatalogTabContent({ clinicId, tab }: { clinicId: string; tab: CatalogTa
             Add
           </button>
         </div>
+        {isMedicine && (
+          // Type — drives the quantity control the doctor sees when prescribing.
+          <div className="flex gap-1.5 pt-1">
+            {MEDICINE_TYPES.map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => setMedType(t.value)}
+                className={cn(
+                  'flex-1 rounded-[4px] border px-3 py-1.5 text-[12px] font-semibold transition-colors',
+                  medType === t.value
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border-base text-muted hover:text-foreground',
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Filter */}
@@ -190,6 +216,11 @@ function CatalogTabContent({ clinicId, tab }: { clinicId: string; tab: CatalogTa
                 >
                   {item.name}
                 </span>
+                {isMedicine && (
+                  <span className="rounded-[3px] bg-surface-2 border border-border-base px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-muted">
+                    {item.type ?? 'tablet'}
+                  </span>
+                )}
                 {withPrice && item.price !== undefined && (
                   <span className="text-[12px] font-semibold text-muted">
                     ₹{item.price.toLocaleString('en-IN')}

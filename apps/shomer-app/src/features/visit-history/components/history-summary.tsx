@@ -5,9 +5,12 @@ import {
   type PaymentMethod,
 } from '@/features/checkout/services/complete-billing'
 import type { HistoryVisit } from '../services/use-visit-history'
+import type { LedgerTotals } from '../services/use-payment-ledger'
 
 interface HistorySummaryProps {
   visits: HistoryVisit[]
+  /** Money totals from the payment ledger, bucketed by the day money was received. */
+  ledger: LedgerTotals
 }
 
 const METHOD_ICONS: Record<PaymentMethod, React.ComponentType<{ size?: number; className?: string }>> = {
@@ -22,18 +25,15 @@ const METHOD_LABELS: Record<PaymentMethod, string> = {
   upi: 'UPI',
 }
 
-export function HistorySummary({ visits }: HistorySummaryProps) {
-  const totalEarned = visits.reduce((s, v) => s + (v.amountPaid ?? 0), 0)
+export function HistorySummary({ visits, ledger }: HistorySummaryProps) {
+  // Money figures come from the payment ledger (bucketed by the day cash was
+  // received), so a partial paid across days lands on the right day. Visit count
+  // stays visit-based — it counts consultations, not money.
+  const totalEarned = ledger.totalEarned
+  const byMethod = ledger.byMethod
   const completedCount = visits.filter(
     (v) => v.status === 'billed' || v.status === 'completed',
   ).length
-
-  const byMethod: Record<PaymentMethod, number> = { cash: 0, card: 0, upi: 0 }
-  for (const v of visits) {
-    for (const p of v.payments ?? []) {
-      byMethod[p.method] += p.amount
-    }
-  }
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 px-6 py-4 border-b border-border-base bg-background">

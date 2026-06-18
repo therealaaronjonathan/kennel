@@ -81,7 +81,11 @@
       "Bash(cat /Users/aj/Shomer/kennel/apps/shomer-app/.env*)",
       "Bash(rm /Users/aj/Shomer/kennel/import-report.json /tmp/seed-test/seed-pet-owners.js)",
       "Bash(rmdir /tmp/seed-test)",
-      "Bash(xxd)"
+      "Bash(xxd)",
+      "Bash(ls TODOS.md docs/TODOS.md)",
+      "Bash(echo \"exit:$?\")",
+      "Bash(find . -path ./node_modules -prune -o -name \"seed-*.ts\" -print)",
+      "Bash(find . -path ./node_modules -prune -o -type d -name scripts -print)"
     ]
   }
 }

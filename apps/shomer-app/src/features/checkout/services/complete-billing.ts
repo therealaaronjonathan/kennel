@@ -1,5 +1,6 @@
-import { doc, serverTimestamp, updateDoc } from 'firebase/firestore'
+import { doc, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { stagePaymentLedger, type LedgerContext } from './payment-ledger'
 
 export type PaymentMethod = 'cash' | 'card' | 'upi'
 
@@ -50,6 +51,7 @@ export async function recordPayments(
   visitId: string,
   services: ServiceEntry[],
   payments: PaymentEntry[],
+  ledgerCtx: LedgerContext,
 ): Promise<void> {
   const billAmount = computeBillAmount(services)
   const cleaned = sanitizePayments(payments)
@@ -76,15 +78,27 @@ export async function recordPayments(
     update.billedAt = serverTimestamp()
   }
 
-  await updateDoc(
+  // Visit update + payment-ledger rows commit together. The ledger logs the
+  // per-method delta collected in THIS action, dated today, so money lands on
+  // the day it was received (not the visit's creation date).
+  const batch = writeBatch(db)
+  batch.update(
     doc(db, `clinics/${clinicId}/branches/${branchId}/visits/${visitId}`),
     update,
   )
+  stagePaymentLedger(batch, clinicId, branchId, visitId, cleaned, ledgerCtx)
+  await batch.commit()
 }
 
 /**
  * Update payments on an already-billed visit. Sum must equal billAmount.
  * Status stays 'billed', billedAt is preserved.
+ *
+ * Deliberately does NOT write payment-ledger rows: the total is unchanged
+ * (no money moved), so this is a method-label correction, not a collection
+ * event. Writing today-dated deltas here would distort the daily tally with
+ * money that physically arrived earlier. The ledger stays the record of when
+ * money actually came in.
  */
 export async function updatePayments(
   clinicId: string,

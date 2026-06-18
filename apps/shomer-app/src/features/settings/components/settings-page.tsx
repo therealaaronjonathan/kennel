@@ -17,6 +17,8 @@ import {
   setClinicMedicineActive,
   addClinicService,
   setClinicServiceActive,
+  MEDICINE_TYPES,
+  type MedicineType,
 } from '../services/clinic-lists-service'
 
 type Tab = 'duty' | 'diagnoses' | 'medicines' | 'services'
@@ -253,6 +255,7 @@ function DiagnosesTab({ clinicId }: { clinicId: string }) {
 function MedicinesTab({ clinicId }: { clinicId: string }) {
   const { items, loading } = useAllClinicMedicines(clinicId)
   const [name, setName] = useState('')
+  const [type, setType] = useState<MedicineType>('tablet')
   const [adding, setAdding] = useState(false)
   const [filter, setFilter] = useState('')
 
@@ -263,8 +266,9 @@ function MedicinesTab({ clinicId }: { clinicId: string }) {
     if (!trimmed) return
     setAdding(true)
     try {
-      await addClinicMedicine(clinicId, trimmed)
+      await addClinicMedicine(clinicId, trimmed, type)
       setName('')
+      setType('tablet')
     } finally {
       setAdding(false)
     }
@@ -297,6 +301,24 @@ function MedicinesTab({ clinicId }: { clinicId: string }) {
             Add
           </button>
         </div>
+        {/* Type — drives the quantity control the doctor sees when prescribing */}
+        <div className="flex gap-1.5 pt-1">
+          {MEDICINE_TYPES.map((t) => (
+            <button
+              key={t.value}
+              type="button"
+              onClick={() => setType(t.value)}
+              className={cn(
+                'flex-1 rounded-[4px] border px-3 py-1.5 text-[12px] font-semibold transition-colors',
+                type === t.value
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border-base text-muted hover:text-foreground',
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {items.length > 6 && (
@@ -320,8 +342,13 @@ function MedicinesTab({ clinicId }: { clinicId: string }) {
               key={item.id}
               className={cn('flex items-center justify-between px-4 py-3 bg-surface', !item.isActive && 'opacity-40')}
             >
-              <span className={cn('text-[13px] text-foreground', !item.isActive && 'line-through text-muted')}>
-                {item.name}
+              <span className="flex items-center gap-2 min-w-0">
+                <span className={cn('text-[13px] text-foreground truncate', !item.isActive && 'line-through text-muted')}>
+                  {item.name}
+                </span>
+                <span className="flex-shrink-0 rounded-[3px] bg-surface-2 border border-border-base px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-muted">
+                  {item.type}
+                </span>
               </span>
               <button
                 type="button"

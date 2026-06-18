@@ -11,6 +11,7 @@ export interface SettingsDiagnosis {
 export interface SettingsMedicine {
   id: string
   name: string
+  type: 'tablet' | 'syrup' | 'injection'
   isActive: boolean
 }
 
@@ -61,6 +62,8 @@ export function useAllClinicMedicines(clinicId: string | null) {
         snap.docs.map((d) => ({
           id: d.id,
           name: d.data().name as string,
+          // Legacy docs created before the type selector default to tablet.
+          type: (d.data().type as SettingsMedicine['type']) ?? 'tablet',
           isActive: d.data().isActive as boolean,
         })),
       )

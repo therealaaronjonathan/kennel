@@ -21,6 +21,7 @@ clinics/{clinicId}
 ├── branches/{branchId}
 │   ├── tokenCounters/{date}               # one doc per day — branch-wide token counter
 │   ├── billingDefaults/{visitId}          # watch-list of explicitly pinned unpaid bills
+│   ├── payments/{paymentId}               # immutable money-movement ledger (per-day tally)
 │   └── visits/{visitId}                   # flat under branch for cross-cutting queries
 │       ├── diagnoses/{diagnosisId}        # one doc per selected diagnosis
 │       ├── prescriptions/{prescriptionId} # one doc per prescribed medicine
@@ -395,6 +396,56 @@ interface BillingDefault {
 
 ---
 
+### PaymentRecord (branch subcollection: `payments/{paymentId}`)
+Immutable ledger of money movements. One row per payment collected. Exists so the
+daily money tally can attribute cash to **the day it was received**, not the day the
+visit was created — a partial paid across multiple days (billing-defaults case) lands
+on the correct days.
+
+```ts
+interface PaymentRecord {
+  visitId: string
+  petId: string           // stable ref — survives pet rename; enables per-pet queries
+  ownerId: string         // stable ref — enables owner account-statement queries
+  amount: number          // INR; delta collected in this transaction (negative on correction)
+  method: 'cash' | 'card' | 'upi'
+  date: string            // YYYY-MM-DD, day money was received (local) — the tally bucket key
+  recordedAt: Timestamp
+  recordedBy: string      // staff uid ('backfill' for migrated rows)
+  petName: string         // display snapshots — backfilled by edit-names.ts on rename
+  ownerName: string
+  tokenDisplay: string
+  visitDate: string       // original visit.date (consultation day), for context
+  source: 'checkout' | 'backfill'
+}
+```
+
+**Write path**: `recordPayments()` (checkout) computes the per-method delta between the
+visit's previously persisted `payments[]` and the new `payments[]`, and stages one ledger
+row per non-zero delta (dated today) onto the SAME `writeBatch` as the visit update — so
+the visit doc and ledger commit atomically. `updatePayments()` (editing an already-billed
+split) does NOT write ledger rows: the total is unchanged, so it's a method-label
+correction, not a money movement.
+
+**Invariant**: `sum(payments where visitId == V) === visit.amountPaid`. The visit doc
+stays the source of truth for per-visit payment STATUS (`amountPaid` / `status`); the
+ledger is the source of truth for per-day money totals only. Never derive paid-status by
+summing the ledger.
+
+**Read path**: `usePaymentLedger()` queries `payments where date in [from,to]` (single-field
+range, auto-indexed) and sums client-side. The History "Total Earned" and "By Method" KPIs
+read from this; "Visits Completed" stays visit-based.
+
+**Firestore rules**: covered by the authenticated catch-all — staff-only, NOT public (unlike
+visits). The summary page never reads it.
+
+**Idempotent backfill**: `scripts/backfill-payment-ledger.ts` seeds existing visits with
+`amountPaid > 0`, one row per `payments[]` entry, deterministic id `${visitId}_${method}`,
+dated at `billedAt` (→ `visit.date` fallback). Legacy multi-day partials collapse to a
+single date because per-day history was never recorded.
+
+---
+
 ### Vaccine (Visit subcollection)
 
 ```ts
@@ -503,7 +554,7 @@ Admin panel provides full catalog management at `/admin/clinics/:id/catalogs` (a
 
 Route: `/reception/history` — accessible to receptionist, admin, owner. Read-only.
 
-Always restricted to finished visits (`status ∈ {billed, completed}`); waiting/in-progress/cancelled are excluded. Filters: date range (default today→today, presets Today / Last 7 days), search (pet/owner/token), services multi-select (from `clinics/{clinicId}/services`), payment method (All/Cash/Card/UPI/Split — same semantics as Queue). KPI strip shows Total Earned (sum of `amountPaid`), Visits Completed (count where status ∈ {billed, completed}), and per-method breakdown summing to total.
+Always restricted to finished visits (`status ∈ {billed, completed}`); waiting/in-progress/cancelled are excluded. Filters: date range (default today→today, presets Today / Last 7 days), search (pet/owner/token), services multi-select (from `clinics/{clinicId}/services`), payment method (All/Cash/Card/UPI/Split — same semantics as Queue). KPI strip shows Total Earned and per-method breakdown (both read from the `payments` ledger by payment date, via `usePaymentLedger` — so cross-day partials count on the day money was received), and Visits Completed (count where status ∈ {billed, completed}, still visit-based).
 
 Query: range filter on `date` field (no composite index needed — single-field range). Capped at 200 most recent results sorted by `billedAt` desc with fallback to `updatedAt`/`createdAt`. Detail panel reuses `VisitDetailPanel` with `canEditPaymentMethod` omitted (read-only).
 
@@ -523,6 +574,7 @@ Query: range filter on `date` field (no composite index needed — single-field 
 - Visit carries `ownerName`, `petName`, `doctorName` — display without extra reads
 - `services` and `billAmount` denormalized onto Visit at completion
 - VisitDiagnosis/VisitPrescription denormalize `name` at write time — master list changes never break historical records
+- **Name corrections backfill the denormalized snapshots.** When a pet or owner name is edited (from the visit detail panel), `features/checkin/services/edit-names.ts` updates the canonical doc (`pets.name` + `petNameLower`, or `petOwners.name` — no `ownerNameLower`, owner lookup is phone-based) **and** rewrites the denormalized `petName`/`ownerName` on every matching visit across the clinic's `branchIds`, plus the `petName`/`ownerName` snapshot on any matching `billingDefaults` doc. Writes are chunked at 500 ops per `WriteBatch` (eventually-consistent, not atomic). This is the one place the otherwise-immutable denormalized name snapshots are deliberately mutated.
 
 ### Indexing
 Composite indexes needed:
