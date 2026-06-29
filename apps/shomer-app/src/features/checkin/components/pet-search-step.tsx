@@ -1,15 +1,23 @@
 import { useState } from 'react'
-import { Search, PawPrint, User, Phone } from 'lucide-react'
+import { Search, PawPrint, User, Phone, Plus, Pencil } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { usePetSearch, type SpeciesFilter } from '../services/use-pet-search'
+import { usePetSearch, useOwnerByPhone, type SpeciesFilter } from '../services/use-pet-search'
 import { useBreeds } from '../services/use-breeds'
 import { BreedSelect } from './breed-select'
-import type { PetWithOwner } from '../types'
+import { EditOwnerDialog } from '@/components/blocks/edit-owner-dialog'
+import type { PetOwner, PetWithOwner } from '../types'
 
 interface PetSearchStepProps {
   clinicId: string
   onFound: (result: PetWithOwner) => void
-  onNotFound: (petName: string, breed: string, species: SpeciesFilter, ownerPhone: string) => void
+  onNotFound: (
+    petName: string,
+    breed: string,
+    species: SpeciesFilter,
+    ownerPhone: string,
+    existingOwner: PetOwner | null,
+  ) => void
+  onAddPet: (owner: PetOwner) => void
 }
 
 const SPECIES_OPTIONS: { value: SpeciesFilter; label: string }[] = [
@@ -23,7 +31,7 @@ function speciesDisplayLabel(species: string, speciesName?: string): string {
   return species.charAt(0).toUpperCase() + species.slice(1)
 }
 
-export function PetSearchStep({ clinicId, onFound, onNotFound }: PetSearchStepProps) {
+export function PetSearchStep({ clinicId, onFound, onNotFound, onAddPet }: PetSearchStepProps) {
   const [phoneDigits, setPhoneDigits] = useState('')
   const [selectedSpecies, setSelectedSpecies] = useState<SpeciesFilter | null>(null)
   const [petName, setPetName] = useState('')
@@ -35,6 +43,7 @@ export function PetSearchStep({ clinicId, onFound, onNotFound }: PetSearchStepPr
     ownerPhone: string
     phoneOnly: boolean
   } | null>(null)
+  const [editOwner, setEditOwner] = useState<PetOwner | null>(null)
 
   const breeds = useBreeds(selectedSpecies ?? 'dog')
 
@@ -57,6 +66,14 @@ export function PetSearchStep({ clinicId, onFound, onNotFound }: PetSearchStepPr
     submitted?.ownerPhone || undefined,
   )
 
+  // Resolve whether the searched phone already belongs to an owner, so the
+  // register/add-pet step can lock onto them instead of a blank owner form.
+  const { data: existingOwner } = useOwnerByPhone(
+    clinicId,
+    submitted?.ownerPhone || undefined,
+    !!submitted?.ownerPhone,
+  )
+
   function handleSearch() {
     if (!canSearch) return
     if (isPhoneOnly) {
@@ -71,6 +88,19 @@ export function PetSearchStep({ clinicId, onFound, onNotFound }: PetSearchStepPr
   }
 
   const noResults = isFetched && submitted && results?.length === 0
+
+  // Group results by owner so each owner's pets sit together and we can offer
+  // "Add another pet" per owner. (Legacy data may have >1 owner per phone.)
+  const ownerGroups = (() => {
+    if (!results || results.length === 0) return []
+    const map = new Map<string, { owner: PetOwner; pets: PetWithOwner['pet'][] }>()
+    for (const { pet, owner } of results) {
+      const group = map.get(owner.id)
+      if (group) group.pets.push(pet)
+      else map.set(owner.id, { owner, pets: [pet] })
+    }
+    return [...map.values()]
+  })()
 
   return (
     <div className="space-y-5">
@@ -207,49 +237,73 @@ export function PetSearchStep({ clinicId, onFound, onNotFound }: PetSearchStepPr
         {isLoading ? 'Searching…' : 'Search'}
       </button>
 
-      {/* Results */}
-      {results && results.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
-            {results.length} match{results.length > 1 ? 'es' : ''} found
-          </p>
-          {results.map(({ pet, owner }) => (
-            <button
-              key={pet.id}
-              type="button"
-              onClick={() => onFound({ pet, owner })}
-              className="w-full rounded-[4px] border border-border-base bg-surface p-4 text-left hover:border-primary hover:bg-surface-2 transition-colors space-y-2"
-            >
-              <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-[4px] bg-primary/10 flex-shrink-0">
-                  <PawPrint size={13} className="text-primary" />
-                </div>
-                <div>
-                  <p className="text-[13px] font-semibold text-foreground">{pet.name}</p>
-                  <p className="text-[11px] text-muted capitalize">
-                    {speciesDisplayLabel(pet.species, pet.speciesName)}
-                    {pet.breed ? ` · ${pet.breed}` : ''}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 pl-9">
+      {/* Results — grouped by owner */}
+      {ownerGroups.length > 0 && (
+        <div className="space-y-4">
+          {ownerGroups.map(({ owner, pets }) => (
+            <div key={owner.id} className="space-y-2">
+              {/* Owner header */}
+              <div className="flex items-center gap-1.5">
                 <User size={11} className="text-muted flex-shrink-0" />
-                <span className="text-[12px] text-muted">
-                  {owner.name} · {owner.phone}
-                </span>
+                <span className="text-[12px] font-semibold text-foreground">{owner.name}</span>
+                <span className="text-[12px] text-muted">· {owner.phone}</span>
+                <button
+                  type="button"
+                  onClick={() => setEditOwner(owner)}
+                  title="Edit owner details"
+                  className="ml-auto flex items-center gap-1 text-[11px] font-semibold text-muted hover:text-primary transition-colors"
+                >
+                  <Pencil size={11} />
+                  Edit
+                </button>
               </div>
-            </button>
+
+              {/* Pets for this owner */}
+              {pets.map((pet) => (
+                <button
+                  key={pet.id}
+                  type="button"
+                  onClick={() => onFound({ pet, owner })}
+                  className="w-full rounded-[4px] border border-border-base bg-surface p-4 text-left hover:border-primary hover:bg-surface-2 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-[4px] bg-primary/10 flex-shrink-0">
+                      <PawPrint size={13} className="text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-[13px] font-semibold text-foreground">{pet.name}</p>
+                      <p className="text-[11px] text-muted capitalize">
+                        {speciesDisplayLabel(pet.species, pet.speciesName)}
+                        {pet.breed ? ` · ${pet.breed}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+
+              {/* Add another pet under this owner */}
+              <button
+                type="button"
+                onClick={() => onAddPet(owner)}
+                className="flex w-full items-center justify-center gap-1.5 rounded-[4px] border border-dashed border-border-base px-4 py-[9px] text-[12px] font-semibold text-muted hover:border-primary hover:text-primary transition-colors"
+              >
+                <Plus size={14} />
+                Add another pet for {owner.name}
+              </button>
+            </div>
           ))}
         </div>
       )}
 
-      {/* Register new — shown after results too */}
-      {results && results.length > 0 && submitted && (
+      {/* Register a brand-new owner — only when the searched phone is NOT
+          already on file (otherwise the per-owner "Add another pet" buttons
+          above cover it). */}
+      {results && results.length > 0 && submitted && !existingOwner && (
         <div className="rounded-[4px] border border-border-base bg-surface p-4 space-y-2">
           <p className="text-[12px] text-muted">Not seeing the right patient?</p>
           <button
             type="button"
-            onClick={() => onNotFound(submitted.petName, submitted.breed, submitted.species, submitted.ownerPhone)}
+            onClick={() => onNotFound(submitted.petName, submitted.breed, submitted.species, submitted.ownerPhone, null)}
             className="rounded-[4px] border border-primary px-4 py-[9px] text-[13px] font-semibold text-primary hover:opacity-85 transition-opacity"
           >
             Register as new patient
@@ -260,38 +314,73 @@ export function PetSearchStep({ clinicId, onFound, onNotFound }: PetSearchStepPr
       {/* No results */}
       {noResults && (
         <div className="rounded-[4px] border border-border-base bg-surface p-4 space-y-3">
-          {submitted?.phoneOnly ? (
+          {existingOwner ? (
             <>
+              {/* Phone is on file — no pet matched, so add one under this owner */}
               <p className="text-[13px] font-medium text-foreground">
-                No pets found for{' '}
-                <span className="font-semibold">+91 {phoneDigits}</span>
+                No pet
+                {submitted!.petName && (
+                  <> named <span className="font-semibold">"{submitted!.petName}"</span></>
+                )}{' '}
+                found under <span className="font-semibold">{existingOwner.name}</span>
               </p>
               <p className="text-[11px] text-muted">
-                The number may not be registered. Register a new owner and pet to continue.
+                Add a new pet under this owner to continue.
               </p>
+              <button
+                type="button"
+                onClick={() => onNotFound(submitted!.petName, submitted!.breed, submitted!.species, submitted!.ownerPhone, existingOwner)}
+                className="rounded-[4px] border border-primary px-4 py-[9px] text-[13px] font-semibold text-primary hover:opacity-85 transition-opacity"
+              >
+                Add pet under {existingOwner.name}
+              </button>
             </>
           ) : (
             <>
-              <p className="text-[13px] font-medium text-foreground">
-                No pet found matching{' '}
-                <span className="font-semibold">"{submitted!.petName}"</span>
-                {submitted!.breed && (
-                  <> · <span className="font-semibold">"{submitted!.breed}"</span></>
-                )}
-              </p>
-              <p className="text-[11px] text-muted">
-                Register a new owner and pet to continue.
-              </p>
+              {submitted?.phoneOnly ? (
+                <>
+                  <p className="text-[13px] font-medium text-foreground">
+                    No pets found for{' '}
+                    <span className="font-semibold">+91 {phoneDigits}</span>
+                  </p>
+                  <p className="text-[11px] text-muted">
+                    The number may not be registered. Register a new owner and pet to continue.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-[13px] font-medium text-foreground">
+                    No pet found matching{' '}
+                    <span className="font-semibold">"{submitted!.petName}"</span>
+                    {submitted!.breed && (
+                      <> · <span className="font-semibold">"{submitted!.breed}"</span></>
+                    )}
+                  </p>
+                  <p className="text-[11px] text-muted">
+                    Register a new owner and pet to continue.
+                  </p>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => onNotFound(submitted!.petName, submitted!.breed, submitted!.species, submitted!.ownerPhone, null)}
+                className="rounded-[4px] border border-primary px-4 py-[9px] text-[13px] font-semibold text-primary hover:opacity-85 transition-opacity"
+              >
+                Register new patient
+              </button>
             </>
           )}
-          <button
-            type="button"
-            onClick={() => onNotFound(submitted!.petName, submitted!.breed, submitted!.species, submitted!.ownerPhone)}
-            className="rounded-[4px] border border-primary px-4 py-[9px] text-[13px] font-semibold text-primary hover:opacity-85 transition-opacity"
-          >
-            Register new patient
-          </button>
         </div>
+      )}
+
+      {editOwner && (
+        <EditOwnerDialog
+          open
+          clinicId={clinicId}
+          owner={editOwner}
+          onCancel={() => setEditOwner(null)}
+          onSaved={() => setEditOwner(null)}
+        />
       )}
     </div>
   )

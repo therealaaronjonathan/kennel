@@ -58,6 +58,9 @@ const AdminStaffPage = lazy(() =>
 const AdminCatalogsPage = lazy(() =>
   import('@/features/admin/components/admin-catalogs-page').then(m => ({ default: m.AdminCatalogsPage }))
 )
+const AdminPetOwnersPage = lazy(() =>
+  import('@/features/admin/components/admin-pet-owners-page').then(m => ({ default: m.AdminPetOwnersPage }))
+)
 const VisitSummaryPage = lazy(() =>
   import('@/features/summary/components/visit-summary-page').then(m => ({ default: m.VisitSummaryPage }))
 )
@@ -139,6 +142,7 @@ const router = createBrowserRouter([
           { path: 'clinics/:id/branches', element: suspense(<AdminBranchesPage />) },
           { path: 'clinics/:id/doctors', element: suspense(<AdminDoctorsPage />) },
           { path: 'clinics/:id/staff', element: suspense(<AdminStaffPage />) },
+          { path: 'clinics/:id/pet-owners', element: suspense(<AdminPetOwnersPage />) },
           { path: 'clinics/:id/catalogs', element: suspense(<AdminCatalogsPage />) },
         ],
       },

@@ -153,6 +153,8 @@ interface PetOwner {
 }
 ```
 
+**Phone is the owner's identity — owners are never duplicated.** Registration uses find-or-create by phone: `registerAndCheckin()` (in `features/checkin/services/checkin-service.ts`) resolves the owner before writing — an explicit owner id (the "add another pet" flow) → an existing `petOwners` doc with the same `phone` → otherwise a new owner doc. When an existing owner is reused, that owner's stored `name`/`email` are authoritative (the registration form's owner fields are ignored) and the current branch is `arrayUnion`'d into `branchIds`. The check-in UI surfaces this: a phone search lists the owner's existing pets (grouped by owner) with an "Add another pet" action that attaches a new pet to the same owner. Legacy data may still contain >1 owner doc sharing a phone; the search groups by owner so staff pick the right one, but no new duplicates are created.
+
 ### Pet
 Direct subcollection of Clinic — not branch-specific.
 
@@ -574,7 +576,8 @@ Query: range filter on `date` field (no composite index needed — single-field 
 - Visit carries `ownerName`, `petName`, `doctorName` — display without extra reads
 - `services` and `billAmount` denormalized onto Visit at completion
 - VisitDiagnosis/VisitPrescription denormalize `name` at write time — master list changes never break historical records
-- **Name corrections backfill the denormalized snapshots.** When a pet or owner name is edited (from the visit detail panel), `features/checkin/services/edit-names.ts` updates the canonical doc (`pets.name` + `petNameLower`, or `petOwners.name` — no `ownerNameLower`, owner lookup is phone-based) **and** rewrites the denormalized `petName`/`ownerName` on every matching visit across the clinic's `branchIds`, plus the `petName`/`ownerName` snapshot on any matching `billingDefaults` doc. Writes are chunked at 500 ops per `WriteBatch` (eventually-consistent, not atomic). This is the one place the otherwise-immutable denormalized name snapshots are deliberately mutated.
+- **Name corrections backfill the denormalized snapshots.** When a pet or owner name is edited (from the visit detail panel, the Checkout page, or the **check-in flow** — owner header in phone-search results and the "found" confirmation card), `features/checkin/services/edit-names.ts` updates the canonical doc (`pets.name` + `petNameLower`, or `petOwners.name` — no `ownerNameLower`, owner lookup is phone-based) **and** rewrites the denormalized `petName`/`ownerName` on every matching visit across the clinic's `branchIds`, plus the `petName`/`ownerName` snapshot on any matching `billingDefaults` doc and payment-ledger row. Writes are chunked at 500 ops per `WriteBatch` (eventually-consistent, not atomic). This is the one place the otherwise-immutable denormalized name snapshots are deliberately mutated.
+- **Owner contact edits (email / alt phone) need no cascade.** `updateOwnerContact()` in the same file patches only the `petOwners` doc — `email` and `altPhone` are never denormalized (they're read fresh, e.g. for the check-in confirmation email). The check-in "Edit owner details" dialog (`components/blocks/edit-owner-dialog.tsx`) edits name + email + alt phone together; **primary `phone` is intentionally read-only** there since it is the owner's lookup identity and is denormalized as `ownerPhone` on visits.
 
 ### Indexing
 Composite indexes needed:

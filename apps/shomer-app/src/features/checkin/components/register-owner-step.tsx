@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { NewOwnerFormData } from '../types'
+import type { NewOwnerFormData, PetOwner } from '../types'
 import { useBreeds } from '../services/use-breeds'
 import { BreedSelect } from './breed-select'
 
@@ -25,6 +25,7 @@ interface RegisterOwnerStepProps {
   prefillBreed?: string
   prefillSpecies?: NewOwnerFormData['species']
   prefillPhone?: string // full E.164 e.g. "+919876543210"
+  lockedOwner?: PetOwner // when set, owner is fixed: add a pet under this owner
   onSubmit: (data: NewOwnerFormData) => void
   onBack: () => void
 }
@@ -36,14 +37,16 @@ export function RegisterOwnerStep({
   prefillBreed = '',
   prefillSpecies = 'dog',
   prefillPhone = '',
+  lockedOwner,
   onSubmit,
   onBack,
 }: RegisterOwnerStepProps) {
+  const ownerLocked = !!lockedOwner
   const [form, setForm] = useState<NewOwnerFormData>({
-    ownerName: '',
-    phone: prefillPhone || '+91',
-    altPhone: '+91',
-    email: '',
+    ownerName: lockedOwner?.name ?? '',
+    phone: lockedOwner?.phone || prefillPhone || '+91',
+    altPhone: lockedOwner?.altPhone ?? '+91',
+    email: lockedOwner?.email ?? '',
     petName: prefillPetName,
     species: prefillSpecies,
     speciesName: '',
@@ -103,15 +106,19 @@ export function RegisterOwnerStep({
 
   function validate(): boolean {
     const next: FormErrors = {}
-    if (!form.ownerName.trim()) next.ownerName = 'Required'
-    if (form.phone === '+91' || form.phone.length === 3) {
-      next.phone = 'Required'
-    } else if (form.phone.slice(3).length !== 10) {
-      next.phone = 'Phone number must be 10 digits'
-    }
-    if (form.email && !EMAIL_RE.test(form.email)) next.email = 'Enter a valid email address'
-    if (form.altPhone !== '+91' && form.altPhone.slice(3).length !== 10) {
-      next.altPhone = 'Must be 10 digits'
+    // Owner fields are validated only when entering a new owner. In locked mode
+    // the owner is an existing record (read-only) and needs no validation.
+    if (!ownerLocked) {
+      if (!form.ownerName.trim()) next.ownerName = 'Required'
+      if (form.phone === '+91' || form.phone.length === 3) {
+        next.phone = 'Required'
+      } else if (form.phone.slice(3).length !== 10) {
+        next.phone = 'Phone number must be 10 digits'
+      }
+      if (form.email && !EMAIL_RE.test(form.email)) next.email = 'Enter a valid email address'
+      if (form.altPhone !== '+91' && form.altPhone.slice(3).length !== 10) {
+        next.altPhone = 'Must be 10 digits'
+      }
     }
     if (!form.petName.trim()) next.petName = 'Required'
     if (form.species === 'other' && !form.speciesName.trim()) next.speciesName = 'Required'
@@ -147,7 +154,29 @@ export function RegisterOwnerStep({
         Back to search
       </button>
 
-      {/* Owner fields */}
+      {/* Owner — read-only summary when adding a pet to an existing owner */}
+      {ownerLocked ? (
+        <div className="space-y-2">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
+            Adding pet under
+          </p>
+          <div className="rounded-[4px] border border-border-active bg-surface-2 p-4">
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-[4px] bg-primary/10 flex-shrink-0">
+                <User size={13} className="text-primary" />
+              </div>
+              <div>
+                <p className="text-[13px] font-semibold text-foreground">{lockedOwner!.name}</p>
+                <p className="text-[11px] text-muted">
+                  {lockedOwner!.phone}
+                  {lockedOwner!.email ? ` · ${lockedOwner!.email}` : ''}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+      /* Owner fields */
       <div className="space-y-4">
         <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
           Owner Details
@@ -247,6 +276,7 @@ export function RegisterOwnerStep({
           )}
         </div>
       </div>
+      )}
 
       {/* Pet fields */}
       <div className="space-y-4">

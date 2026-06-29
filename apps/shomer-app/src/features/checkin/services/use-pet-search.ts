@@ -33,6 +33,36 @@ async function searchByPhone(clinicId: string, ownerPhone: string): Promise<PetW
     .filter((r): r is PetWithOwner => r.owner !== undefined)
 }
 
+/**
+ * Resolve the existing owner for a phone number (if any). Used so the
+ * register/add-pet step can lock onto an existing owner instead of offering a
+ * blank new-owner form when the phone is already on file. Returns the first
+ * matching owner (phone is the owner's identity; legacy dups collapse to one).
+ */
+export function useOwnerByPhone(
+  clinicId: string,
+  ownerPhone: string | undefined,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: ['ownerByPhone', clinicId, ownerPhone ?? ''],
+    queryFn: async (): Promise<PetOwner | null> => {
+      if (!ownerPhone) return null
+      const snap = await getDocs(
+        query(
+          collection(db, `clinics/${clinicId}/petOwners`),
+          where('phone', '==', ownerPhone),
+        ),
+      )
+      if (snap.empty) return null
+      return { id: snap.docs[0].id, ...snap.docs[0].data() } as PetOwner
+    },
+    enabled: enabled && !!ownerPhone && !!clinicId,
+    retry: false,
+    staleTime: 0,
+  })
+}
+
 export function usePetSearch(
   clinicId: string,
   petName: string,

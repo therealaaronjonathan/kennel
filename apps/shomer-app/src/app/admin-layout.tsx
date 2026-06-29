@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { signOut } from 'firebase/auth'
-import { LayoutDashboard, Building2, GitBranch, Stethoscope, Users, BookOpen, LogOut } from 'lucide-react'
+import { LayoutDashboard, Building2, GitBranch, Stethoscope, Users, BookOpen, PawPrint, LogOut } from 'lucide-react'
 import { NavLink, Outlet, useNavigate, useMatch } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { auth } from '@/lib/firebase'
@@ -123,6 +123,21 @@ export function AdminLayout() {
               >
                 <Users size={15} className="flex-shrink-0" />
                 Staff
+              </NavLink>
+
+              <NavLink
+                to={`/admin/clinics/${clinicId}/pet-owners`}
+                className={({ isActive }) =>
+                  cn(
+                    'flex items-center gap-3 px-3 py-[9px] rounded-[4px] text-[13px] font-semibold transition-colors border',
+                    isActive
+                      ? 'bg-surface-2 border-border-active text-primary'
+                      : 'border-transparent text-muted hover:bg-surface-2/60 hover:text-foreground',
+                  )
+                }
+              >
+                <PawPrint size={15} className="flex-shrink-0" />
+                Pet Owners
               </NavLink>
 
               <NavLink

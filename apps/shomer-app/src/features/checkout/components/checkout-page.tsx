@@ -15,6 +15,7 @@ import { useCompletedVisits, type CompletedVisit } from '@/features/dashboard/se
 import { useClinicName } from '@/features/clinic/hooks/use-clinic-name'
 import { useClinicServices } from '@/features/vet/services/use-clinic-services'
 import { useCheckoutDetail } from '../services/use-checkout-detail'
+import { useCheckoutDraft } from '../services/use-checkout-draft'
 import {
   recordPayments,
   sumPayments,
@@ -83,14 +84,17 @@ function CheckoutPanel({
   const normalize = (svcs: typeof visit.services): ServiceEntry[] =>
     (svcs ?? []).map((s) => ({ ...s, quantity: s.quantity ?? 1 }))
 
-  const [editedServices, setEditedServices] = useState<ServiceEntry[]>(() => normalize(visit.services))
+  // In-progress service edits persist to sessionStorage (per visit) so they
+  // survive navigating to Check-in and back within the same tab.
+  const { services: editedServices, setServices: setEditedServices, clearDraft } = useCheckoutDraft(
+    clinicId,
+    branchId,
+    visit.id,
+    normalize(visit.services),
+  )
   const [showWAModal, setShowWAModal] = useState(false)
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
   const [showSplitDialog, setShowSplitDialog] = useState(false)
-
-  useEffect(() => {
-    setEditedServices(normalize(visit.services))
-  }, [visit.id, visit.services])
 
   // ── Name editing (pet / owner) + phone ────────────────────────────────────
   // Mirrors VisitDetailPanel; see TODOS — these two panels should be consolidated.
@@ -154,6 +158,9 @@ function CheckoutPanel({
     onSuccess: (_data, payments) => {
       setShowPaymentDialog(false)
       setShowSplitDialog(false)
+      // Edits are now persisted to Firestore — drop the local draft so a later
+      // re-open reads the saved services rather than a stale draft.
+      clearDraft()
       const paid = payments.reduce((s, p) => s + p.amount, 0)
       if (paid >= billTotal) {
         onToast(`${visit.petName} billed — ${formatInr(billTotal)}`)

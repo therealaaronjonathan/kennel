@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { useCheckinSession } from '../services/use-checkin-session'
-import { AlertCircle, PawPrint, User } from 'lucide-react'
+import { AlertCircle, PawPrint, User, Pencil } from 'lucide-react'
+import { EditOwnerDialog } from '@/components/blocks/edit-owner-dialog'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { useClinic } from '@/features/clinic'
@@ -23,13 +25,21 @@ export type FlowStep =
   | { type: 'search' }
   | { type: 'pet-results'; results: PetWithOwner[]; petName: string; breed: string }
   | { type: 'found'; owner: PetOwner; pets: Pet[]; selectedPetId: string }
-  | { type: 'register'; prefillPetName: string; prefillBreed: string; prefillSpecies: SpeciesFilter; prefillPhone: string }
+  | {
+      type: 'register'
+      prefillPetName: string
+      prefillBreed: string
+      prefillSpecies: SpeciesFilter
+      prefillPhone: string
+      lockedOwner?: PetOwner // set when adding a pet under an existing owner
+    }
   | {
       type: 'checkin-form'
       owner: PetOwner | null
       pets: Pet[]
       selectedPetId: string
       newOwnerData: NewOwnerFormData | null
+      lockedOwnerId?: string // existing owner to attach the new pet to
     }
   | { type: 'confirmation'; result: CheckinResult }
 
@@ -48,6 +58,7 @@ export function CheckinPage() {
   const { onDuty, loading: rosterLoading } = useDutyRoster(clinicId, branchId)
   const { session, updateStep, updateFormInputs, clear: clearSession } = useCheckinSession(clinicId ?? undefined, branchId ?? undefined)
   const step = session.step
+  const [editingOwner, setEditingOwner] = useState(false)
 
   const existingCheckin = useMutation({
     mutationFn: ({
@@ -69,11 +80,13 @@ export function CheckinPage() {
       newOwner,
       formData,
       doctorName,
+      existingOwnerId,
     }: {
       newOwner: NewOwnerFormData
       formData: CheckinFormData
       doctorName: string
-    }) => registerAndCheckin(clinicId!, branchId!, newOwner, formData, doctorName),
+      existingOwnerId?: string
+    }) => registerAndCheckin(clinicId!, branchId!, newOwner, formData, doctorName, existingOwnerId),
     onSuccess: (result) => updateStep({ type: 'confirmation', result }),
   })
 
@@ -87,7 +100,12 @@ export function CheckinPage() {
       const petName = pet?.name ?? ''
       existingCheckin.mutate({ owner: step.owner, petName, formData, doctorName })
     } else if (step.newOwnerData) {
-      newCheckin.mutate({ newOwner: step.newOwnerData, formData, doctorName })
+      newCheckin.mutate({
+        newOwner: step.newOwnerData,
+        formData,
+        doctorName,
+        existingOwnerId: step.lockedOwnerId,
+      })
     }
   }
 
@@ -154,7 +172,9 @@ export function CheckinPage() {
         {/* Step indicator */}
         <div className="mb-6">
           <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
-            {STEP_LABELS[step.type] ?? ''}
+            {step.type === 'register' && step.lockedOwner
+              ? 'Step 1 — Add Pet'
+              : STEP_LABELS[step.type] ?? ''}
           </p>
           {step.type !== 'confirmation' && (
             <div className="mt-2 flex gap-1.5">
@@ -180,8 +200,25 @@ export function CheckinPage() {
             onFound={({ pet, owner }) => {
               updateStep({ type: 'found', owner, pets: [pet], selectedPetId: pet.id })
             }}
-            onNotFound={(petName, breed, species, ownerPhone) =>
-              updateStep({ type: 'register', prefillPetName: petName, prefillBreed: breed, prefillSpecies: species, prefillPhone: ownerPhone })
+            onNotFound={(petName, breed, species, ownerPhone, existingOwner) =>
+              updateStep({
+                type: 'register',
+                prefillPetName: petName,
+                prefillBreed: breed,
+                prefillSpecies: species,
+                prefillPhone: ownerPhone,
+                lockedOwner: existingOwner ?? undefined,
+              })
+            }
+            onAddPet={(owner) =>
+              updateStep({
+                type: 'register',
+                prefillPetName: '',
+                prefillBreed: '',
+                prefillSpecies: 'dog',
+                prefillPhone: owner.phone,
+                lockedOwner: owner,
+              })
             }
           />
         )}
@@ -214,8 +251,35 @@ export function CheckinPage() {
                   {step.owner.name} · {step.owner.phone}
                   {step.owner.email ? ` · ${step.owner.email}` : ''}
                 </span>
+                <button
+                  type="button"
+                  onClick={() => setEditingOwner(true)}
+                  title="Edit owner details"
+                  className="ml-auto flex items-center gap-1 text-[11px] font-semibold text-muted hover:text-primary transition-colors"
+                >
+                  <Pencil size={11} />
+                  Edit
+                </button>
               </div>
             </div>
+
+            {editingOwner && (
+              <EditOwnerDialog
+                open
+                clinicId={clinicId}
+                owner={step.owner}
+                onCancel={() => setEditingOwner(false)}
+                onSaved={(patch) => {
+                  updateStep({
+                    type: 'found',
+                    owner: { ...step.owner, name: patch.name, email: patch.email, altPhone: patch.altPhone },
+                    pets: step.pets,
+                    selectedPetId: step.selectedPetId,
+                  })
+                  setEditingOwner(false)
+                }}
+              />
+            )}
 
             <button
               type="button"
@@ -249,6 +313,7 @@ export function CheckinPage() {
             prefillBreed={step.prefillBreed}
             prefillSpecies={step.prefillSpecies}
             prefillPhone={step.prefillPhone}
+            lockedOwner={step.lockedOwner}
             onBack={reset}
             onSubmit={(data) =>
               updateStep({
@@ -257,6 +322,7 @@ export function CheckinPage() {
                 pets: [],
                 selectedPetId: '',
                 newOwnerData: data,
+                lockedOwnerId: step.lockedOwner?.id,
               })
             }
           />

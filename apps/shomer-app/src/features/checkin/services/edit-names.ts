@@ -10,6 +10,7 @@ import {
 } from 'firebase/firestore'
 import type { DocumentData, DocumentReference, UpdateData } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import type { Pet } from '../types'
 
 // Firestore caps a WriteBatch at 500 operations. A single pet's visit history
 // fits easily, but a long-tenured owner with many visits can exceed it, so we
@@ -94,6 +95,70 @@ export async function updatePetName(
   }
 
   await commitChunked(updates)
+}
+
+export interface PetDetailsInput {
+  name: string
+  species: Pet['species']
+  speciesName?: string
+  breed?: string
+  gender?: 'male' | 'female' | ''
+  dateOfBirth?: string
+  color?: string
+  microchipNumber?: string
+}
+
+/**
+ * Update a pet's full details. The non-denormalized fields (species, breed,
+ * gender, dob, color, microchip) are a single doc update. A name change is
+ * routed through `updatePetName` so the denormalized `petName` on every visit /
+ * billing-default / ledger row is corrected too (and `petNameLower` for search).
+ */
+export async function updatePetDetails(
+  clinicId: string,
+  branchIds: string[],
+  petId: string,
+  currentName: string,
+  data: PetDetailsInput,
+): Promise<void> {
+  const name = data.name.trim()
+  if (!name) throw new Error('Pet name cannot be empty')
+
+  await updateDoc(doc(db, `clinics/${clinicId}/pets/${petId}`), {
+    species: data.species,
+    speciesName: data.species === 'other' ? (data.speciesName?.trim() || null) : null,
+    breed: data.breed?.trim() || null,
+    gender: data.gender || null,
+    dateOfBirth: data.dateOfBirth || null,
+    color: data.color?.trim() || null,
+    microchipNumber: data.microchipNumber?.trim() || null,
+    updatedAt: serverTimestamp(),
+  })
+
+  if (name !== currentName.trim()) {
+    await updatePetName(clinicId, branchIds, petId, name)
+  }
+}
+
+/**
+ * Update an owner's contact details (email / alternate phone).
+ *
+ * Unlike name, these fields are NOT denormalized onto visits/payments — they
+ * live only on the canonical petOwners doc and are read fresh wherever needed
+ * (e.g. the check-in confirmation email) — so a single doc update suffices, no
+ * cascade required. Pass a field as `null` to clear it; omit it to leave it
+ * untouched. The primary `phone` is intentionally not editable here: it is the
+ * owner's lookup identity and is denormalized as `ownerPhone` on visits.
+ */
+export async function updateOwnerContact(
+  clinicId: string,
+  ownerId: string,
+  data: { email?: string | null; altPhone?: string | null },
+): Promise<void> {
+  const patch: UpdateData<DocumentData> = { updatedAt: serverTimestamp() }
+  if (data.email !== undefined) patch.email = data.email
+  if (data.altPhone !== undefined) patch.altPhone = data.altPhone
+  await updateDoc(doc(db, `clinics/${clinicId}/petOwners/${ownerId}`), patch)
 }
 
 /**
