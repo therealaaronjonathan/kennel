@@ -70,6 +70,7 @@
 - Doctor management: invite doctors via backend API (Firebase Auth + Firestore + invite link); inline edit per doctor (name, phone, bio, profile photo via Firebase Storage upload, branch assignment); doctor rows show avatar (photo or initials) and branch tags
 - Staff management: invite receptionists via backend API; inline edit per staff member (name, phone, branch assignment); staff rows show branch tags; reads from `clinics/{clinicId}/staff` subcollection
 - Catalog management (4 tabs): Diagnoses, Medicines, Services, Grooming. Medicines tab has a Tablet / Syrup / Injection type selector at creation + per-row type badge.
+- **Pet Owners**: browse a clinic's pet-owners (cursor-paginated, 50 at a time) and the pets under each (expandable rows, lazy-loaded). Server-side phone search; client-side name filter over loaded rows. Inline edit of owner details (name/email/alt phone) and full pet details (name/species/breed/gender/DOB/color/microchip), with name changes cascading across visit history.
 
 ### Consultation Summary Page
 - Public route: `/visit/:visitId/summary?clinicId=...&branchId=...`

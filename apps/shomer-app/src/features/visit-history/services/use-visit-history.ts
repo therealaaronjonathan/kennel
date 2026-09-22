@@ -14,8 +14,6 @@ import {
   type ServiceEntry,
 } from '@/features/checkout/services/complete-billing'
 
-export const HISTORY_RESULT_CAP = 200
-
 export interface HistoryVisit {
   id: string
   tokenDisplay: string
@@ -47,11 +45,11 @@ export function useVisitHistory(
   branchId: string | null,
   fromDate: string,
   toDate: string,
+  doctorId?: string | null,
 ) {
   const [visits, setVisits] = useState<HistoryVisit[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [capReached, setCapReached] = useState(false)
 
   useEffect(() => {
     if (!clinicId || !branchId || !fromDate || !toDate) {
@@ -63,12 +61,23 @@ export function useVisitHistory(
     setLoading(true)
     setError(null)
 
-    const q = query(
-      collection(db, `clinics/${clinicId}/branches/${branchId}/visits`),
-      where('date', '>=', fromDate),
-      where('date', '<=', toDate),
-      orderBy('date', 'desc'),
-    )
+    const visitsCol = collection(db, `clinics/${clinicId}/branches/${branchId}/visits`)
+    // Date range is capped at 31 days in the UI. When a doctor is selected,
+    // constrain in Firestore so the month count is that doctor's visits.
+    const q = doctorId
+      ? query(
+          visitsCol,
+          where('doctorId', '==', doctorId),
+          where('date', '>=', fromDate),
+          where('date', '<=', toDate),
+          orderBy('date', 'desc'),
+        )
+      : query(
+          visitsCol,
+          where('date', '>=', fromDate),
+          where('date', '<=', toDate),
+          orderBy('date', 'desc'),
+        )
 
     getDocs(q)
       .then((snap) => {
@@ -115,14 +124,13 @@ export function useVisitHistory(
           return bT - aT
         })
 
-        const capped = all.slice(0, HISTORY_RESULT_CAP)
-        setVisits(capped)
-        setCapReached(all.length > HISTORY_RESULT_CAP)
+        setVisits(all)
         setLoading(false)
       })
       .catch((err) => {
         if (cancelled) return
         console.error('Visit history query error:', err)
+        setVisits([])
         setError('Failed to load visit history.')
         setLoading(false)
       })
@@ -130,7 +138,7 @@ export function useVisitHistory(
     return () => {
       cancelled = true
     }
-  }, [clinicId, branchId, fromDate, toDate])
+  }, [clinicId, branchId, fromDate, toDate, doctorId])
 
-  return { visits, loading, error, capReached }
+  return { visits, loading, error }
 }

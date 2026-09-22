@@ -9,12 +9,22 @@ import type { ClinicService } from '@/features/vet/services/use-clinic-services'
 
 export type PaymentFilter = 'all' | 'partial' | PaymentMethod | 'split'
 
+export type DatePreset = 'today' | 'last7' | 'thisMonth' | 'lastMonth'
+
+export interface HistoryDoctorOption {
+  id: string
+  name: string
+}
+
 interface HistoryFiltersProps {
   fromDate: string
   toDate: string
   search: string
   selectedServiceIds: string[]
   paymentFilter: PaymentFilter
+  doctorFilter: string
+  doctors: HistoryDoctorOption[]
+  doctorsLoading: boolean
   services: ClinicService[]
   servicesLoading: boolean
   onChangeFromDate: (v: string) => void
@@ -22,7 +32,8 @@ interface HistoryFiltersProps {
   onChangeSearch: (v: string) => void
   onChangeSelectedServiceIds: (ids: string[]) => void
   onChangePaymentFilter: (v: PaymentFilter) => void
-  onApplyPreset: (preset: 'today' | 'last7') => void
+  onChangeDoctorFilter: (v: string) => void
+  onApplyPreset: (preset: DatePreset) => void
 }
 
 const labelClass =
@@ -31,12 +42,18 @@ const labelClass =
 const inputClass =
   'h-8 rounded-[4px] border border-border-base bg-background px-2 text-[12px] font-semibold text-foreground focus:outline-none focus:border-primary'
 
+const presetBtnClass =
+  'h-8 rounded-[4px] border border-border-base bg-background px-3 text-[11px] font-semibold text-muted hover:border-primary hover:text-primary transition-colors'
+
 export function HistoryFilters({
   fromDate,
   toDate,
   search,
   selectedServiceIds,
   paymentFilter,
+  doctorFilter,
+  doctors,
+  doctorsLoading,
   services,
   servicesLoading,
   onChangeFromDate,
@@ -44,6 +61,7 @@ export function HistoryFilters({
   onChangeSearch,
   onChangeSelectedServiceIds,
   onChangePaymentFilter,
+  onChangeDoctorFilter,
   onApplyPreset,
 }: HistoryFiltersProps) {
   return (
@@ -56,7 +74,6 @@ export function HistoryFilters({
           <input
             type="date"
             value={fromDate}
-            max={toDate}
             onChange={(e) => onChangeFromDate(e.target.value)}
             className={inputClass}
           />
@@ -67,25 +84,23 @@ export function HistoryFilters({
           <input
             type="date"
             value={toDate}
-            min={fromDate}
             onChange={(e) => onChangeToDate(e.target.value)}
             className={inputClass}
           />
         </label>
-        <div className="flex items-center gap-1.5 ml-1">
-          <button
-            type="button"
-            onClick={() => onApplyPreset('today')}
-            className="h-8 rounded-[4px] border border-border-base bg-background px-3 text-[11px] font-semibold text-muted hover:border-primary hover:text-primary transition-colors"
-          >
+        <span className={labelClass}>Max 31 days</span>
+        <div className="flex items-center gap-1.5 ml-1 flex-wrap">
+          <button type="button" onClick={() => onApplyPreset('today')} className={presetBtnClass}>
             Today
           </button>
-          <button
-            type="button"
-            onClick={() => onApplyPreset('last7')}
-            className="h-8 rounded-[4px] border border-border-base bg-background px-3 text-[11px] font-semibold text-muted hover:border-primary hover:text-primary transition-colors"
-          >
+          <button type="button" onClick={() => onApplyPreset('last7')} className={presetBtnClass}>
             Last 7 days
+          </button>
+          <button type="button" onClick={() => onApplyPreset('thisMonth')} className={presetBtnClass}>
+            This month
+          </button>
+          <button type="button" onClick={() => onApplyPreset('lastMonth')} className={presetBtnClass}>
+            Last month
           </button>
         </div>
       </div>
@@ -121,6 +136,21 @@ export function HistoryFilters({
           selectedIds={selectedServiceIds}
           onChange={onChangeSelectedServiceIds}
         />
+
+        <label className="flex items-center gap-1.5">
+          <span className={labelClass}>Doctor</span>
+          <select
+            value={doctorFilter}
+            onChange={(e) => onChangeDoctorFilter(e.target.value)}
+            disabled={doctorsLoading}
+            className={inputClass}
+          >
+            <option value="all">All</option>
+            {doctors.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
+        </label>
 
         <label className="flex items-center gap-1.5">
           <span className={labelClass}>Payment</span>

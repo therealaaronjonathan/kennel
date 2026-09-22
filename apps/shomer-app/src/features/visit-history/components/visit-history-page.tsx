@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { cn, formatInr } from '@/lib/utils'
 import { useClinic } from '@/features/clinic'
+import { useDoctors } from '@/features/checkin/services/use-doctors'
 import { useClinicServices } from '@/features/vet/services/use-clinic-services'
 import { VisitDetailPanel } from '@/features/dashboard/components/visit-detail-panel'
 import type { CompletedVisit } from '@/features/dashboard/services/use-completed-visits'
@@ -9,12 +10,12 @@ import {
 } from '@/features/checkout/services/complete-billing'
 import {
   useVisitHistory,
-  HISTORY_RESULT_CAP,
   type HistoryVisit,
 } from '../services/use-visit-history'
 import { usePaymentLedger } from '../services/use-payment-ledger'
 import {
   HistoryFilters,
+  type DatePreset,
   type PaymentFilter,
 } from './history-filters'
 import { HistorySummary } from './history-summary'
@@ -115,66 +116,158 @@ function todayStr(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+function pad2(n: number): string {
+  return String(n).padStart(2, '0')
+}
+
 function shiftDays(yyyymmdd: string, days: number): string {
   const [y, m, d] = yyyymmdd.split('-').map(Number)
   const date = new Date(y, m - 1, d)
   date.setDate(date.getDate() + days)
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
 }
+
+function ymd(d: Date): string {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+}
+
+/** First and last calendar day of the month containing `d`. */
+function calendarMonthBounds(d: Date): { from: string; to: string } {
+  const from = new Date(d.getFullYear(), d.getMonth(), 1)
+  const to = new Date(d.getFullYear(), d.getMonth() + 1, 0)
+  return { from: ymd(from), to: ymd(to) }
+}
+
+/** Inclusive calendar days between two YYYY-MM-DD strings. */
+function daysInclusive(from: string, to: string): number {
+  const [fy, fm, fd] = from.split('-').map(Number)
+  const [ty, tm, td] = to.split('-').map(Number)
+  const a = Date.UTC(fy, fm - 1, fd)
+  const b = Date.UTC(ty, tm - 1, td)
+  return Math.floor((b - a) / 86_400_000) + 1
+}
+
+const MAX_RANGE_DAYS = 31
 
 export function VisitHistoryPage() {
   const { clinicId, branchId } = useClinic()
   const { services, loading: svcLoading } = useClinicServices(clinicId)
+  const { data: branchDoctors = [], isLoading: doctorsLoading } = useDoctors(
+    clinicId ?? '',
+    branchId ?? '',
+  )
 
   const [fromDate, setFromDate] = useState(() => todayStr())
   const [toDate, setToDate] = useState(() => todayStr())
   const [search, setSearch] = useState('')
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([])
   const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>('all')
+  const [doctorFilter, setDoctorFilter] = useState('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  const { visits, loading, error, capReached } = useVisitHistory(
+  const selectedDoctorId = doctorFilter === 'all' ? null : doctorFilter
+
+  const { visits, loading, error } = useVisitHistory(
     clinicId,
     branchId,
     fromDate,
     toDate,
+    selectedDoctorId,
   )
 
   // Money totals come from the payment ledger (bucketed by day received), not
   // from the visits in range — so cross-day partials are attributed correctly.
-  const { totals: ledgerTotals } = usePaymentLedger(clinicId, branchId, fromDate, toDate)
+  // When a doctor is selected, totals join ledger rows to that doctor's visits.
+  const { totals: ledgerTotals } = usePaymentLedger(
+    clinicId,
+    branchId,
+    fromDate,
+    toDate,
+    selectedDoctorId,
+  )
 
-  // Reset selection when range changes
+  // Reset row selection when range or doctor changes
   useEffect(() => {
     setSelectedId(null)
-  }, [fromDate, toDate])
+  }, [fromDate, toDate, doctorFilter])
 
-  function applyPreset(preset: 'today' | 'last7') {
+  // Branch switch should not keep another branch's doctor selected
+  useEffect(() => {
+    setDoctorFilter('all')
+  }, [clinicId, branchId])
+
+  function applyPreset(preset: DatePreset) {
+    const now = new Date()
     const today = todayStr()
     if (preset === 'today') {
       setFromDate(today)
       setToDate(today)
-    } else {
+      return
+    }
+    if (preset === 'last7') {
       setFromDate(shiftDays(today, -6))
       setToDate(today)
+      return
+    }
+    if (preset === 'thisMonth') {
+      const { from } = calendarMonthBounds(now)
+      setFromDate(from)
+      setToDate(today)
+      return
+    }
+    const { from, to } = calendarMonthBounds(new Date(now.getFullYear(), now.getMonth() - 1, 1))
+    setFromDate(from)
+    setToDate(to)
+  }
+
+  // Keep From ≤ To, and the inclusive span ≤ 31 days (one calendar month).
+  function handleFromChange(v: string) {
+    if (!v) return
+    setFromDate(v)
+    if (v > toDate) {
+      setToDate(v)
+      return
+    }
+    if (daysInclusive(v, toDate) > MAX_RANGE_DAYS) {
+      setToDate(shiftDays(v, MAX_RANGE_DAYS - 1))
+    }
+  }
+  function handleToChange(v: string) {
+    if (!v) return
+    setToDate(v)
+    if (v < fromDate) {
+      setFromDate(v)
+      return
+    }
+    if (daysInclusive(fromDate, v) > MAX_RANGE_DAYS) {
+      setFromDate(shiftDays(v, -(MAX_RANGE_DAYS - 1)))
     }
   }
 
-  // Keep date order valid: clamp From if From > To
-  function handleFromChange(v: string) {
-    setFromDate(v)
-    if (v > toDate) setToDate(v)
-  }
-  function handleToChange(v: string) {
-    setToDate(v)
-    if (v < fromDate) setFromDate(v)
-  }
+  const doctors = useMemo(() => {
+    const byId = new Map<string, string>()
+    for (const d of branchDoctors) {
+      if (d.id) byId.set(d.id, d.name)
+    }
+    for (const v of visits) {
+      if (v.doctorId && !byId.has(v.doctorId)) {
+        byId.set(v.doctorId, v.doctorName || 'Unknown')
+      }
+    }
+    if (doctorFilter !== 'all' && !byId.has(doctorFilter)) {
+      byId.set(doctorFilter, 'Selected doctor')
+    }
+    return Array.from(byId.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [branchDoctors, visits, doctorFilter])
 
   const filteredVisits = useMemo(() => {
     const needle = search.trim().toLowerCase()
     return visits.filter((v) => {
       // exclude waiting/in-progress/cancelled — history is for finished visits
       if (v.status !== 'billed' && v.status !== 'completed') return false
+      if (doctorFilter !== 'all' && v.doctorId !== doctorFilter) return false
       // payment filter
       if (paymentFilter === 'split') {
         if ((v.payments?.length ?? 0) <= 1) return false
@@ -201,7 +294,7 @@ export function VisitHistoryPage() {
       }
       return true
     })
-  }, [visits, paymentFilter, selectedServiceIds, search])
+  }, [visits, doctorFilter, paymentFilter, selectedServiceIds, search])
 
   const selectedVisit = filteredVisits.find((v) => v.id === selectedId) ?? null
   const hasPanel = !!selectedVisit
@@ -227,6 +320,9 @@ export function VisitHistoryPage() {
         search={search}
         selectedServiceIds={selectedServiceIds}
         paymentFilter={paymentFilter}
+        doctorFilter={doctorFilter}
+        doctors={doctors}
+        doctorsLoading={doctorsLoading}
         services={services}
         servicesLoading={svcLoading}
         onChangeFromDate={handleFromChange}
@@ -234,6 +330,7 @@ export function VisitHistoryPage() {
         onChangeSearch={setSearch}
         onChangeSelectedServiceIds={setSelectedServiceIds}
         onChangePaymentFilter={setPaymentFilter}
+        onChangeDoctorFilter={setDoctorFilter}
         onApplyPreset={applyPreset}
       />
 
@@ -325,11 +422,6 @@ export function VisitHistoryPage() {
                     </button>
                   )
                 })}
-                {capReached && (
-                  <p className="px-5 py-3 text-[11px] text-muted italic">
-                    Showing {HISTORY_RESULT_CAP} most recent. Narrow the date range to see older visits.
-                  </p>
-                )}
               </>
             )}
           </div>
