@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { signOut } from 'firebase/auth'
-import { LayoutDashboard, UserPlus, LayoutList, ReceiptText, History, Settings, LogOut, Stethoscope, CheckCircle, X } from 'lucide-react'
+import { LayoutDashboard, UserPlus, LayoutList, ReceiptText, History, Settings, LogOut, Stethoscope, CheckCircle, X, PawPrint } from 'lucide-react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { auth } from '@/lib/firebase'
@@ -13,6 +13,7 @@ import { LogoutConfirmDialog } from '@/components/blocks/logout-confirm-dialog'
 const NAV_ITEMS = [
   { to: '/reception/home', label: 'Home', Icon: LayoutDashboard },
   { to: '/reception/checkin', label: 'Check-in', Icon: UserPlus },
+  { to: '/reception/pets', label: 'Pet Search', Icon: PawPrint },
   { to: '/reception/queue', label: 'Queue', Icon: LayoutList },
   { to: '/reception/checkout', label: 'Check-out', Icon: ReceiptText, badge: true },
   { to: '/reception/history', label: 'History', Icon: History },

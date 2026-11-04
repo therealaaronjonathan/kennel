@@ -24,6 +24,8 @@ interface VisitDetailPanelProps {
   onToast: (message: string) => void
   /** When true, billed visits show a Change payment method action. */
   canEditPaymentMethod?: boolean
+  /** When false, pet and owner name pencils are hidden. Default true. */
+  canEditNames?: boolean
 }
 
 const labelClass = 'text-[10px] font-semibold uppercase tracking-[0.08em] text-muted'
@@ -80,6 +82,7 @@ export function VisitDetailPanel({
   branchId,
   onToast,
   canEditPaymentMethod = false,
+  canEditNames = true,
 }: VisitDetailPanelProps) {
   const { detail, loading } = useVisitBill(clinicId, branchId, visit.id, visit.ownerId, visit.petId)
   const [showWAModal, setShowWAModal] = useState(false)
@@ -178,14 +181,16 @@ export function VisitDetailPanel({
             {visit.tokenDisplay}
           </span>
           <span className="text-[15px] font-bold text-foreground">{petName}</span>
-          <button
-            type="button"
-            onClick={() => setEditTarget('pet')}
-            aria-label="Edit pet name"
-            className="text-muted hover:text-primary transition-colors"
-          >
-            <Pencil size={12} />
-          </button>
+          {canEditNames && (
+            <button
+              type="button"
+              onClick={() => setEditTarget('pet')}
+              aria-label="Edit pet name"
+              className="text-muted hover:text-primary transition-colors"
+            >
+              <Pencil size={12} />
+            </button>
+          )}
         </div>
         {(visit.date || visit.completedAt) && (() => {
           const label = formatVisitDateTime(visit.date, visit.completedAt)
@@ -205,14 +210,16 @@ export function VisitDetailPanel({
           <p className={labelClass}>Owner</p>
           <div className="flex items-center gap-2">
             <p className="text-[14px] font-semibold text-foreground">{ownerName}</p>
-            <button
-              type="button"
-              onClick={() => setEditTarget('owner')}
-              aria-label="Edit owner name"
-              className="text-muted hover:text-primary transition-colors"
-            >
-              <Pencil size={12} />
-            </button>
+            {canEditNames && (
+              <button
+                type="button"
+                onClick={() => setEditTarget('owner')}
+                aria-label="Edit owner name"
+                className="text-muted hover:text-primary transition-colors"
+              >
+                <Pencil size={12} />
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Phone size={12} className="text-primary flex-shrink-0" />
@@ -517,7 +524,7 @@ export function VisitDetailPanel({
       )}
 
       <EditNameDialog
-        open={editTarget !== null}
+        open={canEditNames && editTarget !== null}
         title={editTarget === 'pet' ? 'Edit pet name' : 'Edit owner name'}
         label={editTarget === 'pet' ? 'Pet name' : 'Owner name'}
         initialValue={editTarget === 'pet' ? petName : ownerName}

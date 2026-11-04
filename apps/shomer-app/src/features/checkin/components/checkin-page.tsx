@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useCheckinSession } from '../services/use-checkin-session'
 import { AlertCircle, PawPrint, User, Pencil } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { FoundPetHistory } from '@/features/pets/components/found-pet-history'
 import { EditOwnerDialog } from '@/components/blocks/edit-owner-dialog'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
@@ -147,7 +149,12 @@ export function CheckinPage() {
         </h1>
       </header>
 
-      <main className="mx-auto max-w-xl w-full px-6 py-8 animate-fade-up">
+      <main
+        className={cn(
+          'mx-auto w-full px-6 py-8 animate-fade-up',
+          step.type === 'found' ? 'max-w-2xl' : 'max-w-xl',
+        )}
+      >
         {/* No doctors on duty warning */}
         {onDuty.length === 0 && step.type !== 'confirmation' && (
           <div className="mb-6 flex items-start gap-3 rounded-[4px] border border-warning/30 bg-warning/5 px-4 py-3">
@@ -280,6 +287,8 @@ export function CheckinPage() {
                 }}
               />
             )}
+
+            <FoundPetHistory clinicId={clinicId} petId={step.selectedPetId} />
 
             <button
               type="button"

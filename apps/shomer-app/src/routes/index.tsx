@@ -16,6 +16,12 @@ const ReceptionHomePage = lazy(() =>
 const CheckinPage = lazy(() =>
   import('@/features/checkin/components/checkin-page').then(m => ({ default: m.CheckinPage }))
 )
+const PetSearchPage = lazy(() =>
+  import('@/features/pets/components/pet-search-page').then(m => ({ default: m.PetSearchPage }))
+)
+const PetFilePage = lazy(() =>
+  import('@/features/pets/components/pet-file-page').then(m => ({ default: m.PetFilePage }))
+)
 const ReceptionQueuePage = lazy(() =>
   import('@/features/reception/components/queue-page').then(m => ({ default: m.ReceptionQueuePage }))
 )
@@ -110,6 +116,8 @@ const router = createBrowserRouter([
           { index: true, element: <Navigate to="/reception/home" replace /> },
           { path: 'home',     element: suspense(<ReceptionHomePage />) },
           { path: 'checkin',  element: suspense(<CheckinPage />) },
+          { path: 'pets',     element: suspense(<PetSearchPage />) },
+          { path: 'pets/:petId', element: suspense(<PetFilePage />) },
           { path: 'queue',    element: suspense(<ReceptionQueuePage />) },
           { path: 'checkout', element: suspense(<CheckoutPage />) },
           { path: 'history',  element: suspense(<VisitHistoryPage />) },
