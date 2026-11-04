@@ -5,12 +5,11 @@ import { cn } from '@/lib/utils'
 import { useClinic } from '@/features/clinic'
 import { usePetFile } from '../services/use-pet-file'
 import { usePetVisitHistory, type PetHistoryVisit } from '../services/use-pet-visit-history'
-import { toCompletedVisit } from '../services/to-completed-visit'
-import { VisitDetailPanel } from '@/features/dashboard/components/visit-detail-panel'
 import { LastVisitCard } from './last-visit-card'
 import { PetVisitKpis } from './pet-visit-kpis'
 import { PetVisitList } from './pet-visit-list'
 import { PetInformationTab } from './pet-information-tab'
+import { PetVisitDetailOverlay } from './pet-visit-detail-overlay'
 
 type Tab = 'info' | 'visits'
 
@@ -54,10 +53,7 @@ export function PetFilePage() {
         <p className="px-6 py-8 text-[12px] text-danger">Pet not found.</p>
       ) : (
         <div className="flex flex-1 min-h-0 overflow-hidden">
-          <div
-            className="flex flex-col min-h-0 overflow-hidden border-r border-border-base"
-            style={{ width: selected && tab === 'visits' ? '55%' : '100%' }}
-          >
+          <div className="flex flex-col min-h-0 overflow-hidden w-full">
             <div className="px-6 pt-4 flex-shrink-0">
               <div className="flex gap-1 border-b border-border-base">
                 {(
@@ -126,6 +122,7 @@ export function PetFilePage() {
                         <LastVisitCard
                           visit={history.lastVisit}
                           branchName={history.lastVisitBranchName}
+                          clinicId={clinicId}
                         />
                       )}
                       <PetVisitList
@@ -141,16 +138,11 @@ export function PetFilePage() {
           </div>
 
           {selected && tab === 'visits' && clinicId && (
-            <div className="flex-1 overflow-hidden flex flex-col bg-background">
-              <VisitDetailPanel
-                key={selected.id}
-                visit={toCompletedVisit(selected)}
-                clinicId={clinicId}
-                branchId={selected.branchId}
-                onToast={() => {}}
-                canEditNames={false}
-              />
-            </div>
+            <PetVisitDetailOverlay
+              visit={selected}
+              clinicId={clinicId}
+              onClose={() => setSelected(null)}
+            />
           )}
         </div>
       )}

@@ -5,6 +5,7 @@ import {
   sumPayments,
   type PaymentEntry,
 } from '@/features/checkout/services/complete-billing'
+import { parseVisitDiscount, type VisitDiscount } from '@/features/checkout/services/discount'
 
 export interface ServiceEntry {
   serviceId: string
@@ -27,6 +28,7 @@ export interface CompletedVisit {
   isEmergency?: boolean
   services?: ServiceEntry[]
   billAmount?: number
+  discount?: VisitDiscount
   payments?: PaymentEntry[]
   amountPaid?: number
   consultationNotes?: string
@@ -87,6 +89,7 @@ export function useCompletedVisits(clinicId: string | null, branchId: string | n
               isEmergency: data.isEmergency ?? false,
               services: data.services ?? undefined,
               billAmount: data.billAmount ?? undefined,
+              discount: parseVisitDiscount(data.discount),
               payments,
               amountPaid:
                 typeof data.amountPaid === 'number'

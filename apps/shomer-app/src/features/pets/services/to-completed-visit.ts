@@ -18,6 +18,7 @@ export function toCompletedVisit(v: PetHistoryVisit): CompletedVisit {
     status: v.status,
     services: v.services,
     billAmount: v.billAmount,
+    discount: v.discount,
     payments: v.payments,
     amountPaid: v.amountPaid,
     petWeightKg: v.petWeightKg,

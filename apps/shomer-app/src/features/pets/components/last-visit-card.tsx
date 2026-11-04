@@ -14,7 +14,10 @@ import {
 } from 'lucide-react'
 import { cn, formatInr } from '@/lib/utils'
 import { PAYMENT_METHOD_LABELS } from '@/features/checkout/services/complete-billing'
+import { amountDue, serviceSubtotal } from '@/features/checkout/services/discount'
+import { useDiscountApproval } from '@/features/checkout/services/use-discount-approval'
 import type { LastVisitSummary } from '@/features/vet/services/use-visit-detail'
+import { visitPaymentState } from '../services/visit-payment-state'
 
 const labelClass = 'text-[10px] font-semibold uppercase tracking-[0.08em] text-muted'
 
@@ -98,10 +101,11 @@ function formatDose(type?: string, quantity?: string): string | null {
 interface LastVisitCardProps {
   visit: LastVisitSummary
   branchName?: string | null
+  clinicId?: string | null
   footer?: ReactNode
 }
 
-export function LastVisitCard({ visit, branchName, footer }: LastVisitCardProps) {
+export function LastVisitCard({ visit, branchName, clinicId, footer }: LastVisitCardProps) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -148,6 +152,20 @@ export function LastVisitCard({ visit, branchName, footer }: LastVisitCardProps)
                 {visit.service}
               </span>
             )}
+            {(() => {
+              const pay = visitPaymentState(visit.amountPaid, visit.billAmount)
+              if (pay.label === '—') return null
+              return (
+                <span
+                  className={cn(
+                    'rounded-[3px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em]',
+                    pay.badgeClass,
+                  )}
+                >
+                  {pay.label}
+                </span>
+              )
+            })()}
             {open ? (
               <ChevronUp size={14} className="text-muted ml-1" />
             ) : (
@@ -162,7 +180,29 @@ export function LastVisitCard({ visit, branchName, footer }: LastVisitCardProps)
         )}
       </button>
 
-      {open && (
+      {open && <LastVisitDetails visit={visit} clinicId={clinicId} />}
+
+      {open && footer}
+    </div>
+  )
+}
+
+export function LastVisitDetails({
+  visit,
+  clinicId,
+  emptyLabel = 'No notes recorded for last visit.',
+}: {
+  visit: LastVisitSummary
+  clinicId?: string | null
+  emptyLabel?: string
+}) {
+  const approval = useDiscountApproval(
+    clinicId ?? null,
+    visit.branchId ?? null,
+    visit.visitId,
+    !!visit.discount && !!clinicId && !!visit.branchId,
+  )
+  return (
         <div className="p-4 space-y-4">
           {(typeof visit.petWeightKg === 'number' || typeof visit.petTemperatureF === 'number') && (
             <div className="flex items-center gap-4 flex-wrap">
@@ -322,13 +362,40 @@ export function LastVisitCard({ visit, branchName, footer }: LastVisitCardProps)
                     </span>
                   </div>
                 ))}
-                {typeof visit.billAmount === 'number' && (
+                {visit.discount && (
+                  <>
+                    <div className="flex items-center justify-between px-3 py-2 bg-surface">
+                      <span className="text-[12px] text-muted">Subtotal</span>
+                      <span className="text-[12px] font-semibold text-foreground tabular-nums">
+                        {formatInr(serviceSubtotal(visit.services))}
+                      </span>
+                    </div>
+                    <div className="px-3 py-2 bg-surface space-y-0.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-[12px] font-semibold text-foreground">
+                          {visit.discount.kind === 'percent' ? `Discount ${visit.discount.value}%` : 'Discount'}
+                        </span>
+                        <span className="text-[12px] font-semibold text-foreground tabular-nums">
+                          {formatInr(visit.discount.amount)}
+                        </span>
+                      </div>
+                      {approval.data?.name && (
+                        <p className="text-[11px] text-muted">Approved by {approval.data.name}</p>
+                      )}
+                    </div>
+                  </>
+                )}
+                {(visit.discount || typeof visit.billAmount === 'number') && (
                   <div className="flex items-center justify-between px-3 py-2 bg-surface-2">
                     <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted">
                       Total
                     </span>
                     <span className="text-[13px] font-bold text-primary tabular-nums">
-                      {formatInr(visit.billAmount)}
+                      {formatInr(
+                        visit.discount
+                          ? amountDue(serviceSubtotal(visit.services), visit.discount)
+                          : (visit.billAmount ?? 0),
+                      )}
                     </span>
                   </div>
                 )}
@@ -370,12 +437,8 @@ export function LastVisitCard({ visit, branchName, footer }: LastVisitCardProps)
             visit.vaccines.length === 0 &&
             visit.services.length === 0 &&
             visit.complaints.length === 0 && (
-              <p className="text-[12px] text-muted">No notes recorded for last visit.</p>
+              <p className="text-[12px] text-muted">{emptyLabel}</p>
             )}
         </div>
-      )}
-
-      {open && footer}
-    </div>
   )
 }

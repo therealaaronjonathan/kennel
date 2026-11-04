@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
   ChevronDown,
@@ -38,6 +38,19 @@ import {
 } from './medicine-select'
 import { ServicesSelect, type ServiceEntry } from '@/components/blocks/services-select'
 import { formatInr } from '@/lib/utils'
+import { useAuth } from '@/features/auth'
+import { DiscountDialog } from '@/features/checkout/components/discount-dialog'
+import { useApprovers } from '@/features/checkout/services/use-approvers'
+import { useDiscountApproval } from '@/features/checkout/services/use-discount-approval'
+import { saveDiscountApprover } from '@/features/checkout/services/save-discount'
+import {
+  amountDue,
+  parseVisitDiscount,
+  quoteDiscount,
+  serviceSubtotal,
+  type DiscountApprover,
+  type VisitDiscount,
+} from '@/features/checkout/services/discount'
 import { LastVisitCard } from '@/features/pets/components/last-visit-card'
 import { EarlierVisitsModal } from './earlier-visits-modal'
 import { useDoctors } from '@/features/checkin/services/use-doctors'
@@ -99,6 +112,31 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
   const [selectedServices, setSelectedServices] = useState<ServiceEntry[]>(
     () => draft?.services ?? [],
   )
+  const [discount, setDiscount] = useState<VisitDiscount | null>(
+    () => parseVisitDiscount(draft?.discount) ?? null,
+  )
+  const [pickedApprover, setPickedApprover] = useState<DiscountApprover | null>(null)
+  const [discountOpen, setDiscountOpen] = useState(false)
+  const [discountSaving, setDiscountSaving] = useState(false)
+  const [discountError, setDiscountError] = useState<string | null>(null)
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
+  const { doctors: approverDoctors, staff: approverStaff, options: approverOptions, loading: approversLoading } =
+    useApprovers(clinicId, branchId)
+  const approvalQuery = useDiscountApproval(clinicId, branchId, entry.id, !!discount)
+  const approver = pickedApprover ?? approvalQuery.data ?? null
+  const serviceTotal = serviceSubtotal(selectedServices)
+  const discountQuote = discount
+    ? quoteDiscount({
+        subtotal: serviceTotal,
+        kind: discount.kind,
+        rawValue: String(discount.value),
+        alreadyPaid: 0,
+      })
+    : ({ ok: true, discount: null } as const)
+  const activeDiscount = discountQuote.ok ? discountQuote.discount : null
+  const defaultApproverId =
+    user && approverOptions.some((o) => o.id === user.uid) ? user.uid : ''
   const [petWeightKg, setPetWeightKg] = useState<string>(() =>
     draft?.petWeightKg != null ? String(draft.petWeightKg) : '',
   )
@@ -137,6 +175,7 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
   function handleMarkCompleteClick() {
     setAttemptedSubmit(true)
     const firstErrorId = findFirstErrorElementId()
+    if (discount && (!discountQuote.ok || !approver)) return
     if (firstErrorId) {
       // Open vaccine accordion if the error is in there
       if (firstErrorId.startsWith('vaccine-')) setVaccineOpen(true)
@@ -231,7 +270,21 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
       vaccines: vaccineEntries.map((v) => ({ name: v.name, batch: v.batch, nextDue: v.nextDue })),
       petWeightKg: !isNaN(weightNum) && weightNum > 0 ? weightNum : undefined,
       petTemperatureF: !isNaN(tempNum) && tempNum > 0 ? tempNum : undefined,
+      discount: discount ?? undefined,
     }
+  }
+
+  function removeDiscount() {
+    setDiscountError(null)
+    setDiscount(null)
+    setPickedApprover(null)
+    saveDiscountApprover(clinicId, branchId, entry.id, null, null)
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ['discount-approval', clinicId, branchId, entry.id] })
+      })
+      .catch((err: unknown) => {
+        setDiscountError(err instanceof Error ? err.message : 'Could not remove the discount')
+      })
   }
 
   const pause = useMutation({
@@ -267,6 +320,7 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
     vaccineEntries,
     petWeightKg,
     petTemperatureF,
+    discount,
   ])
 
   const complete = useMutation({
@@ -280,6 +334,8 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
         vaccines: vaccineEntries.map((v) => ({ name: v.name, batch: v.batch, nextDue: v.nextDue })),
         petWeightKg: draft.petWeightKg,
         petTemperatureF: draft.petTemperatureF,
+        discount: activeDiscount,
+        approver: activeDiscount ? approver : null,
       }
       return completeVisit(clinicId, branchId, entry.id, form)
     },
@@ -313,7 +369,7 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
     }
   }
 
-  const confirmTotal = selectedServices.reduce((sum, s) => sum + s.quantity * s.price, 0)
+  const confirmTotal = amountDue(serviceTotal, activeDiscount)
 
   const pet = detail?.pet
   const owner = detail?.owner
@@ -478,6 +534,7 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
             {lastVisit ? (
               <LastVisitCard
                 visit={lastVisit}
+                clinicId={clinicId}
                 footer={
                   detail && detail.earlierVisits.length > 0 ? (
                     <button
@@ -722,13 +779,48 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
 
               {/* Services */}
               <div className="space-y-1.5">
-                <label className={labelClass}>Services Availed</label>
+                <div className="flex items-center justify-between gap-3">
+                  <label className={labelClass}>Services Availed</label>
+                  <button
+                    type="button"
+                    onClick={() => setDiscountOpen(true)}
+                    className="rounded-[4px] border border-border-base px-2.5 py-1 text-[11px] font-semibold text-foreground hover:border-primary hover:text-primary transition-colors"
+                  >
+                    Add Discount
+                  </button>
+                </div>
                 <ServicesSelect
                   selected={selectedServices}
                   onChange={setSelectedServices}
                   items={serviceItems}
                   loading={svcLoading}
+                  discountLine={
+                    activeDiscount
+                      ? {
+                          label:
+                            activeDiscount.kind === 'percent'
+                              ? `Discount ${activeDiscount.value}%`
+                              : 'Discount',
+                          amount: activeDiscount.amount,
+                          onRemove: removeDiscount,
+                        }
+                      : null
+                  }
                 />
+                {discount && !discountQuote.ok && (
+                  <p className="text-[12px] font-semibold text-danger">
+                    {discountQuote.error}{' '}
+                    <button type="button" onClick={removeDiscount} className="underline">
+                      Remove discount
+                    </button>
+                  </p>
+                )}
+                {discount && discountQuote.ok && !approver && !approvalQuery.isFetching && (
+                  <p className="text-[12px] font-semibold text-danger">Choose who approved this discount.</p>
+                )}
+                {discountError && (
+                  <p className="text-[12px] font-semibold text-danger">{discountError}</p>
+                )}
               </div>
             </div>
           </>
@@ -741,7 +833,11 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
         <div className="border-t border-border-base px-6 py-4 flex-shrink-0 space-y-2">
           <button
             type="button"
-            disabled={complete.isPending || pause.isPending}
+            disabled={
+              complete.isPending ||
+              pause.isPending ||
+              (!!discount && (approvalQuery.isFetching || !discountQuote.ok || !approver))
+            }
             onClick={handleMarkCompleteClick}
             className="w-full rounded-[4px] bg-primary px-4 py-[10px] text-[13px] font-semibold text-white hover:opacity-85 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -770,6 +866,39 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
           </div>
         </div>
       )}
+
+      <DiscountDialog
+        open={discountOpen}
+        subtotal={serviceTotal}
+        alreadyPaid={0}
+        initial={discount}
+        initialApproverId={approver?.id ?? ''}
+        defaultApproverId={defaultApproverId}
+        doctors={approverDoctors}
+        staff={approverStaff}
+        optionsLoading={approversLoading}
+        saving={discountSaving}
+        onClose={() => {
+          if (!discountSaving) setDiscountOpen(false)
+        }}
+        onSubmit={(next, who) => {
+          setDiscountError(null)
+          setDiscountSaving(true)
+          saveDiscountApprover(clinicId, branchId, entry.id, next, who)
+            .then(() => {
+              setDiscount(next)
+              setPickedApprover(who)
+              setDiscountOpen(false)
+              queryClient.invalidateQueries({
+                queryKey: ['discount-approval', clinicId, branchId, entry.id],
+              })
+            })
+            .catch((err: unknown) => {
+              setDiscountError(err instanceof Error ? err.message : 'Could not save the discount')
+            })
+            .finally(() => setDiscountSaving(false))
+        }}
+      />
 
       {/* Reassign dialog */}
       {showReassignDialog && (
@@ -865,6 +994,16 @@ export function ConsultationView({ entry, clinicId, branchId, hasInProgress, onC
                     <span className="text-[13px] font-semibold text-foreground tabular-nums">{formatInr(s.quantity * s.price)}</span>
                   </div>
                 ))}
+                {activeDiscount && (
+                  <div className="flex items-center justify-between px-3 py-2 bg-surface gap-2">
+                    <span className="flex-1 text-[13px] text-foreground">
+                      {activeDiscount.kind === 'percent' ? `Discount ${activeDiscount.value}%` : 'Discount'}
+                    </span>
+                    <span className="text-[13px] font-semibold text-foreground tabular-nums">
+                      {formatInr(activeDiscount.amount)}
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between px-3 py-2 bg-surface-2">
                   <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">Total</span>
                   <span className="text-[14px] font-bold text-primary tabular-nums">{formatInr(confirmTotal)}</span>

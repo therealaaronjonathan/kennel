@@ -8,6 +8,7 @@ import {
 import { db } from '@/lib/firebase'
 import type { DiagnosisEntry, PrescriptionEntry } from './complete-visit'
 import type { ServiceEntry } from '@/components/blocks/services-select'
+import type { VisitDiscount } from '@/features/checkout/services/discount'
 
 /**
  * Consultation draft stored on the visit doc so a vet's in-progress work
@@ -22,6 +23,8 @@ export interface ConsultationDraft {
   vaccines: { name: string; batch: string; nextDue: string }[]
   petWeightKg?: number
   petTemperatureF?: number
+  /** Numbers only. The approver name stays off this visit document. */
+  discount?: VisitDiscount
   savedAt?: Timestamp
 }
 
@@ -38,6 +41,7 @@ export function buildDraftDoc(draft: ConsultationDraftInput, savedAt: unknown): 
   }
   if (typeof draft.petWeightKg === 'number') doc.petWeightKg = draft.petWeightKg
   if (typeof draft.petTemperatureF === 'number') doc.petTemperatureF = draft.petTemperatureF
+  if (draft.discount) doc.discount = draft.discount
   return doc
 }
 

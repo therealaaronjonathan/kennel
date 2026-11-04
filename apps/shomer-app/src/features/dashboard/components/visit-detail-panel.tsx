@@ -16,6 +16,11 @@ import {
 } from '@/features/checkout/services/complete-billing'
 import { useVisitBill } from '../services/use-visit-bill'
 import type { CompletedVisit } from '../services/use-completed-visits'
+import {
+  amountDue,
+  serviceSubtotal,
+} from '@/features/checkout/services/discount'
+import { useDiscountApproval } from '@/features/checkout/services/use-discount-approval'
 
 interface VisitDetailPanelProps {
   visit: CompletedVisit
@@ -147,7 +152,10 @@ export function VisitDetailPanel({
   // Services, bill, and consultation notes come directly from the visit doc —
   // no extra fetch needed, avoids putting arrays in useEffect deps.
   const services = Array.isArray(visit.services) ? visit.services : []
-  const billAmount = visit.billAmount ?? 0
+  const discount = visit.discount
+  const subtotal = serviceSubtotal(services)
+  const billAmount = discount ? amountDue(subtotal, discount) : (visit.billAmount ?? 0)
+  const approval = useDiscountApproval(clinicId, branchId, visit.id, !!discount)
   const consultationNotes = visit.consultationNotes ?? ''
 
   const baseUrl = import.meta.env.VITE_APP_BASE_URL ?? 'https://shomer-app-test.web.app'
@@ -175,7 +183,7 @@ export function VisitDetailPanel({
   return (
     <div className="flex flex-col h-full">
       {/* Header — sticky anchor: token + pet + visit date */}
-      <div className="border-b border-border-base px-6 py-4 flex-shrink-0">
+      <div className="border-b border-border-base px-6 py-4 pr-12 flex-shrink-0">
         <div className="flex items-baseline gap-2.5">
           <span className="font-display text-[20px] font-bold text-primary leading-none">
             {visit.tokenDisplay}
@@ -387,19 +395,45 @@ export function VisitDetailPanel({
                   {services.map((s, i) => (
                     <div
                       key={s.serviceId ?? i}
-                      className="flex items-center justify-between px-3 py-2 bg-surface"
+                      className="flex items-center justify-between px-3 py-2 bg-surface gap-2"
                     >
-                      <span className="text-[13px] text-foreground">{s.name}</span>
-                      <span className="text-[13px] font-semibold text-foreground">
-                        {formatInr(s.price)}
+                      <span className="text-[13px] text-foreground">
+                        {s.name}
+                        {(s.quantity ?? 1) > 1 ? ` × ${s.quantity}` : ''}
+                      </span>
+                      <span className="text-[13px] font-semibold text-foreground tabular-nums">
+                        {formatInr((s.quantity ?? 1) * s.price)}
                       </span>
                     </div>
                   ))}
+                  {discount && (
+                    <>
+                      <div className="flex items-center justify-between px-3 py-2 bg-surface">
+                        <span className="text-[12px] text-muted">Subtotal</span>
+                        <span className="text-[13px] font-semibold text-foreground tabular-nums">
+                          {formatInr(subtotal)}
+                        </span>
+                      </div>
+                      <div className="px-3 py-2 bg-surface space-y-0.5">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-[13px] font-semibold text-foreground">
+                            {discount.kind === 'percent' ? `Discount ${discount.value}%` : 'Discount'}
+                          </span>
+                          <span className="text-[13px] font-semibold text-foreground tabular-nums">
+                            {formatInr(discount.amount)}
+                          </span>
+                        </div>
+                        {approval.data?.name && (
+                          <p className="text-[11px] text-muted">Approved by {approval.data.name}</p>
+                        )}
+                      </div>
+                    </>
+                  )}
                   <div className="flex items-center justify-between px-3 py-2 bg-surface-2">
                     <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
                       Total
                     </span>
-                    <span className="text-[14px] font-bold text-primary">
+                    <span className="text-[14px] font-bold text-primary tabular-nums">
                       {formatInr(billAmount)}
                     </span>
                   </div>

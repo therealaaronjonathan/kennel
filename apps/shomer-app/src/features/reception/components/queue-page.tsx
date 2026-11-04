@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { useClinic } from '@/features/clinic'
 import { useAllVisits, type AllVisit } from '../services/use-all-visits'
 import { VisitDetailPanel } from '@/features/dashboard/components/visit-detail-panel'
+import { VisitDetailDrawer } from '@/components/blocks/visit-detail-drawer'
 import type { CompletedVisit } from '@/features/dashboard/services/use-completed-visits'
 import {
   PAYMENT_METHOD_LABELS,
@@ -95,6 +96,7 @@ function toCompletedVisit(v: AllVisit): CompletedVisit {
     status: v.status,
     services: v.services,
     billAmount: v.billAmount,
+    discount: v.discount,
     payments: v.payments,
     amountPaid: v.amountPaid,
     petWeightKg: v.petWeightKg,
@@ -142,7 +144,6 @@ export function ReceptionQueuePage() {
   }, [visits, paymentFilter, doctorFilter])
 
   const selectedVisit = filteredVisits.find((v) => v.id === selectedId) ?? null
-  const hasPanel = !!selectedVisit
   const canMarkComplete =
     !!selectedVisit &&
     (selectedVisit.status === 'waiting' || selectedVisit.status === 'in-progress')
@@ -211,10 +212,7 @@ export function ReceptionQueuePage() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left: visits list */}
-        <div
-          className="flex flex-col overflow-hidden border-r border-border-base"
-          style={{ width: hasPanel ? '55%' : '100%', transition: 'width 0.2s ease' }}
-        >
+        <div className="flex flex-col overflow-hidden w-full">
           {/* Table header */}
           {!loading && filteredVisits.length > 0 && (
             <div className={cn('grid gap-3 px-5 py-2 border-b border-border-base flex-shrink-0', COLS)}>
@@ -288,35 +286,38 @@ export function ReceptionQueuePage() {
           </div>
         </div>
 
-        {/* Right: detail panel */}
-        {selectedVisit && clinicId && branchId && (
-          <div className="flex-1 overflow-hidden flex flex-col bg-background">
-            {/* Mark complete action bar */}
-            {canMarkComplete && (
-              <div className="flex-shrink-0 border-b border-border-base bg-surface px-4 py-2.5 flex items-center justify-between gap-3">
-                <span className="text-[12px] text-muted">
-                  Doctor hasn't completed this visit yet.
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setConfirmComplete(true)}
-                  className="flex items-center gap-1.5 rounded-[4px] border border-success/40 bg-success/10 px-3 py-1.5 text-[12px] font-semibold text-success hover:bg-success/20 transition-colors"
-                >
-                  <CheckCheck size={13} />
-                  Mark as Complete
-                </button>
-              </div>
-            )}
-            <VisitDetailPanel
-              key={selectedVisit.id}
-              visit={toCompletedVisit(selectedVisit)}
-              clinicId={clinicId}
-              branchId={branchId}
-              canEditPaymentMethod
-              onToast={(msg) => setToast(msg)}
-            />
-          </div>
-        )}
+        <VisitDetailDrawer
+          open={!!selectedVisit && !!clinicId && !!branchId}
+          onClose={() => setSelectedId(null)}
+        >
+          {selectedVisit && clinicId && branchId && (
+            <>
+              {canMarkComplete && (
+                <div className="flex-shrink-0 border-b border-border-base bg-surface px-4 py-2.5 pr-12 flex items-center justify-between gap-3">
+                  <span className="text-[12px] text-muted">
+                    Doctor hasn't completed this visit yet.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmComplete(true)}
+                    className="flex items-center gap-1.5 rounded-[4px] border border-success/40 bg-success/10 px-3 py-1.5 text-[12px] font-semibold text-success hover:bg-success/20 transition-colors"
+                  >
+                    <CheckCheck size={13} />
+                    Mark as Complete
+                  </button>
+                </div>
+              )}
+              <VisitDetailPanel
+                key={selectedVisit.id}
+                visit={toCompletedVisit(selectedVisit)}
+                clinicId={clinicId}
+                branchId={branchId}
+                canEditPaymentMethod
+                onToast={(msg) => setToast(msg)}
+              />
+            </>
+          )}
+        </VisitDetailDrawer>
       </div>
 
       {/* Mark complete confirmation modal */}

@@ -13,6 +13,7 @@ import {
   type ServiceEntry,
 } from '@/features/checkout/services/complete-billing'
 import type { LastVisitSummary } from '@/features/vet/services/use-visit-detail'
+import { parseVisitDiscount, type VisitDiscount } from '@/features/checkout/services/discount'
 import { useClinicBranches, type ClinicBranch } from './use-clinic-branches'
 
 const FINISHED = new Set(['completed', 'billed'])
@@ -36,6 +37,7 @@ export interface PetHistoryVisit {
   consultationNotes?: string
   services?: ServiceEntry[]
   billAmount?: number
+  discount?: VisitDiscount
   payments?: PaymentEntry[]
   amountPaid?: number
   petWeightKg?: number
@@ -101,6 +103,7 @@ function mapVisit(
     consultationNotes: (data.consultationNotes as string) || undefined,
     services: Array.isArray(data.services) ? (data.services as ServiceEntry[]) : undefined,
     billAmount: typeof data.billAmount === 'number' ? data.billAmount : undefined,
+    discount: parseVisitDiscount(data.discount),
     payments,
     amountPaid:
       typeof data.amountPaid === 'number' ? data.amountPaid : sumPayments(payments),
@@ -114,7 +117,7 @@ function mapVisit(
   }
 }
 
-async function loadLastVisitSummary(
+export async function loadLastVisitSummary(
   clinicId: string,
   visit: PetHistoryVisit,
 ): Promise<LastVisitSummary> {
@@ -166,6 +169,8 @@ async function loadLastVisitSummary(
       quantity: s.quantity,
     })),
     billAmount: visit.billAmount,
+    discount: visit.discount,
+    branchId: visit.branchId,
     payments: visit.payments,
     amountPaid: visit.amountPaid,
     status: visit.status,

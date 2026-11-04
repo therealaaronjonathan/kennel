@@ -22,6 +22,7 @@ clinics/{clinicId}
 │   ├── tokenCounters/{date}               # one doc per day — branch-wide token counter
 │   ├── billingDefaults/{visitId}          # watch-list of explicitly pinned unpaid bills
 │   ├── payments/{paymentId}               # immutable money-movement ledger (per-day tally)
+│   ├── discountApprovals/{visitId}        # staff-only: who approved a visit discount
 │   └── visits/{visitId}                   # flat under branch for cross-cutting queries
 │       ├── diagnoses/{diagnosisId}        # one doc per selected diagnosis
 │       ├── prescriptions/{prescriptionId} # one doc per prescribed medicine
@@ -288,7 +289,8 @@ interface Visit {
   date: string            // YYYY-MM-DD
   consultationNotes?: string
   services?: ServiceLineItem[]
-  billAmount?: number     // sum of (quantity × price) for all service line items
+  discount?: VisitDiscount   // optional; absent on visits with no discount
+  billAmount?: number     // amount due: service total minus discount.amount
   payments?: PaymentEntry[]  // up to 3 entries, each method at most once; sum equals billAmount when status is 'billed'
   amountPaid?: number     // denormalized sum of payments[].amount; used for queue filters and partial display
   petWeightKg?: number       // weight at time of consultation (kg); optional, entered by vet
@@ -313,8 +315,14 @@ interface ConsultationDraft {
 interface ServiceLineItem {
   serviceId: string
   name: string
-  price: number           // unit price at time of visit (may differ from catalog price if edited)
+  price: number           // unit price copied from the catalog when the line was added; not edited on the visit
   quantity: number        // defaults to 1; line total = quantity × price
+}
+
+interface VisitDiscount {
+  kind: 'amount' | 'percent'
+  value: number           // whole rupees, or a whole percent from 1 to 100
+  amount: number          // rupees taken off, rounded to the nearest rupee
 }
 
 interface PaymentEntry {
@@ -324,6 +332,8 @@ interface PaymentEntry {
 ```
 
 **Status flow**: `waiting` → `in-progress` → `completed` → `billed`
+
+**Discount**: one optional discount per visit, on the whole service total. The desk chooses rupees or a percent. `discount.amount` is the rupees taken off. `billAmount` is the amount due after that. The approver's name is not on the visit, because the visit is world-readable from the summary link. It lives in `discountApprovals/{visitId}` (`approvedById`, `approvedByName`, `approvedByRole`), which the authenticated catch-all covers and the summary page does not read. A discount can be changed until the visit is fully paid. Line prices on a visit are fixed.
 
 **Billing & partial payments**: at checkout the receptionist records one or more `PaymentEntry` rows.
 - `sum(payments) === billAmount` → status flips to `billed`, `billedAt` set.

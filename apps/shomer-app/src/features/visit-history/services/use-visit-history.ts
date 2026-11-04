@@ -13,6 +13,7 @@ import {
   type PaymentEntry,
   type ServiceEntry,
 } from '@/features/checkout/services/complete-billing'
+import { parseVisitDiscount, type VisitDiscount } from '@/features/checkout/services/discount'
 
 export interface HistoryVisit {
   id: string
@@ -30,6 +31,7 @@ export interface HistoryVisit {
   consultationNotes?: string
   services?: ServiceEntry[]
   billAmount?: number
+  discount?: VisitDiscount
   payments?: PaymentEntry[]
   amountPaid?: number
   petWeightKg?: number
@@ -103,6 +105,7 @@ export function useVisitHistory(
             consultationNotes: (data.consultationNotes as string) || undefined,
             services: data.services ?? undefined,
             billAmount: typeof data.billAmount === 'number' ? data.billAmount : undefined,
+            discount: parseVisitDiscount(data.discount),
             payments,
             amountPaid:
               typeof data.amountPaid === 'number'

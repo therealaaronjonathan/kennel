@@ -3,6 +3,11 @@ import { useParams, useSearchParams } from 'react-router-dom'
 import { collection, doc, getDoc, getDocs } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { getAgeFromDob } from '@/lib/age'
+import {
+  amountDue,
+  parseVisitDiscount,
+  serviceSubtotal,
+} from '@/features/checkout/services/discount'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -54,6 +59,7 @@ interface VisitData {
   status?: string
   services?: ServiceEntry[]
   billAmount?: number
+  discount?: unknown
   payments?: PaymentEntry[]
   petWeightKg?: number
 }
@@ -321,7 +327,9 @@ export function VisitSummaryPage() {
   const isBilled = data.visit.status === 'billed'
   const isFinished = isBilled || data.visit.status === 'completed'
   const services = data.visit.services ?? []
-  const billAmount = data.visit.billAmount ?? 0
+  const discount = parseVisitDiscount(data.visit.discount)
+  const subtotal = serviceSubtotal(services)
+  const billAmount = discount ? amountDue(subtotal, discount) : (data.visit.billAmount ?? subtotal)
   const payments = data.visit.payments ?? []
   // Show the itemized bill for finished visits (completed OR billed) so customers
   // can review charges before paying. The "Paid via" block below stays gated on
@@ -754,12 +762,33 @@ export function VisitSummaryPage() {
                 <tbody>
                   {services.map((s, i) => (
                     <tr key={s.serviceId ?? i}>
-                      <td style={styles.td}>{s.name}</td>
+                      <td style={styles.td}>
+                        {s.name}
+                        {(s.quantity ?? 1) > 1 ? ` × ${s.quantity}` : ''}
+                      </td>
                       <td style={{ ...styles.td, textAlign: 'right', fontWeight: 600 }}>
                         {formatInr((s.quantity ?? 1) * s.price)}
                       </td>
                     </tr>
                   ))}
+                  {discount && (
+                    <>
+                      <tr>
+                        <td style={styles.td}>Subtotal</td>
+                        <td style={{ ...styles.td, textAlign: 'right', fontWeight: 600 }}>
+                          {formatInr(subtotal)}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style={styles.td}>
+                          {discount.kind === 'percent' ? `Discount ${discount.value}%` : 'Discount'}
+                        </td>
+                        <td style={{ ...styles.td, textAlign: 'right', fontWeight: 600 }}>
+                          {formatInr(discount.amount)}
+                        </td>
+                      </tr>
+                    </>
+                  )}
                   <tr>
                     <td
                       style={{

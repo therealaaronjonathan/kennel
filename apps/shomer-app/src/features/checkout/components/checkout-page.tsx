@@ -5,11 +5,14 @@ import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { cn, formatInr } from '@/lib/utils'
 import { WhatsAppShareModal } from '@/components/blocks/whatsapp-share-modal'
+import { VisitDetailDrawer } from '@/components/blocks/visit-detail-drawer'
 import { ServicesSelect, type ServiceEntry } from '@/components/blocks/services-select'
+import { DiscountDialog } from './discount-dialog'
 import { PaymentMethodDialog } from '@/components/blocks/payment-method-dialog'
 import { SplitPaymentDialog } from '@/components/blocks/split-payment-dialog'
 import { EditNameDialog } from '@/components/blocks/edit-name-dialog'
 import { updatePetName, updateOwnerName } from '@/features/checkin/services/edit-names'
+import { useAuth } from '@/features/auth'
 import { useClinic } from '@/features/clinic'
 import { useCompletedVisits, type CompletedVisit } from '@/features/dashboard/services/use-completed-visits'
 import { useClinicName } from '@/features/clinic/hooks/use-clinic-name'
@@ -24,6 +27,17 @@ import {
 } from '../services/complete-billing'
 import { useBillingDefaults, type BillingDefaultEntry } from '../services/use-billing-defaults'
 import { addToBillingDefaults, removeFromBillingDefaults } from '../services/billing-defaults-service'
+import {
+  amountDue,
+  parseVisitDiscount,
+  quoteDiscount,
+  serviceSubtotal,
+  type DiscountApprover,
+  type VisitDiscount,
+} from '../services/discount'
+import { saveVisitBill } from '../services/save-discount'
+import { useApprovers } from '../services/use-approvers'
+import { useDiscountApproval } from '../services/use-discount-approval'
 
 // ── Toast ────────────────────────────────────────────────────────────────────
 
@@ -92,6 +106,18 @@ function CheckoutPanel({
     visit.id,
     normalize(visit.services),
   )
+  const { user } = useAuth()
+  const { doctors, staff, options, loading: approversLoading } = useApprovers(clinicId, branchId)
+  const approvalQuery = useDiscountApproval(clinicId, branchId, visit.id, !!visit.discount)
+  const approval = approvalQuery.data ?? null
+  const [discountOpen, setDiscountOpen] = useState(false)
+  const [savedApprover, setSavedApprover] = useState<DiscountApprover | null>(null)
+
+  useEffect(() => {
+    setDiscountOpen(false)
+    setSavedApprover(null)
+  }, [visit.id])
+
   const [showWAModal, setShowWAModal] = useState(false)
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
   const [showSplitDialog, setShowSplitDialog] = useState(false)
@@ -140,13 +166,39 @@ function CheckoutPanel({
     },
   })
 
-  const billTotal = editedServices.reduce((s, item) => s + item.quantity * item.price, 0)
+  const subtotal = serviceSubtotal(editedServices)
   const existingPaid = visit.amountPaid ?? 0
-  const hasPartial = existingPaid > 0 && existingPaid < billTotal
+  const savedDiscount = visit.discount ?? null
+  const requoted = savedDiscount
+    ? quoteDiscount({
+        subtotal,
+        kind: savedDiscount.kind,
+        rawValue: String(savedDiscount.value),
+        alreadyPaid: existingPaid,
+      })
+    : ({ ok: true, discount: null } as const)
+  const activeDiscount = requoted.ok ? requoted.discount : null
+  const approver: DiscountApprover | null = activeDiscount ? approval ?? savedApprover : null
+  const billTotal = requoted.ok ? amountDue(subtotal, activeDiscount) : subtotal
+  const hasPartial = requoted.ok && existingPaid > 0 && existingPaid < billTotal
+  const covered = requoted.ok && existingPaid === billTotal
+  const defaultApproverId = user && options.some((o) => o.id === user.uid) ? user.uid : ''
+
+  const savingBill = useMutation({
+    mutationFn: ({ discount, approver: who }: { discount: VisitDiscount | null; approver: DiscountApprover | null }) =>
+      saveVisitBill(clinicId, branchId, visit.id, editedServices, discount, who, isDefaulted),
+    onSuccess: (amount, { discount, approver: who }) => {
+      setSavedApprover(discount ? who : null)
+      setDiscountOpen(false)
+      queryClient.invalidateQueries({ queryKey: ['discount-approval', clinicId, branchId, visit.id] })
+      onToast(discount ? `Bill updated — ${formatInr(amount)} due` : 'Discount removed')
+    },
+  })
 
   const billing = useMutation({
-    mutationFn: (payments: PaymentEntry[]) =>
-      recordPayments(clinicId, branchId, visit.id, editedServices, payments, {
+    mutationFn: (payments: PaymentEntry[]) => {
+      if (!requoted.ok) throw new Error(requoted.error)
+      return recordPayments(clinicId, branchId, visit.id, editedServices, payments, {
         petId: visit.petId,
         ownerId: visit.ownerId,
         petName: visit.petName,
@@ -154,13 +206,19 @@ function CheckoutPanel({
         tokenDisplay: visit.tokenDisplay,
         visitDate: visit.date,
         previousPayments: visit.payments ?? [],
-      }),
+      }, {
+        discount: activeDiscount,
+        approver: activeDiscount ? approver : null,
+        pinned: isDefaulted,
+      })
+    },
     onSuccess: (_data, payments) => {
       setShowPaymentDialog(false)
       setShowSplitDialog(false)
       // Edits are now persisted to Firestore — drop the local draft so a later
       // re-open reads the saved services rather than a stale draft.
       clearDraft()
+      queryClient.invalidateQueries({ queryKey: ['discount-approval', clinicId, branchId, visit.id] })
       const paid = payments.reduce((s, p) => s + p.amount, 0)
       if (paid >= billTotal) {
         onToast(`${visit.petName} billed — ${formatInr(billTotal)}`)
@@ -193,7 +251,7 @@ function CheckoutPanel({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="border-b border-border-base px-6 py-4 flex-shrink-0">
+      <div className="border-b border-border-base px-6 py-4 pr-12 flex-shrink-0">
         <div className="flex items-baseline gap-2.5">
           <span className="font-display text-[20px] font-bold text-primary leading-none">
             {visit.tokenDisplay}
@@ -342,13 +400,44 @@ function CheckoutPanel({
             )}
 
             <div className="space-y-2">
-              <p className={labelClass}>Services &amp; Bill</p>
+              <div className="flex items-center justify-between gap-3">
+                <p className={labelClass}>Services &amp; Bill</p>
+                <button
+                  type="button"
+                  onClick={() => setDiscountOpen(true)}
+                  className="rounded-[4px] border border-border-base px-2.5 py-1 text-[11px] font-semibold text-foreground hover:border-primary hover:text-primary transition-colors"
+                >
+                  Add Discount
+                </button>
+              </div>
               <ServicesSelect
                 selected={editedServices}
                 onChange={setEditedServices}
                 items={catalogServices}
                 loading={svcLoading}
+                totalLabel="Subtotal"
+                discountLine={
+                  activeDiscount
+                    ? {
+                        label:
+                          activeDiscount.kind === 'percent'
+                            ? `Discount ${activeDiscount.value}%`
+                            : 'Discount',
+                        amount: activeDiscount.amount,
+                        onRemove: () =>
+                          savingBill.mutate({ discount: null, approver: null }),
+                      }
+                    : null
+                }
               />
+              {!requoted.ok && (
+                <p className="text-[12px] font-semibold text-danger">{requoted.error}</p>
+              )}
+              {savingBill.isError && (
+                <p className="text-[12px] font-semibold text-danger">
+                  {(savingBill.error as Error)?.message ?? 'Could not save the discount.'}
+                </p>
+              )}
             </div>
           </>
         )}
@@ -373,15 +462,23 @@ function CheckoutPanel({
           </button>
           <button
             type="button"
-            disabled={billing.isPending || editedServices.length === 0}
+            disabled={
+              billing.isPending ||
+              savingBill.isPending ||
+              editedServices.length === 0 ||
+              !requoted.ok ||
+              (!!activeDiscount && !approver)
+            }
             onClick={() => {
-              if (hasPartial) setShowSplitDialog(true)
+              if (!requoted.ok) return
+              if (covered) billing.mutate(visit.payments ?? [])
+              else if (hasPartial) setShowSplitDialog(true)
               else setShowPaymentDialog(true)
             }}
             className="flex-1 flex items-center justify-center gap-2 rounded-[4px] bg-primary px-4 py-[9px] text-[13px] font-semibold text-white hover:opacity-85 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <CheckCheck size={13} />
-            {billing.isPending ? 'Saving…' : hasPartial ? 'Continue Payment' : 'Mark Billed'}
+            {billing.isPending ? 'Saving…' : covered ? 'Mark billed' : hasPartial ? 'Continue Payment' : 'Mark Billed'}
           </button>
         </div>
 
@@ -470,6 +567,23 @@ function CheckoutPanel({
           if (editTarget) editName.mutate({ target: editTarget, value })
         }}
       />
+
+      <DiscountDialog
+        open={discountOpen}
+        subtotal={subtotal}
+        alreadyPaid={existingPaid}
+        initial={savedDiscount}
+        initialApproverId={approver?.id ?? ''}
+        defaultApproverId={defaultApproverId}
+        doctors={doctors}
+        staff={staff}
+        optionsLoading={approversLoading}
+        saving={savingBill.isPending}
+        onClose={() => {
+          if (!savingBill.isPending) setDiscountOpen(false)
+        }}
+        onSubmit={(discount, who) => savingBill.mutate({ discount, approver: who })}
+      />
     </div>
   )
 }
@@ -508,10 +622,7 @@ interface VisitListItemProps {
 }
 
 function VisitListItem({ visit, selected, showRelativeDate, today, onSelect }: VisitListItemProps) {
-  const billAmt = (visit.services ?? []).reduce(
-    (s, item) => s + (item.quantity ?? 1) * item.price,
-    0,
-  )
+  const billAmt = amountDue(serviceSubtotal(visit.services ?? []), visit.discount)
   const paid = visit.amountPaid ?? 0
   const isPartial = paid > 0 && paid < billAmt
 
@@ -669,6 +780,7 @@ export function CheckoutPage() {
           isEmergency: data.isEmergency ?? false,
           services: data.services ?? undefined,
           billAmount: data.billAmount ?? undefined,
+          discount: parseVisitDiscount(data.discount),
           payments,
           amountPaid:
             typeof data.amountPaid === 'number' ? data.amountPaid : sumPayments(payments),
@@ -701,7 +813,6 @@ export function CheckoutPage() {
     visits.find((v) => v.id === selectedId) ?? fetchedVisit ?? null
 
   const isSelectedDefaulted = selectedId ? defaultedIds.has(selectedId) : false
-  const hasPanel = !!selectedVisit
 
   function handleBilled() {
     // Auto-remove from billing defaults when a pinned visit is fully paid
@@ -750,11 +861,8 @@ export function CheckoutPage() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left: pending billing list */}
-        <div
-          className="flex flex-col overflow-hidden border-r border-border-base"
-          style={{ width: hasPanel ? '40%' : '100%', transition: 'width 0.2s ease' }}
-        >
-          <div className="flex-1 overflow-y-auto" onClick={() => setSelectedId(null)}>
+        <div className="flex flex-col overflow-hidden w-full">
+          <div className="flex-1 overflow-y-auto">
             {loading ? (
               <p className="px-5 py-8 text-[12px] text-muted">Loading…</p>
             ) : error ? (
@@ -844,9 +952,15 @@ export function CheckoutPage() {
           </div>
         </div>
 
-        {/* Right: checkout detail */}
-        {selectedVisit && clinicId && branchId && (
-          <div className="flex-1 overflow-hidden flex flex-col bg-background">
+        <VisitDetailDrawer
+          open={!!selectedVisit && !!clinicId && !!branchId}
+          onClose={() => {
+            setSelectedId(null)
+            setFetchedVisit(null)
+          }}
+          widthClass="max-w-lg"
+        >
+          {selectedVisit && clinicId && branchId && (
             <CheckoutPanel
               key={selectedVisit.id}
               visit={selectedVisit}
@@ -858,8 +972,8 @@ export function CheckoutPage() {
               onToast={(msg) => setToast(msg)}
               onToggleDefault={handleToggleDefault}
             />
-          </div>
-        )}
+          )}
+        </VisitDetailDrawer>
       </div>
 
       {toast && <Toast message={toast} onDone={() => setToast(null)} />}

@@ -5,6 +5,7 @@ import {
   sumPayments,
   type PaymentEntry,
 } from '@/features/checkout/services/complete-billing'
+import { parseVisitDiscount, type VisitDiscount } from '@/features/checkout/services/discount'
 
 export interface PetDetail {
   name: string
@@ -67,6 +68,8 @@ export interface LastVisitSummary {
   vaccines: LastVisitVaccine[]
   services: LastVisitService[]
   billAmount?: number
+  discount?: VisitDiscount
+  branchId?: string
   payments?: PaymentEntry[]
   amountPaid?: number
   status?: string
@@ -211,6 +214,8 @@ export function useVisitDetail(
           vaccines,
           services,
           billAmount: typeof visitData.billAmount === 'number' ? visitData.billAmount : undefined,
+          discount: parseVisitDiscount(visitData.discount),
+          branchId: branchId ?? undefined,
           payments: lastPayments,
           amountPaid:
             typeof visitData.amountPaid === 'number'

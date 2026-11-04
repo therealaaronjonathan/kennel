@@ -1,5 +1,7 @@
 import { doc, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { amountDue, serviceSubtotal, type DiscountApprover, type VisitDiscount } from './discount'
+import { discountVisitFields, stageDiscountApproval } from './save-discount'
 import { stagePaymentLedger, type LedgerContext } from './payment-ledger'
 
 export type PaymentMethod = 'cash' | 'card' | 'upi'
@@ -30,7 +32,14 @@ export function sumPayments(payments: PaymentEntry[] | undefined): number {
 }
 
 function computeBillAmount(services: ServiceEntry[]): number {
-  return services.reduce((sum, s) => sum + (s.quantity ?? 1) * s.price, 0)
+  return serviceSubtotal(services)
+}
+
+export interface BillAdjustment {
+  discount: VisitDiscount | null
+  approver: DiscountApprover | null
+  /** Update the pinned billing-default amount. Skip once the visit is fully paid. */
+  pinned: boolean
 }
 
 function sanitizePayments(payments: PaymentEntry[]): PaymentEntry[] {
@@ -43,7 +52,10 @@ function sanitizePayments(payments: PaymentEntry[]): PaymentEntry[] {
  * Record payments at checkout. Sets status based on amount paid:
  * - sum === billAmount → status 'billed' (sets billedAt)
  * - 0 < sum < billAmount → status stays 'completed' (partial payment)
- * Throws if sum exceeds billAmount or is non-positive.
+ * Throws if sum exceeds billAmount. A zero payment is allowed only when the
+ * amount due is zero (a discount covered the whole bill).
+ * `adjustment` publishes the discount in the same batch. Omit it to leave any
+ * existing discount untouched.
  */
 export async function recordPayments(
   clinicId: string,
@@ -52,12 +64,14 @@ export async function recordPayments(
   services: ServiceEntry[],
   payments: PaymentEntry[],
   ledgerCtx: LedgerContext,
+  adjustment?: BillAdjustment,
 ): Promise<void> {
-  const billAmount = computeBillAmount(services)
+  const subtotal = computeBillAmount(services)
+  const billAmount = adjustment ? amountDue(subtotal, adjustment.discount) : subtotal
   const cleaned = sanitizePayments(payments)
   const amountPaid = sumPayments(cleaned)
 
-  if (amountPaid <= 0) {
+  if (amountPaid < 0 || (amountPaid === 0 && billAmount > 0)) {
     throw new Error('Enter a payment amount.')
   }
   if (amountPaid > billAmount) {
@@ -74,6 +88,9 @@ export async function recordPayments(
     status: isFullyPaid ? 'billed' : 'completed',
     updatedAt: serverTimestamp(),
   }
+  if (adjustment) {
+    Object.assign(update, discountVisitFields(adjustment.discount))
+  }
   if (isFullyPaid) {
     update.billedAt = serverTimestamp()
   }
@@ -86,6 +103,18 @@ export async function recordPayments(
     doc(db, `clinics/${clinicId}/branches/${branchId}/visits/${visitId}`),
     update,
   )
+  if (adjustment) {
+    stageDiscountApproval(
+      batch,
+      clinicId,
+      branchId,
+      visitId,
+      adjustment.discount,
+      adjustment.approver,
+      adjustment.pinned && !isFullyPaid,
+      billAmount,
+    )
+  }
   stagePaymentLedger(batch, clinicId, branchId, visitId, cleaned, ledgerCtx)
   await batch.commit()
 }

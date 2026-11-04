@@ -1,5 +1,7 @@
 import { addDoc, collection, deleteField, doc, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { amountDue, serviceSubtotal, type DiscountApprover, type VisitDiscount } from '@/features/checkout/services/discount'
+import { discountVisitFields, stageDiscountApproval } from '@/features/checkout/services/save-discount'
 
 export interface DiagnosisEntry {
   diagnosisId: string | null
@@ -26,6 +28,7 @@ export interface ServiceEntry {
   serviceId: string
   name: string
   price: number
+  quantity?: number
 }
 
 export interface VaccineEntry {
@@ -42,6 +45,8 @@ export interface ConsultationFormData {
   vaccines: VaccineEntry[]
   petWeightKg?: number
   petTemperatureF?: number
+  discount?: VisitDiscount | null
+  approver?: DiscountApprover | null
 }
 
 export async function completeVisit(
@@ -51,13 +56,15 @@ export async function completeVisit(
   form: ConsultationFormData,
 ): Promise<void> {
   const visitRef = doc(db, `clinics/${clinicId}/branches/${branchId}/visits/${visitId}`)
-  const billAmount = form.services.reduce((sum, s) => sum + s.price, 0)
+  const discount = form.discount ?? null
+  const billAmount = amountDue(serviceSubtotal(form.services), discount)
 
   const batch = writeBatch(db)
   const visitUpdate: Record<string, unknown> = {
     status: 'completed',
     services: form.services,
     billAmount,
+    ...discountVisitFields(discount),
     consultationNotes: form.consultationNotes,
     consultationDraft: deleteField(),
     updatedAt: serverTimestamp(),
@@ -69,6 +76,16 @@ export async function completeVisit(
     visitUpdate.petTemperatureF = form.petTemperatureF
   }
   batch.update(visitRef, visitUpdate)
+  stageDiscountApproval(
+    batch,
+    clinicId,
+    branchId,
+    visitId,
+    discount,
+    form.approver ?? null,
+    false,
+    billAmount,
+  )
   await batch.commit()
 
   const visitBase = `clinics/${clinicId}/branches/${branchId}/visits/${visitId}`

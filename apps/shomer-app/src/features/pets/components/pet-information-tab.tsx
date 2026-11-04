@@ -25,6 +25,9 @@ function Row({ label, value }: { label: string; value: string }) {
   )
 }
 
+const headingClass =
+  'text-[11px] font-semibold uppercase tracking-[0.08em] text-muted mb-2'
+
 export function PetInformationTab({ pet, owner }: { pet: Pet; owner: PetOwner }) {
   const species =
     pet.species === 'other' && pet.speciesName
@@ -35,22 +38,28 @@ export function PetInformationTab({ pet, owner }: { pet: Pet; owner: PetOwner })
   const age = getAgeFromDob(pet.dateOfBirth)
 
   return (
-    <div className="space-y-4">
-      <section className="rounded-[4px] border border-border-base bg-surface px-4 divide-y divide-border-base">
-        <Row label="Pet" value={dash(pet.name)} />
-        <Row label="Species" value={dash(species)} />
-        <Row label="Breed" value={dash(pet.breed)} />
-        <Row label="Gender" value={gender} />
-        <Row label="Age" value={age ? `${age} old` : '—'} />
-        <Row label="Colour" value={dash(pet.color)} />
-        <Row label="Microchip" value={dash(pet.microchipNumber)} />
+    <div className="space-y-6">
+      <section>
+        <h2 className={headingClass}>Pet Information</h2>
+        <div className="rounded-[4px] border border-border-base bg-surface px-4 divide-y divide-border-base">
+          <Row label="Pet Name" value={dash(pet.name)} />
+          <Row label="Species" value={dash(species)} />
+          <Row label="Breed" value={dash(pet.breed)} />
+          <Row label="Gender" value={gender} />
+          <Row label="Age" value={age ? `${age} old` : '—'} />
+          <Row label="Colour" value={dash(pet.color)} />
+          <Row label="Microchip" value={dash(pet.microchipNumber)} />
+        </div>
       </section>
 
-      <section className="rounded-[4px] border border-border-base bg-surface px-4 divide-y divide-border-base">
-        <Row label="Owner" value={dash(owner.name)} />
-        <Row label="Phone" value={dash(owner.phone)} />
-        <Row label="Alt phone" value={dash(owner.altPhone)} />
-        <Row label="Email" value={dash(owner.email)} />
+      <section>
+        <h2 className={headingClass}>Pet Parent</h2>
+        <div className="rounded-[4px] border border-border-base bg-surface px-4 divide-y divide-border-base">
+          <Row label="Name" value={dash(owner.name)} />
+          <Row label="Phone" value={dash(owner.phone)} />
+          <Row label="Alt phone" value={dash(owner.altPhone)} />
+          <Row label="Email" value={dash(owner.email)} />
+        </div>
       </section>
     </div>
   )

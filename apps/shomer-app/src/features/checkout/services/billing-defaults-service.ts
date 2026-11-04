@@ -1,6 +1,7 @@
 import { deleteDoc, doc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { auth, db } from '@/lib/firebase'
 import type { CompletedVisit } from '@/features/dashboard/services/use-completed-visits'
+import { amountDue, serviceSubtotal } from './discount'
 
 export async function addToBillingDefaults(
   clinicId: string,
@@ -8,10 +9,7 @@ export async function addToBillingDefaults(
   visit: CompletedVisit,
 ): Promise<void> {
   const user = auth.currentUser
-  const billAmount = (visit.services ?? []).reduce(
-    (s, item) => s + (item.quantity ?? 1) * item.price,
-    0,
-  )
+  const billAmount = amountDue(serviceSubtotal(visit.services ?? []), visit.discount)
 
   await setDoc(
     doc(db, `clinics/${clinicId}/branches/${branchId}/billingDefaults/${visit.id}`),

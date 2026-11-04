@@ -288,8 +288,6 @@ export function CheckinPage() {
               />
             )}
 
-            <FoundPetHistory clinicId={clinicId} petId={step.selectedPetId} />
-
             <button
               type="button"
               onClick={() =>
@@ -312,6 +310,8 @@ export function CheckinPage() {
             >
               Not the right pet? Search again
             </button>
+
+            <FoundPetHistory clinicId={clinicId} petId={step.selectedPetId} />
           </div>
         )}
 

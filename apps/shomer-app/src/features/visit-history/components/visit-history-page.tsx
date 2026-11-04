@@ -4,6 +4,7 @@ import { useClinic } from '@/features/clinic'
 import { useDoctors } from '@/features/checkin/services/use-doctors'
 import { useClinicServices } from '@/features/vet/services/use-clinic-services'
 import { VisitDetailPanel } from '@/features/dashboard/components/visit-detail-panel'
+import { VisitDetailDrawer } from '@/components/blocks/visit-detail-drawer'
 import type { CompletedVisit } from '@/features/dashboard/services/use-completed-visits'
 import {
   PAYMENT_METHOD_LABELS,
@@ -102,6 +103,7 @@ function toCompletedVisit(v: HistoryVisit): CompletedVisit {
     status: v.status,
     services: v.services,
     billAmount: v.billAmount,
+    discount: v.discount,
     payments: v.payments,
     amountPaid: v.amountPaid,
     petWeightKg: v.petWeightKg,
@@ -262,6 +264,14 @@ export function VisitHistoryPage() {
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [branchDoctors, visits, doctorFilter])
 
+  const discountTotal = useMemo(
+    () =>
+      visits
+        .filter((v) => v.status === 'billed' || v.status === 'completed')
+        .reduce((sum, v) => sum + (v.discount?.amount ?? 0), 0),
+    [visits],
+  )
+
   const filteredVisits = useMemo(() => {
     const needle = search.trim().toLowerCase()
     return visits.filter((v) => {
@@ -297,7 +307,6 @@ export function VisitHistoryPage() {
   }, [visits, doctorFilter, paymentFilter, selectedServiceIds, search])
 
   const selectedVisit = filteredVisits.find((v) => v.id === selectedId) ?? null
-  const hasPanel = !!selectedVisit
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -334,14 +343,11 @@ export function VisitHistoryPage() {
         onApplyPreset={applyPreset}
       />
 
-      <HistorySummary visits={filteredVisits} ledger={ledgerTotals} />
+      <HistorySummary visits={filteredVisits} ledger={ledgerTotals} discountTotal={discountTotal} />
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left: list */}
-        <div
-          className="flex flex-col overflow-hidden border-r border-border-base"
-          style={{ width: hasPanel ? '55%' : '100%', transition: 'width 0.2s ease' }}
-        >
+        <div className="flex flex-col overflow-hidden w-full">
           {!loading && filteredVisits.length > 0 && (
             <div className={cn('grid gap-3 px-5 py-2 border-b border-border-base flex-shrink-0', COLS)}>
               {['Token', 'Pet', 'Owner', 'Doctor', 'Status', 'Payment', 'Amount', 'Time'].map((h) => (
@@ -358,7 +364,7 @@ export function VisitHistoryPage() {
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto" onClick={() => setSelectedId(null)}>
+          <div className="flex-1 overflow-y-auto">
             {loading ? (
               <p className="px-5 py-8 text-[12px] text-muted">Loading…</p>
             ) : error ? (
@@ -427,9 +433,11 @@ export function VisitHistoryPage() {
           </div>
         </div>
 
-        {/* Right: detail panel — read-only */}
-        {selectedVisit && clinicId && branchId && (
-          <div className="flex-1 overflow-hidden flex flex-col bg-background">
+        <VisitDetailDrawer
+          open={!!selectedVisit && !!clinicId && !!branchId}
+          onClose={() => setSelectedId(null)}
+        >
+          {selectedVisit && clinicId && branchId && (
             <VisitDetailPanel
               key={selectedVisit.id}
               visit={toCompletedVisit(selectedVisit)}
@@ -437,8 +445,8 @@ export function VisitHistoryPage() {
               branchId={branchId}
               onToast={() => {}}
             />
-          </div>
-        )}
+          )}
+        </VisitDetailDrawer>
       </div>
     </div>
   )

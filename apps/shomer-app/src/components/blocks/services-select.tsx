@@ -22,6 +22,10 @@ interface ServicesSelectProps {
   onChange: (selected: ServiceEntry[]) => void
   items: CatalogService[]
   loading: boolean
+  /** Checkout labels this Subtotal because a discount can follow it. */
+  totalLabel?: string
+  /** One discount row inside the bill. Cancel removes it. */
+  discountLine?: { label: string; amount: number; onRemove?: () => void } | null
 }
 
 // ── Grouping ──────────────────────────────────────────────────────────────────
@@ -49,7 +53,14 @@ function groupByType(items: CatalogService[]): [string, CatalogService[]][] {
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
-export function ServicesSelect({ selected, onChange, items, loading }: ServicesSelectProps) {
+export function ServicesSelect({
+  selected,
+  onChange,
+  items,
+  loading,
+  totalLabel = 'Total',
+  discountLine,
+}: ServicesSelectProps) {
   const [globalFilter, setGlobalFilter] = useState('')
   const [globalOpen, setGlobalOpen] = useState(false)
   const [openType, setOpenType] = useState<string | null>(null)
@@ -67,10 +78,6 @@ export function ServicesSelect({ selected, onChange, items, loading }: ServicesS
 
   function removeService(serviceId: string) {
     onChange(selected.filter((s) => s.serviceId !== serviceId))
-  }
-
-  function updatePrice(serviceId: string, newPrice: number) {
-    onChange(selected.map((s) => s.serviceId === serviceId ? { ...s, price: newPrice } : s))
   }
 
   function updateQuantity(serviceId: string, newQty: number) {
@@ -124,17 +131,9 @@ export function ServicesSelect({ selected, onChange, items, loading }: ServicesS
                   className="w-[44px] rounded-[3px] border border-border-base bg-background px-2 py-0.5 text-[13px] font-semibold text-foreground text-right focus:border-primary focus:outline-none transition-colors tabular-nums"
                 />
                 <span className="text-[11px] text-muted">×</span>
-                {/* Unit price */}
-                <span className="text-[11px] text-muted">₹</span>
-                <input
-                  type="number"
-                  min="0"
-                  max="100000"
-                  step="1"
-                  value={entry.price}
-                  onChange={(e) => updatePrice(entry.serviceId, Number(e.target.value) || 0)}
-                  className="w-[72px] rounded-[3px] border border-border-base bg-background px-2 py-0.5 text-[13px] font-semibold text-foreground text-right focus:border-primary focus:outline-none transition-colors tabular-nums"
-                />
+                <span className="text-[13px] font-semibold text-foreground tabular-nums">
+                  {formatInr(entry.price)}
+                </span>
                 <button
                   type="button"
                   onClick={() => removeService(entry.serviceId)}
@@ -145,10 +144,30 @@ export function ServicesSelect({ selected, onChange, items, loading }: ServicesS
               </div>
             </div>
           ))}
+          {discountLine && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-surface">
+              <span className="flex-1 text-[13px] text-foreground truncate">{discountLine.label}</span>
+              <span className="text-[13px] font-semibold text-foreground tabular-nums">
+                {formatInr(discountLine.amount)}
+              </span>
+              {discountLine.onRemove && (
+                <button
+                  type="button"
+                  onClick={discountLine.onRemove}
+                  className="text-muted hover:text-danger transition-colors ml-0.5"
+                  aria-label="Remove discount"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          )}
           {/* Total row */}
           <div className="flex items-center justify-between px-3 py-2 bg-surface-2">
-            <span className={labelClass}>Total</span>
-            <span className="text-[14px] font-bold text-primary tabular-nums">{formatInr(total)}</span>
+            <span className={labelClass}>{discountLine ? 'Total' : totalLabel}</span>
+            <span className="text-[14px] font-bold text-primary tabular-nums">
+              {formatInr(Math.max(0, total - (discountLine?.amount ?? 0)))}
+            </span>
           </div>
         </div>
       )}
