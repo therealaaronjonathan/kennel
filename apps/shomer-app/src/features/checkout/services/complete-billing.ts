@@ -1,8 +1,18 @@
-import { doc, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import {
+  collection,
+  doc,
+  getDocs,
+  query,
+  serverTimestamp,
+  where,
+  writeBatch,
+  type DocumentData,
+} from 'firebase/firestore'
+import { auth, db } from '@/lib/firebase'
 import { amountDue, serviceSubtotal, type DiscountApprover, type VisitDiscount } from './discount'
 import { discountVisitFields, stageDiscountApproval } from './save-discount'
-import { stagePaymentLedger, type LedgerContext } from './payment-ledger'
+import { stagePaymentLedger, type LedgerContext, type PaymentRecord } from './payment-ledger'
+import { planMethodReclass, type LedgerMethod, type LedgerSlice } from './payment-ledger-reclass'
 
 export type PaymentMethod = 'cash' | 'card' | 'upi'
 
@@ -119,15 +129,30 @@ export async function recordPayments(
   await batch.commit()
 }
 
+function asLedgerMethod(value: unknown): LedgerMethod | null {
+  return value === 'cash' || value === 'card' || value === 'upi' ? value : null
+}
+
+function ledgerSnapshot(data: DocumentData, visitId: string): Omit<PaymentRecord, 'amount' | 'method' | 'date' | 'recordedBy'> {
+  return {
+    visitId: typeof data.visitId === 'string' ? data.visitId : visitId,
+    petId: typeof data.petId === 'string' ? data.petId : '',
+    ownerId: typeof data.ownerId === 'string' ? data.ownerId : '',
+    petName: typeof data.petName === 'string' ? data.petName : '',
+    ownerName: typeof data.ownerName === 'string' ? data.ownerName : '',
+    tokenDisplay: typeof data.tokenDisplay === 'string' ? data.tokenDisplay : '',
+    visitDate: typeof data.visitDate === 'string' ? data.visitDate : '',
+    source: data.source === 'backfill' ? 'backfill' : 'checkout',
+  }
+}
+
 /**
  * Update payments on an already-billed visit. Sum must equal billAmount.
  * Status stays 'billed', billedAt is preserved.
  *
- * Deliberately does NOT write payment-ledger rows: the total is unchanged
- * (no money moved), so this is a method-label correction, not a collection
- * event. Writing today-dated deltas here would distort the daily tally with
- * money that physically arrived earlier. The ledger stays the record of when
- * money actually came in.
+ * The visit and the payment ledger commit together. The ledger rows for this
+ * visit are rewritten so their methods match the new split. Each day's net
+ * amount stays on that day, so Total Earned does not move and By Method does.
  */
 export async function updatePayments(
   clinicId: string,
@@ -143,12 +168,38 @@ export async function updatePayments(
     throw new Error('Payments must add up to the bill total.')
   }
 
-  await updateDoc(
-    doc(db, `clinics/${clinicId}/branches/${branchId}/visits/${visitId}`),
-    {
-      payments: cleaned,
-      amountPaid,
-      updatedAt: serverTimestamp(),
-    },
-  )
+  const paymentsRef = collection(db, `clinics/${clinicId}/branches/${branchId}/payments`)
+  const existingSnap = await getDocs(query(paymentsRef, where('visitId', '==', visitId)))
+  const slices: LedgerSlice[] = []
+  for (const row of existingSnap.docs) {
+    const data = row.data()
+    const method = asLedgerMethod(data.method)
+    if (!method || typeof data.amount !== 'number' || typeof data.date !== 'string') continue
+    slices.push({ id: row.id, date: data.date, amount: data.amount, method })
+  }
+  const plan = planMethodReclass(slices, cleaned)
+  const template = existingSnap.docs[0]?.data()
+
+  const batch = writeBatch(db)
+  batch.update(doc(db, `clinics/${clinicId}/branches/${branchId}/visits/${visitId}`), {
+    payments: cleaned,
+    amountPaid,
+    updatedAt: serverTimestamp(),
+  })
+  if (plan.ok && plan.changed && template) {
+    const snapshot = ledgerSnapshot(template, visitId)
+    const recordedBy = auth.currentUser?.uid ?? 'unknown'
+    for (const id of plan.deleteIds) batch.delete(doc(paymentsRef, id))
+    for (const row of plan.rows) {
+      batch.set(doc(paymentsRef), {
+        ...snapshot,
+        amount: row.amount,
+        method: row.method,
+        date: row.date,
+        recordedBy,
+        recordedAt: serverTimestamp(),
+      })
+    }
+  }
+  await batch.commit()
 }
