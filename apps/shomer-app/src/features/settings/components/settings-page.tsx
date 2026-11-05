@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { Plus, Trash2, RotateCcw, ArrowLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { CatalogEditButton, CatalogEditForm } from './catalog-inline-edit'
 import { useClinic } from '@/features/clinic'
+import { OverdueVisitsTab } from './overdue-visits-tab'
 import { useDutyRoster } from '../services/use-duty-roster'
 import { setDoctorOnDuty } from '../services/duty-roster-service'
 import { useDoctors } from '@/features/checkin/services/use-doctors'
@@ -17,11 +19,12 @@ import {
   setClinicMedicineActive,
   addClinicService,
   setClinicServiceActive,
+  updateCatalogEntry,
   MEDICINE_TYPES,
   type MedicineType,
 } from '../services/clinic-lists-service'
 
-type Tab = 'duty' | 'diagnoses' | 'medicines' | 'services'
+type Tab = 'duty' | 'diagnoses' | 'medicines' | 'services' | 'overdue'
 
 const labelClass = 'text-[10px] font-semibold uppercase tracking-[0.08em] text-muted'
 const inputClass =
@@ -140,6 +143,9 @@ function DiagnosesTab({ clinicId }: { clinicId: string }) {
   const [filter, setFilter] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
 
   const activeItems = items.filter((i) => i.isActive)
   const filtered = activeItems.filter((i) => i.name.toLowerCase().includes(filter.toLowerCase()))
@@ -163,6 +169,19 @@ function DiagnosesTab({ clinicId }: { clinicId: string }) {
       setConfirmDeleteId(null)
     } finally {
       setDeleting(false)
+    }
+  }
+
+  async function handleSave(id: string, nextName: string) {
+    setSavingEdit(true)
+    setEditError(null)
+    try {
+      await updateCatalogEntry(`clinics/${clinicId}/diagnosisCatalog`, id, { name: nextName })
+      setEditingId(null)
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Could not save.')
+    } finally {
+      setSavingEdit(false)
     }
   }
 
@@ -210,8 +229,23 @@ function DiagnosesTab({ clinicId }: { clinicId: string }) {
           {filtered.map((item) => (
             <div
               key={item.id}
-              className="flex items-center justify-between px-4 py-3 bg-surface transition-colors"
+              className="flex items-center justify-between gap-3 px-4 py-3 bg-surface transition-colors"
             >
+              {editingId === item.id ? (
+                <CatalogEditForm
+                  initialName={item.name}
+                  saving={savingEdit}
+                  error={editError}
+                  onCancel={() => {
+                    if (!savingEdit) {
+                      setEditingId(null)
+                      setEditError(null)
+                    }
+                  }}
+                  onSave={(nextName) => handleSave(item.id, nextName)}
+                />
+              ) : (
+              <>
               <span className="text-[13px] text-foreground">{item.name}</span>
               {confirmDeleteId === item.id ? (
                 <div className="flex items-center gap-2">
@@ -234,13 +268,25 @@ function DiagnosesTab({ clinicId }: { clinicId: string }) {
                   </button>
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setConfirmDeleteId(item.id)}
-                  className="flex items-center gap-1.5 rounded-[3px] px-2.5 py-1 text-[11px] font-semibold text-danger hover:bg-danger/10 transition-colors"
-                >
-                  <Trash2 size={11} /> Delete
-                </button>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <CatalogEditButton
+                    name={item.name}
+                    onClick={() => {
+                      setConfirmDeleteId(null)
+                      setEditError(null)
+                      setEditingId(item.id)
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteId(item.id)}
+                    className="flex items-center gap-1.5 rounded-[3px] px-2.5 py-1 text-[11px] font-semibold text-danger hover:bg-danger/10 transition-colors"
+                  >
+                    <Trash2 size={11} /> Delete
+                  </button>
+                </div>
+              )}
+              </>
               )}
             </div>
           ))}
@@ -258,6 +304,9 @@ function MedicinesTab({ clinicId }: { clinicId: string }) {
   const [type, setType] = useState<MedicineType>('tablet')
   const [adding, setAdding] = useState(false)
   const [filter, setFilter] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
 
   const filtered = items.filter((i) => i.name.toLowerCase().includes(filter.toLowerCase()))
 
@@ -276,6 +325,19 @@ function MedicinesTab({ clinicId }: { clinicId: string }) {
 
   async function toggle(id: string, current: boolean) {
     await setClinicMedicineActive(clinicId, id, !current)
+  }
+
+  async function handleSave(id: string, nextName: string) {
+    setSavingEdit(true)
+    setEditError(null)
+    try {
+      await updateCatalogEntry(`clinics/${clinicId}/medicinesCatalog`, id, { name: nextName })
+      setEditingId(null)
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Could not save.')
+    } finally {
+      setSavingEdit(false)
+    }
   }
 
   return (
@@ -340,26 +402,52 @@ function MedicinesTab({ clinicId }: { clinicId: string }) {
           {filtered.map((item) => (
             <div
               key={item.id}
-              className={cn('flex items-center justify-between px-4 py-3 bg-surface', !item.isActive && 'opacity-40')}
+              className={cn('flex items-center justify-between gap-3 px-4 py-3 bg-surface', !item.isActive && editingId !== item.id && 'opacity-40')}
             >
-              <span className="flex items-center gap-2 min-w-0">
-                <span className={cn('text-[13px] text-foreground truncate', !item.isActive && 'line-through text-muted')}>
-                  {item.name}
-                </span>
-                <span className="flex-shrink-0 rounded-[3px] bg-surface-2 border border-border-base px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-muted">
-                  {item.type}
-                </span>
-              </span>
-              <button
-                type="button"
-                onClick={() => toggle(item.id, item.isActive)}
-                className={cn(
-                  'flex items-center gap-1.5 rounded-[3px] px-2.5 py-1 text-[11px] font-semibold transition-colors',
-                  item.isActive ? 'text-danger hover:bg-danger/10' : 'text-success hover:bg-success/10',
-                )}
-              >
-                {item.isActive ? <><Trash2 size={11} /> Remove</> : <><RotateCcw size={11} /> Restore</>}
-              </button>
+              {editingId === item.id ? (
+                <CatalogEditForm
+                  initialName={item.name}
+                  saving={savingEdit}
+                  error={editError}
+                  onCancel={() => {
+                    if (!savingEdit) {
+                      setEditingId(null)
+                      setEditError(null)
+                    }
+                  }}
+                  onSave={(nextName) => handleSave(item.id, nextName)}
+                />
+              ) : (
+                <>
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span className={cn('text-[13px] text-foreground truncate', !item.isActive && 'line-through text-muted')}>
+                      {item.name}
+                    </span>
+                    <span className="flex-shrink-0 rounded-[3px] bg-surface-2 border border-border-base px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-muted">
+                      {item.type}
+                    </span>
+                  </span>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <CatalogEditButton
+                      name={item.name}
+                      onClick={() => {
+                        setEditError(null)
+                        setEditingId(item.id)
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggle(item.id, item.isActive)}
+                      className={cn(
+                        'flex items-center gap-1.5 rounded-[3px] px-2.5 py-1 text-[11px] font-semibold transition-colors',
+                        item.isActive ? 'text-danger hover:bg-danger/10' : 'text-success hover:bg-success/10',
+                      )}
+                    >
+                      {item.isActive ? <><Trash2 size={11} /> Remove</> : <><RotateCcw size={11} /> Restore</>}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           ))}
         </div>
@@ -376,6 +464,9 @@ function ServicesTab({ clinicId }: { clinicId: string }) {
   const [price, setPrice] = useState('')
   const [adding, setAdding] = useState(false)
   const [filter, setFilter] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
 
   const filtered = items.filter((i) => i.name.toLowerCase().includes(filter.toLowerCase()))
 
@@ -395,6 +486,19 @@ function ServicesTab({ clinicId }: { clinicId: string }) {
 
   async function toggle(id: string, current: boolean) {
     await setClinicServiceActive(clinicId, id, !current)
+  }
+
+  async function handleSave(id: string, nextName: string, nextPrice?: number) {
+    setSavingEdit(true)
+    setEditError(null)
+    try {
+      await updateCatalogEntry(`clinics/${clinicId}/services`, id, { name: nextName, price: nextPrice })
+      setEditingId(null)
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Could not save.')
+    } finally {
+      setSavingEdit(false)
+    }
   }
 
   return (
@@ -452,24 +556,51 @@ function ServicesTab({ clinicId }: { clinicId: string }) {
           {filtered.map((item) => (
             <div
               key={item.id}
-              className={cn('flex items-center justify-between px-4 py-3 bg-surface', !item.isActive && 'opacity-40')}
+              className={cn('flex items-center justify-between gap-3 px-4 py-3 bg-surface', !item.isActive && editingId !== item.id && 'opacity-40')}
             >
-              <div className="flex items-center gap-4">
-                <span className={cn('text-[13px] text-foreground', !item.isActive && 'line-through text-muted')}>
-                  {item.name}
-                </span>
-                <span className="text-[12px] font-semibold text-muted">{formatInr(item.price)}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => toggle(item.id, item.isActive)}
-                className={cn(
-                  'flex items-center gap-1.5 rounded-[3px] px-2.5 py-1 text-[11px] font-semibold transition-colors',
-                  item.isActive ? 'text-danger hover:bg-danger/10' : 'text-success hover:bg-success/10',
-                )}
-              >
-                {item.isActive ? <><Trash2 size={11} /> Remove</> : <><RotateCcw size={11} /> Restore</>}
-              </button>
+              {editingId === item.id ? (
+                <CatalogEditForm
+                  initialName={item.name}
+                  initialPrice={item.price}
+                  saving={savingEdit}
+                  error={editError}
+                  onCancel={() => {
+                    if (!savingEdit) {
+                      setEditingId(null)
+                      setEditError(null)
+                    }
+                  }}
+                  onSave={(nextName, nextPrice) => handleSave(item.id, nextName, nextPrice)}
+                />
+              ) : (
+                <>
+                  <div className="flex items-center gap-4 min-w-0">
+                    <span className={cn('text-[13px] text-foreground', !item.isActive && 'line-through text-muted')}>
+                      {item.name}
+                    </span>
+                    <span className="text-[12px] font-semibold text-muted">{formatInr(item.price)}</span>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <CatalogEditButton
+                      name={item.name}
+                      onClick={() => {
+                        setEditError(null)
+                        setEditingId(item.id)
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggle(item.id, item.isActive)}
+                      className={cn(
+                        'flex items-center gap-1.5 rounded-[3px] px-2.5 py-1 text-[11px] font-semibold transition-colors',
+                        item.isActive ? 'text-danger hover:bg-danger/10' : 'text-success hover:bg-success/10',
+                      )}
+                    >
+                      {item.isActive ? <><Trash2 size={11} /> Remove</> : <><RotateCcw size={11} /> Restore</>}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           ))}
         </div>
@@ -485,7 +616,13 @@ interface SettingsPageProps {
 }
 
 export function SettingsPage({ onClose }: SettingsPageProps = {}) {
-  const { clinicId, branchId, loading: clinicLoading, error: clinicError } = useClinic()
+  const {
+    clinicId,
+    branchId,
+    role,
+    loading: clinicLoading,
+    error: clinicError,
+  } = useClinic()
   const [activeTab, setActiveTab] = useState<Tab>('duty')
 
   if (clinicLoading) {
@@ -510,6 +647,9 @@ export function SettingsPage({ onClose }: SettingsPageProps = {}) {
     { key: 'medicines', label: 'Medicines' },
     { key: 'services', label: 'Services' },
   ]
+  if (role === 'doctor') {
+    tabs.push({ key: 'overdue', label: 'Overdue Visit' })
+  }
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -559,6 +699,9 @@ export function SettingsPage({ onClose }: SettingsPageProps = {}) {
           {activeTab === 'diagnoses' && <DiagnosesTab clinicId={clinicId} />}
           {activeTab === 'medicines' && <MedicinesTab clinicId={clinicId} />}
           {activeTab === 'services' && <ServicesTab clinicId={clinicId} />}
+          {activeTab === 'overdue' && role === 'doctor' && (
+            <OverdueVisitsTab clinicId={clinicId} branchId={branchId} />
+          )}
         </div>
       </div>
     </div>

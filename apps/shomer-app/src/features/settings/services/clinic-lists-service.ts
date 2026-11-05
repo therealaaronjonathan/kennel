@@ -74,3 +74,25 @@ export async function setClinicServiceActive(
     updatedAt: serverTimestamp(),
   })
 }
+
+/**
+ * Rename a catalog row, and replace its price when one is passed.
+ * Visits keep the name and price copied onto them when the line was added.
+ */
+export async function updateCatalogEntry(
+  collectionPath: string,
+  id: string,
+  fields: { name: string; price?: number },
+): Promise<void> {
+  const name = fields.name.trim()
+  if (!name) throw new Error('Enter a name.')
+  const data: Record<string, unknown> = {
+    name,
+    updatedAt: serverTimestamp(),
+  }
+  if (fields.price !== undefined) {
+    if (!Number.isFinite(fields.price) || fields.price < 0) throw new Error('Enter a price.')
+    data.price = Math.round(fields.price)
+  }
+  await updateDoc(doc(db, `${collectionPath}/${id}`), data)
+}
