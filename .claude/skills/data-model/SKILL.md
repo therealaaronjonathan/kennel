@@ -21,7 +21,7 @@ clinics/{clinicId}
 ├── branches/{branchId}
 │   ├── tokenCounters/{date}               # one doc per day — branch-wide token counter
 │   ├── billingDefaults/{visitId}          # watch-list of explicitly pinned unpaid bills
-│   ├── payments/{paymentId}               # immutable money-movement ledger (per-day tally)
+│   ├── payments/{paymentId}               # money-movement ledger (per-day tally)
 │   ├── discountApprovals/{visitId}        # staff-only: who approved a visit discount
 │   └── visits/{visitId}                   # flat under branch for cross-cutting queries
 │       ├── diagnoses/{diagnosisId}        # one doc per selected diagnosis
@@ -226,6 +226,8 @@ interface ClinicService {
 
 **`serviceType`**: optional free-text string. Services without it (or with an empty string) are grouped under "General" in the UI accordion. Written by the seeder tool and editable via admin catalog. The UI groups services alphabetically by type with "General" pinned last.
 
+**Catalog edits**: Settings (front desk and the doctor) and Admin catalogs can rename a diagnosis or a medicine, and can change a service or grooming service's name and price. The write updates that catalog document only. A visit keeps the name and price copied onto it when the line was added.
+
 ### GroomingService (collection: `groomingServices`)
 Clinic-level grooming services catalogue. Same shape as regular services.
 
@@ -315,7 +317,7 @@ interface ConsultationDraft {
 interface ServiceLineItem {
   serviceId: string
   name: string
-  price: number           // unit price copied from the catalog when the line was added; not edited on the visit
+  price: number           // unit price. Starts as the catalog price; the doctor or front desk can change it on this visit
   quantity: number        // defaults to 1; line total = quantity × price
 }
 
@@ -333,7 +335,7 @@ interface PaymentEntry {
 
 **Status flow**: `waiting` → `in-progress` → `completed` → `billed`
 
-**Discount**: one optional discount per visit, on the whole service total. The desk chooses rupees or a percent. `discount.amount` is the rupees taken off. `billAmount` is the amount due after that. The approver's name is not on the visit, because the visit is world-readable from the summary link. It lives in `discountApprovals/{visitId}` (`approvedById`, `approvedByName`, `approvedByRole`), which the authenticated catch-all covers and the summary page does not read. A discount can be changed until the visit is fully paid. Line prices on a visit are fixed.
+**Discount**: one optional discount per visit, on the whole service total. The desk chooses rupees or a percent. `discount.amount` is the rupees taken off. `billAmount` is the amount due after that. The approver's name is not on the visit, because the visit is world-readable from the summary link. It lives in `discountApprovals/{visitId}` (`approvedById`, `approvedByName`, `approvedByRole`), which the authenticated catch-all covers and the summary page does not read. A discount can be changed until the visit is fully paid. The discount is taken off the visit line prices, which the doctor or front desk can change.
 
 **Billing & partial payments**: at checkout the receptionist records one or more `PaymentEntry` rows.
 - `sum(payments) === billAmount` → status flips to `billed`, `billedAt` set.
@@ -436,8 +438,9 @@ interface PaymentRecord {
 visit's previously persisted `payments[]` and the new `payments[]`, and stages one ledger
 row per non-zero delta (dated today) onto the SAME `writeBatch` as the visit update — so
 the visit doc and ledger commit atomically. `updatePayments()` (editing an already-billed
-split) does NOT write ledger rows: the total is unchanged, so it's a method-label
-correction, not a money movement.
+split from the queue) rewrites this visit's ledger rows in the same batch. The new method
+totals match `payments[]`. Each day's net amount stays on that day, so Total Earned does
+not move and By Method does. It does not post a fresh delta dated today.
 
 **Invariant**: `sum(payments where visitId == V) === visit.amountPaid`. The visit doc
 stays the source of truth for per-visit payment STATUS (`amountPaid` / `status`); the

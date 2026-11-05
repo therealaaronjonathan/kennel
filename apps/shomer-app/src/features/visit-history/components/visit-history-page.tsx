@@ -14,6 +14,7 @@ import {
   type HistoryVisit,
 } from '../services/use-visit-history'
 import { usePaymentLedger } from '../services/use-payment-ledger'
+import { useSettledOverdues } from '../services/use-settled-overdues'
 import {
   HistoryFilters,
   type DatePreset,
@@ -113,6 +114,122 @@ function toCompletedVisit(v: HistoryVisit): CompletedVisit {
   }
 }
 
+function visitMatchesFilters(
+  v: HistoryVisit,
+  search: string,
+  doctorFilter: string,
+  paymentFilter: PaymentFilter,
+  selectedServiceIds: string[],
+): boolean {
+  if (v.status !== 'billed' && v.status !== 'completed') return false
+  if (doctorFilter !== 'all' && v.doctorId !== doctorFilter) return false
+  if (paymentFilter === 'split') {
+    if ((v.payments?.length ?? 0) <= 1) return false
+  } else if (paymentFilter === 'partial') {
+    const paid = v.amountPaid ?? 0
+    const total = v.billAmount ?? 0
+    if (!(paid > 0 && paid < total)) return false
+  } else if (paymentFilter !== 'all') {
+    if (!(v.payments ?? []).some((p) => p.method === paymentFilter && p.amount > 0)) {
+      return false
+    }
+  }
+  if (selectedServiceIds.length > 0) {
+    const has = (v.services ?? []).some((s) => selectedServiceIds.includes(s.serviceId))
+    if (!has) return false
+  }
+  const needle = search.trim().toLowerCase()
+  if (needle) {
+    const hay = `${v.petName} ${v.ownerName} ${v.tokenDisplay}`.toLowerCase()
+    if (!hay.includes(needle)) return false
+  }
+  return true
+}
+
+function formatVisitDay(date: string): string {
+  const [y, m, d] = date.split('-').map(Number)
+  if (!y || !m || !d) return date || '—'
+  return new Date(y, m - 1, d).toLocaleDateString([], {
+    day: '2-digit',
+    month: 'short',
+  })
+}
+
+function formatHistoryTime(visit: HistoryVisit): string {
+  const ts = visit.billedAt ?? visit.updatedAt ?? visit.createdAt
+  return ts
+    ? ts.toDate().toLocaleString([], {
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '—'
+}
+
+function HistoryColumnHeaders() {
+  return (
+    <div className={cn('grid gap-3 px-5 py-2 border-b border-border-base flex-shrink-0', COLS)}>
+      {['Token', 'Pet', 'Owner', 'Doctor', 'Status', 'Payment', 'Amount', 'Time'].map((h) => (
+        <span
+          key={h}
+          className={cn(
+            'text-[10px] font-semibold uppercase tracking-[0.08em] text-muted',
+            h === 'Amount' && 'text-right',
+          )}
+        >
+          {h}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function HistoryVisitRow({
+  visit,
+  selected,
+  timeLabel,
+  onSelect,
+}: {
+  visit: HistoryVisit
+  selected: boolean
+  timeLabel: string
+  onSelect: () => void
+}) {
+  const isDimmed = visit.status === 'cancelled'
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        onSelect()
+      }}
+      className={cn(
+        'w-full grid gap-3 px-5 py-3 text-left border-b border-border-base transition-colors',
+        COLS,
+        selected ? 'bg-surface-2 border-l-2 border-l-primary' : 'hover:bg-surface',
+        isDimmed && 'opacity-50',
+      )}
+    >
+      <span
+        className={cn(
+          'text-[12px] font-bold truncate',
+          selected ? 'text-primary' : 'text-muted',
+        )}
+      >
+        {visit.tokenDisplay}
+      </span>
+      <span className="text-[12px] font-semibold text-foreground truncate">{visit.petName}</span>
+      <span className="text-[12px] text-muted truncate">{visit.ownerName}</span>
+      <span className="text-[12px] text-muted truncate">{visit.doctorName}</span>
+      <StatusBadge status={visit.status} />
+      <PaymentCell visit={visit} />
+      <AmountCell visit={visit} />
+      <span className="text-[11px] text-muted tabular-nums truncate">{timeLabel}</span>
+    </button>
+  )
+}
+
 function todayStr(): string {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -188,6 +305,18 @@ export function VisitHistoryPage() {
     selectedDoctorId,
   )
 
+  const {
+    visits: overdueVisits,
+    loading: overdueLoading,
+    error: overdueError,
+  } = useSettledOverdues(
+    clinicId,
+    branchId,
+    fromDate,
+    toDate,
+    selectedDoctorId,
+  )
+
   // Reset row selection when range or doctor changes
   useEffect(() => {
     setSelectedId(null)
@@ -251,7 +380,7 @@ export function VisitHistoryPage() {
     for (const d of branchDoctors) {
       if (d.id) byId.set(d.id, d.name)
     }
-    for (const v of visits) {
+    for (const v of [...visits, ...overdueVisits]) {
       if (v.doctorId && !byId.has(v.doctorId)) {
         byId.set(v.doctorId, v.doctorName || 'Unknown')
       }
@@ -262,7 +391,7 @@ export function VisitHistoryPage() {
     return Array.from(byId.entries())
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name))
-  }, [branchDoctors, visits, doctorFilter])
+  }, [branchDoctors, visits, overdueVisits, doctorFilter])
 
   const discountTotal = useMemo(
     () =>
@@ -272,41 +401,29 @@ export function VisitHistoryPage() {
     [visits],
   )
 
-  const filteredVisits = useMemo(() => {
-    const needle = search.trim().toLowerCase()
-    return visits.filter((v) => {
-      // exclude waiting/in-progress/cancelled — history is for finished visits
-      if (v.status !== 'billed' && v.status !== 'completed') return false
-      if (doctorFilter !== 'all' && v.doctorId !== doctorFilter) return false
-      // payment filter
-      if (paymentFilter === 'split') {
-        if ((v.payments?.length ?? 0) <= 1) return false
-      } else if (paymentFilter === 'partial') {
-        const paid = v.amountPaid ?? 0
-        const total = v.billAmount ?? 0
-        if (!(paid > 0 && paid < total)) return false
-      } else if (paymentFilter !== 'all') {
-        if (!(v.payments ?? []).some((p) => p.method === paymentFilter && p.amount > 0)) {
-          return false
-        }
-      }
-      // service filter
-      if (selectedServiceIds.length > 0) {
-        const has = (v.services ?? []).some((s) =>
-          selectedServiceIds.includes(s.serviceId),
-        )
-        if (!has) return false
-      }
-      // search
-      if (needle) {
-        const hay = `${v.petName} ${v.ownerName} ${v.tokenDisplay}`.toLowerCase()
-        if (!hay.includes(needle)) return false
-      }
-      return true
-    })
-  }, [visits, doctorFilter, paymentFilter, selectedServiceIds, search])
+  const filteredVisits = useMemo(
+    () =>
+      visits.filter((v) =>
+        visitMatchesFilters(v, search, doctorFilter, paymentFilter, selectedServiceIds),
+      ),
+    [visits, doctorFilter, paymentFilter, selectedServiceIds, search],
+  )
 
-  const selectedVisit = filteredVisits.find((v) => v.id === selectedId) ?? null
+  const filteredOverdues = useMemo(
+    () =>
+      overdueVisits.filter((v) =>
+        visitMatchesFilters(v, search, doctorFilter, paymentFilter, selectedServiceIds),
+      ),
+    [overdueVisits, doctorFilter, paymentFilter, selectedServiceIds, search],
+  )
+
+  const selectedVisit =
+    filteredVisits.find((v) => v.id === selectedId) ??
+    filteredOverdues.find((v) => v.id === selectedId) ??
+    null
+
+  const listEmpty = filteredVisits.length === 0 && filteredOverdues.length === 0
+  const showListLoading = loading || (listEmpty && overdueLoading)
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -315,10 +432,13 @@ export function VisitHistoryPage() {
         <h1 className="font-display text-[18px] font-bold text-foreground leading-none">
           Visit History
         </h1>
-        {!loading && (
+        {!showListLoading && (
           <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-[11px] font-bold text-muted">
-            {filteredVisits.length}
-            {filteredVisits.length === visits.length ? '' : ` of ${visits.length}`}
+            {filteredVisits.length + filteredOverdues.length}
+            {filteredVisits.length === visits.length &&
+            filteredOverdues.length === overdueVisits.length
+              ? ''
+              : ` of ${visits.length + overdueVisits.length}`}
           </span>
         )}
       </header>
@@ -348,28 +468,14 @@ export function VisitHistoryPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* Left: list */}
         <div className="flex flex-col overflow-hidden w-full">
-          {!loading && filteredVisits.length > 0 && (
-            <div className={cn('grid gap-3 px-5 py-2 border-b border-border-base flex-shrink-0', COLS)}>
-              {['Token', 'Pet', 'Owner', 'Doctor', 'Status', 'Payment', 'Amount', 'Time'].map((h) => (
-                <span
-                  key={h}
-                  className={cn(
-                    'text-[10px] font-semibold uppercase tracking-[0.08em] text-muted',
-                    h === 'Amount' && 'text-right',
-                  )}
-                >
-                  {h}
-                </span>
-              ))}
-            </div>
-          )}
+          {!showListLoading && !listEmpty && <HistoryColumnHeaders />}
 
           <div className="flex-1 overflow-y-auto">
-            {loading ? (
+            {showListLoading ? (
               <p className="px-5 py-8 text-[12px] text-muted">Loading…</p>
             ) : error ? (
               <p className="px-5 py-8 text-[12px] text-danger">{error}</p>
-            ) : filteredVisits.length === 0 ? (
+            ) : listEmpty ? (
               <div className="flex flex-col items-center justify-center py-20 gap-2">
                 <span className="text-[28px]">🐾</span>
                 <p className="text-[13px] font-semibold text-muted">
@@ -378,56 +484,51 @@ export function VisitHistoryPage() {
               </div>
             ) : (
               <>
-                {filteredVisits.map((visit) => {
-                  const isSelected = selectedId === visit.id
-                  const isDimmed = visit.status === 'cancelled'
-                  const ts = visit.billedAt ?? visit.updatedAt ?? visit.createdAt
-                  const time = ts
-                    ? ts.toDate().toLocaleString([], {
-                        day: '2-digit',
-                        month: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })
-                    : '—'
+                {filteredVisits.length > 0 && filteredOverdues.length > 0 && (
+                  <div className="px-5 py-2 border-b border-border-base bg-surface">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-muted">
+                      Visits · {filteredVisits.length}
+                    </p>
+                  </div>
+                )}
+                {filteredVisits.map((visit) => (
+                  <HistoryVisitRow
+                    key={visit.id}
+                    visit={visit}
+                    selected={selectedId === visit.id}
+                    timeLabel={formatHistoryTime(visit)}
+                    onSelect={() =>
+                      setSelectedId(selectedId === visit.id ? null : visit.id)
+                    }
+                  />
+                ))}
 
-                  return (
-                    <button
-                      key={visit.id}
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setSelectedId(isSelected ? null : visit.id)
-                      }}
-                      className={cn(
-                        'w-full grid gap-3 px-5 py-3 text-left border-b border-border-base transition-colors',
-                        COLS,
-                        isSelected
-                          ? 'bg-surface-2 border-l-2 border-l-primary'
-                          : 'hover:bg-surface',
-                        isDimmed && 'opacity-50',
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          'text-[12px] font-bold truncate',
-                          isSelected ? 'text-primary' : 'text-muted',
-                        )}
-                      >
-                        {visit.tokenDisplay}
-                      </span>
-                      <span className="text-[12px] font-semibold text-foreground truncate">
-                        {visit.petName}
-                      </span>
-                      <span className="text-[12px] text-muted truncate">{visit.ownerName}</span>
-                      <span className="text-[12px] text-muted truncate">{visit.doctorName}</span>
-                      <StatusBadge status={visit.status} />
-                      <PaymentCell visit={visit} />
-                      <AmountCell visit={visit} />
-                      <span className="text-[11px] text-muted tabular-nums truncate">{time}</span>
-                    </button>
-                  )
-                })}
+                {overdueLoading && filteredOverdues.length === 0 && (
+                  <p className="px-5 py-4 text-[12px] text-muted">Loading settled overdues…</p>
+                )}
+                {overdueError && (
+                  <p className="px-5 py-4 text-[12px] text-danger">{overdueError}</p>
+                )}
+                {filteredOverdues.length > 0 && (
+                  <>
+                    <div className="px-5 py-2 border-b border-border-base bg-surface-2">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-muted">
+                        Settled Overdues · {filteredOverdues.length}
+                      </p>
+                    </div>
+                    {filteredOverdues.map((visit) => (
+                      <HistoryVisitRow
+                        key={visit.id}
+                        visit={visit}
+                        selected={selectedId === visit.id}
+                        timeLabel={formatVisitDay(visit.date)}
+                        onSelect={() =>
+                          setSelectedId(selectedId === visit.id ? null : visit.id)
+                        }
+                      />
+                    ))}
+                  </>
+                )}
               </>
             )}
           </div>
@@ -444,6 +545,7 @@ export function VisitHistoryPage() {
               clinicId={clinicId}
               branchId={branchId}
               onToast={() => {}}
+              canPrintBill
             />
           )}
         </VisitDetailDrawer>

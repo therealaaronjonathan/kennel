@@ -5,6 +5,8 @@ import {
   orderBy,
   query,
   where,
+  type DocumentData,
+  type QueryDocumentSnapshot,
   type Timestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
@@ -40,6 +42,43 @@ export interface HistoryVisit {
   billedAt: Timestamp | null
   updatedAt: Timestamp | null
   createdAt: Timestamp | null
+}
+
+export function historyVisitFromDoc(
+  d: QueryDocumentSnapshot<DocumentData>,
+): HistoryVisit {
+  const data = d.data()
+  const payments = Array.isArray(data.payments)
+    ? (data.payments as PaymentEntry[])
+    : undefined
+  return {
+    id: d.id,
+    tokenDisplay: data.tokenDisplay ?? '',
+    petName: data.petName ?? '',
+    ownerName: data.ownerName ?? '',
+    ownerId: data.ownerId ?? '',
+    petId: data.petId ?? '',
+    doctorName: data.doctorName ?? '',
+    doctorId: data.doctorId ?? '',
+    status: data.status ?? 'waiting',
+    isEmergency: !!data.isEmergency,
+    complaints: (data.complaints as string[]) ?? [],
+    otherComplaintText: (data.otherComplaintText as string) || undefined,
+    consultationNotes: (data.consultationNotes as string) || undefined,
+    services: data.services ?? undefined,
+    billAmount: typeof data.billAmount === 'number' ? data.billAmount : undefined,
+    discount: parseVisitDiscount(data.discount),
+    payments,
+    amountPaid:
+      typeof data.amountPaid === 'number' ? data.amountPaid : sumPayments(payments),
+    petWeightKg: typeof data.petWeightKg === 'number' ? data.petWeightKg : undefined,
+    petTemperatureF:
+      typeof data.petTemperatureF === 'number' ? data.petTemperatureF : undefined,
+    date: data.date ?? '',
+    billedAt: (data.billedAt as Timestamp | undefined) ?? null,
+    updatedAt: (data.updatedAt as Timestamp | undefined) ?? null,
+    createdAt: (data.createdAt as Timestamp | undefined) ?? null,
+  }
 }
 
 export function useVisitHistory(
@@ -84,41 +123,7 @@ export function useVisitHistory(
     getDocs(q)
       .then((snap) => {
         if (cancelled) return
-        const all = snap.docs.map((d) => {
-          const data = d.data()
-          const payments = Array.isArray(data.payments)
-            ? (data.payments as PaymentEntry[])
-            : undefined
-          return {
-            id: d.id,
-            tokenDisplay: data.tokenDisplay ?? '',
-            petName: data.petName ?? '',
-            ownerName: data.ownerName ?? '',
-            ownerId: data.ownerId ?? '',
-            petId: data.petId ?? '',
-            doctorName: data.doctorName ?? '',
-            doctorId: data.doctorId ?? '',
-            status: data.status ?? 'waiting',
-            isEmergency: !!data.isEmergency,
-            complaints: (data.complaints as string[]) ?? [],
-            otherComplaintText: (data.otherComplaintText as string) || undefined,
-            consultationNotes: (data.consultationNotes as string) || undefined,
-            services: data.services ?? undefined,
-            billAmount: typeof data.billAmount === 'number' ? data.billAmount : undefined,
-            discount: parseVisitDiscount(data.discount),
-            payments,
-            amountPaid:
-              typeof data.amountPaid === 'number'
-                ? data.amountPaid
-                : sumPayments(payments),
-            petWeightKg: typeof data.petWeightKg === 'number' ? data.petWeightKg : undefined,
-            petTemperatureF: typeof data.petTemperatureF === 'number' ? data.petTemperatureF : undefined,
-            date: data.date ?? '',
-            billedAt: (data.billedAt as Timestamp | undefined) ?? null,
-            updatedAt: (data.updatedAt as Timestamp | undefined) ?? null,
-            createdAt: (data.createdAt as Timestamp | undefined) ?? null,
-          } as HistoryVisit
-        })
+        const all = snap.docs.map(historyVisitFromDoc)
 
         // Sort by recency: billedAt > updatedAt > createdAt
         all.sort((a, b) => {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { MessageCircle, CheckCheck, Pill, CheckCircle, Syringe, Pin, Pencil, Phone, Copy, Check } from 'lucide-react'
+import { MessageCircle, CheckCheck, Pill, CheckCircle, Syringe, Pin, Pencil, Phone, Copy, Check, Printer } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
@@ -16,6 +16,7 @@ import { useAuth } from '@/features/auth'
 import { useClinic } from '@/features/clinic'
 import { useCompletedVisits, type CompletedVisit } from '@/features/dashboard/services/use-completed-visits'
 import { useClinicName } from '@/features/clinic/hooks/use-clinic-name'
+import { useBranchAddress } from '@/features/clinic/hooks/use-branch-address'
 import { useClinicServices } from '@/features/vet/services/use-clinic-services'
 import { useCheckoutDetail } from '../services/use-checkout-detail'
 import { useCheckoutDraft } from '../services/use-checkout-draft'
@@ -38,6 +39,7 @@ import {
 import { saveVisitBill } from '../services/save-discount'
 import { useApprovers } from '../services/use-approvers'
 import { useDiscountApproval } from '../services/use-discount-approval'
+import { printCheckoutBill, type CheckoutBill } from '../services/checkout-bill-print'
 
 // ── Toast ────────────────────────────────────────────────────────────────────
 
@@ -77,9 +79,65 @@ interface CheckoutPanelProps {
   branchId: string
   clinicName: string | null
   isDefaulted: boolean
-  onBilled: () => void
+  /** Full payment saved. The page keeps this bill on screen so it can be printed. */
+  onBilled: (bill: CheckoutBill) => void
   onToast: (msg: string) => void
   onToggleDefault: () => void
+}
+
+function BillDonePanel({
+  bill,
+  onDone,
+  onToast,
+}: {
+  bill: CheckoutBill
+  onDone: () => void
+  onToast: (message: string) => void
+}) {
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+        <CheckCircle size={28} className="text-success" />
+        <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+          Bill completed
+        </p>
+        <p className="mt-2 font-display text-[20px] font-bold leading-none text-primary">
+          {bill.token}
+        </p>
+        <p className="mt-2 text-[15px] font-bold text-foreground">{bill.petName}</p>
+        <p className="mt-1 text-[13px] text-muted">
+          {bill.ownerName}
+          {bill.doctorName ? ` · ${bill.doctorName}` : ''}
+        </p>
+        <p className="mt-4 text-[22px] font-bold tabular-nums text-foreground">
+          {formatInr(bill.total)}
+        </p>
+        <p className="mt-6 text-[13px] font-semibold text-foreground">
+          Print this bill for the parent?
+        </p>
+      </div>
+      <div className="flex flex-shrink-0 gap-3 border-t border-border-base px-6 py-4">
+        <button
+          type="button"
+          onClick={onDone}
+          className="flex-1 rounded-[4px] border border-border-base px-4 py-[9px] text-[13px] font-semibold text-foreground transition-colors hover:border-primary hover:text-primary"
+        >
+          Done
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const opened = printCheckoutBill(bill)
+            if (!opened) onToast('Could not open the print bill')
+          }}
+          className="flex flex-1 items-center justify-center gap-2 rounded-[4px] bg-primary px-4 py-[9px] text-[13px] font-semibold text-white transition-opacity hover:opacity-85"
+        >
+          <Printer size={13} />
+          Print bill
+        </button>
+      </div>
+    </div>
+  )
 }
 
 function CheckoutPanel({
@@ -124,7 +182,8 @@ function CheckoutPanel({
 
   // ── Name editing (pet / owner) + phone ────────────────────────────────────
   // Mirrors VisitDetailPanel; see TODOS — these two panels should be consolidated.
-  const { branchIds } = useClinic()
+  const { branchIds, branchName } = useClinic()
+  const branchAddress = useBranchAddress(clinicId, branchId)
   const queryClient = useQueryClient()
   const [copied, setCopied] = useState(false)
   const [editTarget, setEditTarget] = useState<'pet' | 'owner' | null>(null)
@@ -221,8 +280,20 @@ function CheckoutPanel({
       queryClient.invalidateQueries({ queryKey: ['discount-approval', clinicId, branchId, visit.id] })
       const paid = payments.reduce((s, p) => s + p.amount, 0)
       if (paid >= billTotal) {
-        onToast(`${visit.petName} billed — ${formatInr(billTotal)}`)
-        onBilled()
+        onBilled({
+          clinicName: clinicName ?? '',
+          branchName: branchName ?? '',
+          branchAddress,
+          date: visit.date,
+          token: visit.tokenDisplay,
+          petName,
+          ownerName,
+          doctorName: visit.doctorName,
+          services: editedServices,
+          discount: activeDiscount,
+          payments,
+          total: billTotal,
+        })
       } else {
         onToast(
           `${visit.petName} partial — ${formatInr(paid)} of ${formatInr(billTotal)}`,
@@ -402,13 +473,41 @@ function CheckoutPanel({
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <p className={labelClass}>Services &amp; Bill</p>
-                <button
-                  type="button"
-                  onClick={() => setDiscountOpen(true)}
-                  className="rounded-[4px] border border-border-base px-2.5 py-1 text-[11px] font-semibold text-foreground hover:border-primary hover:text-primary transition-colors"
-                >
-                  Add Discount
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={editedServices.length === 0 || !requoted.ok}
+                    onClick={() => {
+                      if (!requoted.ok) return
+                      const opened = printCheckoutBill({
+                        clinicName: clinicName ?? '',
+                        branchName: branchName ?? '',
+                        branchAddress,
+                        date: visit.date,
+                        token: visit.tokenDisplay,
+                        petName,
+                        ownerName,
+                        doctorName: visit.doctorName,
+                        services: editedServices,
+                        discount: activeDiscount,
+                        payments: visit.payments ?? [],
+                        total: billTotal,
+                      })
+                      if (!opened) onToast('Could not open the print bill')
+                    }}
+                    className="flex items-center gap-1.5 rounded-[4px] border border-border-base px-2.5 py-1 text-[11px] font-semibold text-foreground hover:border-primary hover:text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Printer size={11} />
+                    Print
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDiscountOpen(true)}
+                    className="rounded-[4px] border border-border-base px-2.5 py-1 text-[11px] font-semibold text-foreground hover:border-primary hover:text-primary transition-colors"
+                  >
+                    Add Discount
+                  </button>
+                </div>
               </div>
               <ServicesSelect
                 selected={editedServices}
@@ -445,6 +544,7 @@ function CheckoutPanel({
 
       {/* Footer actions */}
       <div className="border-t border-border-base px-6 py-4 flex-shrink-0">
+        <BillPaidDue bill={billTotal} paid={existingPaid} />
         <div className="flex gap-3">
           <button
             type="button"
@@ -611,6 +711,43 @@ function relativeDate(visitDate: string, today: string): string {
   return `${n} days ago`
 }
 
+function BillPaidDue({ bill, paid }: { bill: number; paid: number }) {
+  const due = Math.max(0, bill - paid)
+  return (
+    <div className="mb-3 rounded-[4px] border border-border-base bg-surface px-3 py-2.5 space-y-1">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+          Bill
+        </span>
+        <span className="text-[13px] font-semibold tabular-nums text-foreground">
+          {formatInr(bill)}
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+          Paid
+        </span>
+        <span
+          className={cn(
+            'text-[13px] font-semibold tabular-nums',
+            paid > 0 ? 'text-success' : 'text-muted',
+          )}
+        >
+          {formatInr(paid)}
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+          Due
+        </span>
+        <span className="text-[13px] font-bold tabular-nums text-warning">
+          {formatInr(due)}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 // ── List items ────────────────────────────────────────────────────────────────
 
 interface VisitListItemProps {
@@ -685,12 +822,26 @@ function VisitListItem({ visit, selected, showRelativeDate, today, onSelect }: V
 
 interface BillingDefaultListItemProps {
   entry: BillingDefaultEntry
+  visit: CompletedVisit | undefined
   selected: boolean
   today: string
   onSelect: () => void
 }
 
-function BillingDefaultListItem({ entry, selected, today, onSelect }: BillingDefaultListItemProps) {
+function BillingDefaultListItem({
+  entry,
+  visit,
+  selected,
+  today,
+  onSelect,
+}: BillingDefaultListItemProps) {
+  const billAmt = visit
+    ? amountDue(serviceSubtotal(visit.services ?? []), visit.discount)
+    : entry.billAmount
+  const paid = visit?.amountPaid ?? 0
+  const due = Math.max(0, billAmt - paid)
+  const isPartial = paid > 0 && due > 0
+
   return (
     <button
       type="button"
@@ -709,6 +860,11 @@ function BillingDefaultListItem({ entry, selected, today, onSelect }: BillingDef
             <span className="text-[13px] font-bold text-primary">
               {entry.tokenDisplay}
             </span>
+            {isPartial && (
+              <span className="rounded-[3px] bg-warning/10 border border-warning/25 px-1 py-0.5 text-[9px] font-bold uppercase text-warning">
+                Partial
+              </span>
+            )}
             <span className="text-[10px] font-semibold uppercase tracking-[0.04em] text-muted">
               {relativeDate(entry.date, today)}
             </span>
@@ -719,9 +875,12 @@ function BillingDefaultListItem({ entry, selected, today, onSelect }: BillingDef
           <p className="text-[11px] text-muted truncate">{entry.ownerName}</p>
         </div>
         <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
-          {entry.billAmount > 0 && (
-            <span className="text-[13px] font-bold text-foreground tabular-nums">
-              {formatInr(entry.billAmount)}
+          <span className="text-[13px] font-bold tabular-nums text-warning">
+            {formatInr(due)} Due
+          </span>
+          {paid > 0 && (
+            <span className="text-[13px] font-bold tabular-nums text-success">
+              {formatInr(paid)} Paid
             </span>
           )}
         </div>
@@ -739,6 +898,7 @@ export function CheckoutPage() {
   const clinicName = useClinicName(clinicId)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [fetchedVisit, setFetchedVisit] = useState<CompletedVisit | null>(null)
+  const [receipt, setReceipt] = useState<{ visitId: string; bill: CheckoutBill } | null>(null)
   const [toast, setToast] = useState<string | null>(null)
 
   const today = todayString()
@@ -814,13 +974,24 @@ export function CheckoutPage() {
 
   const isSelectedDefaulted = selectedId ? defaultedIds.has(selectedId) : false
 
-  function handleBilled() {
-    // Auto-remove from billing defaults when a pinned visit is fully paid
+  function closePanel() {
+    setReceipt(null)
+    setSelectedId(null)
+    setFetchedVisit(null)
+  }
+
+  function selectVisit(id: string) {
+    setReceipt(null)
+    setSelectedId(selectedId === id ? null : id)
+  }
+
+  function handleBilled(bill: CheckoutBill) {
+    // Auto-remove from billing defaults when a pinned visit is fully paid.
+    // The panel stays open on the print prompt until the desk dismisses it.
     if (selectedId && clinicId && branchId && defaultedIds.has(selectedId)) {
       removeFromBillingDefaults(clinicId, branchId, selectedId).catch(() => {})
     }
-    setSelectedId(null)
-    setFetchedVisit(null)
+    if (selectedId) setReceipt({ visitId: selectedId, bill })
   }
 
   function handleToggleDefault() {
@@ -890,11 +1061,10 @@ export function CheckoutPage() {
                       <BillingDefaultListItem
                         key={entry.visitId}
                         entry={entry}
+                        visit={visits.find((v) => v.id === entry.visitId)}
                         selected={selectedId === entry.visitId}
                         today={today}
-                        onSelect={() =>
-                          setSelectedId(selectedId === entry.visitId ? null : entry.visitId)
-                        }
+                        onSelect={() => selectVisit(entry.visitId)}
                       />
                     ))}
                   </>
@@ -915,9 +1085,7 @@ export function CheckoutPage() {
                         selected={selectedId === visit.id}
                         showRelativeDate
                         today={today}
-                        onSelect={() =>
-                          setSelectedId(selectedId === visit.id ? null : visit.id)
-                        }
+                        onSelect={() => selectVisit(visit.id)}
                       />
                     ))}
                   </>
@@ -940,9 +1108,7 @@ export function CheckoutPage() {
                         selected={selectedId === visit.id}
                         showRelativeDate={false}
                         today={today}
-                        onSelect={() =>
-                          setSelectedId(selectedId === visit.id ? null : visit.id)
-                        }
+                        onSelect={() => selectVisit(visit.id)}
                       />
                     ))}
                   </>
@@ -953,25 +1119,30 @@ export function CheckoutPage() {
         </div>
 
         <VisitDetailDrawer
-          open={!!selectedVisit && !!clinicId && !!branchId}
-          onClose={() => {
-            setSelectedId(null)
-            setFetchedVisit(null)
-          }}
+          open={!!clinicId && !!branchId && (!!receipt || !!selectedVisit)}
+          onClose={closePanel}
           widthClass="max-w-lg"
         >
-          {selectedVisit && clinicId && branchId && (
-            <CheckoutPanel
-              key={selectedVisit.id}
-              visit={selectedVisit}
-              clinicId={clinicId}
-              branchId={branchId}
-              clinicName={clinicName}
-              isDefaulted={isSelectedDefaulted}
-              onBilled={handleBilled}
+          {receipt ? (
+            <BillDonePanel
+              bill={receipt.bill}
+              onDone={closePanel}
               onToast={(msg) => setToast(msg)}
-              onToggleDefault={handleToggleDefault}
             />
+          ) : (
+            selectedVisit && clinicId && branchId && (
+              <CheckoutPanel
+                key={selectedVisit.id}
+                visit={selectedVisit}
+                clinicId={clinicId}
+                branchId={branchId}
+                clinicName={clinicName}
+                isDefaulted={isSelectedDefaulted}
+                onBilled={handleBilled}
+                onToast={(msg) => setToast(msg)}
+                onToggleDefault={handleToggleDefault}
+              />
+            )
           )}
         </VisitDetailDrawer>
       </div>
