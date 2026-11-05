@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { MessageCircle, ExternalLink, Pill, Syringe, Pencil, Scale, Thermometer, CalendarClock, Phone, Copy, Check } from 'lucide-react'
+import { MessageCircle, ExternalLink, Pill, Syringe, Pencil, Scale, Thermometer, CalendarClock, Phone, Copy, Check, Printer } from 'lucide-react'
 import type { Timestamp } from 'firebase/firestore'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useClinic } from '@/features/clinic/hooks/use-clinic'
@@ -21,6 +21,8 @@ import {
   serviceSubtotal,
 } from '@/features/checkout/services/discount'
 import { useDiscountApproval } from '@/features/checkout/services/use-discount-approval'
+import { printCheckoutBill } from '@/features/checkout/services/checkout-bill-print'
+import { useBranchAddress } from '@/features/clinic/hooks/use-branch-address'
 
 interface VisitDetailPanelProps {
   visit: CompletedVisit
@@ -31,6 +33,8 @@ interface VisitDetailPanelProps {
   canEditPaymentMethod?: boolean
   /** When false, pet and owner name pencils are hidden. Default true. */
   canEditNames?: boolean
+  /** History shows a print-bill prompt. Other drawers leave this off. */
+  canPrintBill?: boolean
 }
 
 const labelClass = 'text-[10px] font-semibold uppercase tracking-[0.08em] text-muted'
@@ -88,6 +92,7 @@ export function VisitDetailPanel({
   onToast,
   canEditPaymentMethod = false,
   canEditNames = true,
+  canPrintBill = false,
 }: VisitDetailPanelProps) {
   const { detail, loading } = useVisitBill(clinicId, branchId, visit.id, visit.ownerId, visit.petId)
   const [showWAModal, setShowWAModal] = useState(false)
@@ -109,7 +114,8 @@ export function VisitDetailPanel({
   }
 
   // ── Name editing (pet / owner) ──────────────────────────────────────────────
-  const { branchIds } = useClinic()
+  const { branchIds, branchName } = useClinic()
+  const branchAddress = useBranchAddress(canPrintBill ? clinicId : null, canPrintBill ? branchId : null)
   const queryClient = useQueryClient()
   const [editTarget, setEditTarget] = useState<'pet' | 'owner' | null>(null)
   const [petNameOverride, setPetNameOverride] = useState<string | null>(null)
@@ -172,6 +178,32 @@ export function VisitDetailPanel({
 
   function handleViewConsultation() {
     window.open(summaryLink, '_blank')
+  }
+
+  function handlePrintBill() {
+    if (!hasServices) return
+    const opened = printCheckoutBill({
+      clinicName: clinicName ?? '',
+      branchName: branchName ?? '',
+      branchAddress,
+      date: visit.date,
+      token: visit.tokenDisplay,
+      petName,
+      ownerName,
+      doctorName: visit.doctorName,
+      services: services.map((service) => ({
+        name: service.name,
+        price: service.price,
+        quantity: service.quantity,
+      })),
+      discount: discount ?? null,
+      payments: (visit.payments ?? []).map((payment) => ({
+        method: payment.method,
+        amount: payment.amount,
+      })),
+      total: billAmount,
+    })
+    if (!opened) onToast('Could not open the print bill')
   }
 
   const isConsultationDone = visit.status === 'completed' || visit.status === 'billed'
@@ -516,7 +548,18 @@ export function VisitDetailPanel({
       </div>
 
       {/* Action buttons */}
-      <div className="border-t border-border-base px-6 py-4 flex-shrink-0 flex gap-3">
+      <div className="border-t border-border-base px-6 py-4 flex-shrink-0 flex flex-col gap-2">
+        {canPrintBill && hasServices && (
+          <button
+            type="button"
+            onClick={handlePrintBill}
+            className="flex w-full items-center justify-center gap-2 rounded-[4px] border border-primary px-4 py-[9px] text-[13px] font-semibold text-primary transition-opacity hover:opacity-85"
+          >
+            <Printer size={13} />
+            Print bill
+          </button>
+        )}
+        <div className="flex gap-3">
         <button
           type="button"
           disabled={!isConsultationDone || !detail || loading}
@@ -545,6 +588,7 @@ export function VisitDetailPanel({
           <ExternalLink size={13} />
           View Consultation
         </button>
+        </div>
       </div>
 
       {detail?.ownerPhone && (
