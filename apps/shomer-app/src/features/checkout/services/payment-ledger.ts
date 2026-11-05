@@ -3,7 +3,11 @@ import { db, auth } from '@/lib/firebase'
 import { PAYMENT_METHODS, type PaymentEntry, type PaymentMethod } from './complete-billing'
 
 /**
- * Payment ledger — one immutable row per money movement.
+ * Payment ledger — one row per money movement.
+ *
+ * A billed visit's method edit (queue Change) does not add a row dated today.
+ * `updatePayments` rewrites this visit's rows so the methods match, and leaves
+ * each day's net amount on that day.
  *
  * Location: clinics/{clinicId}/branches/{branchId}/payments/{paymentId}
  *
@@ -71,7 +75,9 @@ export function diffPaymentsByMethod(
 /**
  * Stage ledger writes onto an existing WriteBatch — one row per non-zero
  * per-method delta, dated today. Call alongside the visit update so both commit
- * atomically. No-op when no money moved (e.g. a method-only edit that nets zero).
+ * atomically. No-op when every method's amount is unchanged. A billed visit's
+ * method edit does not come through here; `updatePayments` rewrites the
+ * existing rows instead of posting a new delta.
  */
 export function stagePaymentLedger(
   batch: WriteBatch,

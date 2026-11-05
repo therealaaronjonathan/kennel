@@ -84,6 +84,10 @@ export function ServicesSelect({
     onChange(selected.map((s) => s.serviceId === serviceId ? { ...s, quantity: Math.max(1, newQty) } : s))
   }
 
+  function updatePrice(serviceId: string, newPrice: number) {
+    onChange(selected.map((s) => s.serviceId === serviceId ? { ...s, price: newPrice } : s))
+  }
+
   function toggleType(type: string, buttonEl: HTMLElement) {
     const isOpening = openType !== type
     setOpenType(isOpening ? type : null)
@@ -131,9 +135,17 @@ export function ServicesSelect({
                   className="w-[44px] rounded-[3px] border border-border-base bg-background px-2 py-0.5 text-[13px] font-semibold text-foreground text-right focus:border-primary focus:outline-none transition-colors tabular-nums"
                 />
                 <span className="text-[11px] text-muted">×</span>
-                <span className="text-[13px] font-semibold text-foreground tabular-nums">
-                  {formatInr(entry.price)}
-                </span>
+                <span className="text-[11px] text-muted">₹</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="100000"
+                  step="1"
+                  aria-label={`Price for ${entry.name}`}
+                  value={entry.price}
+                  onChange={(e) => updatePrice(entry.serviceId, Number(e.target.value) || 0)}
+                  className="w-[72px] rounded-[3px] border border-border-base bg-background px-2 py-0.5 text-[13px] font-semibold text-foreground text-right focus:border-primary focus:outline-none transition-colors tabular-nums"
+                />
                 <button
                   type="button"
                   onClick={() => removeService(entry.serviceId)}

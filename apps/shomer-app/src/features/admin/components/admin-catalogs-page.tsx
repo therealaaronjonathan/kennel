@@ -11,7 +11,8 @@ import {
 import { db } from '@/lib/firebase'
 import { Plus, Trash2, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { MEDICINE_TYPES, type MedicineType } from '@/features/settings/services/clinic-lists-service'
+import { MEDICINE_TYPES, updateCatalogEntry, type MedicineType } from '@/features/settings/services/clinic-lists-service'
+import { CatalogEditButton, CatalogEditForm } from '@/features/settings/components/catalog-inline-edit'
 
 type CatalogTab = 'diagnoses' | 'medicines' | 'services' | 'grooming'
 
@@ -51,6 +52,9 @@ function CatalogTabContent({ clinicId, tab }: { clinicId: string; tab: CatalogTa
   const [price, setPrice] = useState('')
   const [adding, setAdding] = useState(false)
   const [filter, setFilter] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
 
   const withPrice = hasPrice(tab)
   const isMedicine = tab === 'medicines'
@@ -95,6 +99,26 @@ function CatalogTabContent({ clinicId, tab }: { clinicId: string; tab: CatalogTa
       await loadItems()
     } finally {
       setAdding(false)
+    }
+  }
+
+  async function handleSave(item: CatalogItem, nextName: string, nextPrice?: number) {
+    setSavingEdit(true)
+    setEditError(null)
+    try {
+      await updateCatalogEntry(path, item.id, withPrice ? { name: nextName, price: nextPrice } : { name: nextName })
+      setItems((prev) =>
+        prev.map((row) =>
+          row.id === item.id
+            ? { ...row, name: nextName, ...(withPrice && nextPrice !== undefined ? { price: nextPrice } : {}) }
+            : row,
+        ),
+      )
+      setEditingId(null)
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Could not save.')
+    } finally {
+      setSavingEdit(false)
     }
   }
 
@@ -203,46 +227,73 @@ function CatalogTabContent({ clinicId, tab }: { clinicId: string; tab: CatalogTa
             <div
               key={item.id}
               className={cn(
-                'flex items-center justify-between px-4 py-3 bg-surface transition-colors',
-                !item.isActive && 'opacity-40',
+                'flex items-center justify-between gap-3 px-4 py-3 bg-surface transition-colors',
+                !item.isActive && editingId !== item.id && 'opacity-40',
               )}
             >
-              <div className="flex items-center gap-4">
-                <span
-                  className={cn(
-                    'text-[13px] text-foreground',
-                    !item.isActive && 'line-through text-muted',
-                  )}
-                >
-                  {item.name}
-                </span>
-                {isMedicine && (
-                  <span className="rounded-[3px] bg-surface-2 border border-border-base px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-muted">
-                    {item.type ?? 'tablet'}
-                  </span>
-                )}
-                {withPrice && item.price !== undefined && (
-                  <span className="text-[12px] font-semibold text-muted">
-                    ₹{item.price.toLocaleString('en-IN')}
-                  </span>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => toggleActive(item)}
-                className={cn(
-                  'flex items-center gap-1.5 rounded-[3px] px-2.5 py-1 text-[11px] font-semibold transition-colors',
-                  item.isActive
-                    ? 'text-danger hover:bg-danger/10'
-                    : 'text-success hover:bg-success/10',
-                )}
-              >
-                {item.isActive ? (
-                  <><Trash2 size={11} /> Remove</>
-                ) : (
-                  <><RotateCcw size={11} /> Restore</>
-                )}
-              </button>
+              {editingId === item.id ? (
+                <CatalogEditForm
+                  initialName={item.name}
+                  initialPrice={withPrice ? (item.price ?? 0) : undefined}
+                  saving={savingEdit}
+                  error={editError}
+                  onCancel={() => {
+                    if (!savingEdit) {
+                      setEditingId(null)
+                      setEditError(null)
+                    }
+                  }}
+                  onSave={(nextName, nextPrice) => handleSave(item, nextName, nextPrice)}
+                />
+              ) : (
+                <>
+                  <div className="flex items-center gap-4 min-w-0">
+                    <span
+                      className={cn(
+                        'text-[13px] text-foreground',
+                        !item.isActive && 'line-through text-muted',
+                      )}
+                    >
+                      {item.name}
+                    </span>
+                    {isMedicine && (
+                      <span className="rounded-[3px] bg-surface-2 border border-border-base px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-muted">
+                        {item.type ?? 'tablet'}
+                      </span>
+                    )}
+                    {withPrice && item.price !== undefined && (
+                      <span className="text-[12px] font-semibold text-muted">
+                        ₹{item.price.toLocaleString('en-IN')}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <CatalogEditButton
+                      name={item.name}
+                      onClick={() => {
+                        setEditError(null)
+                        setEditingId(item.id)
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggleActive(item)}
+                      className={cn(
+                        'flex items-center gap-1.5 rounded-[3px] px-2.5 py-1 text-[11px] font-semibold transition-colors',
+                        item.isActive
+                          ? 'text-danger hover:bg-danger/10'
+                          : 'text-success hover:bg-success/10',
+                      )}
+                    >
+                      {item.isActive ? (
+                        <><Trash2 size={11} /> Remove</>
+                      ) : (
+                        <><RotateCcw size={11} /> Restore</>
+                      )}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           ))}
         </div>
